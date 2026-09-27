@@ -4,13 +4,14 @@
 
 Current Xcode work lives in this Bitrig `feat/ios-experience` checkout. Ansh's PR #4 guided front/side scene-depth scanner is integrated and connected to the editable body draft. Owner reports physical measurement quality on the connected iPhone is “pretty good” and says they would trust it; this is qualitative owner-reported acceptance only. Numeric tape spans, errors, and repeat logs were not supplied, so this supports no quantified or population-accuracy claim. Garment ruler implementation is complete, reviewed, and simulator-compiled; physical lifecycle behavior remains unverified.
 
-The iPhone 17 simulator suite passed **42/42 tests, zero skipped**:
+Before latest scanner merge, iPhone 17 simulator suite passed **42/42**. Latest merged scanner passed **40/40 targeted unit tests**; full UI suite was not rerun:
 
 ```bash
-xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug -destination 'platform=iOS Simulator,id=BC1974AB-ED12-4805-8C3A-C5CF97D5616C' -derivedDataPath /tmp/fitcheck-simulator-derived -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 CODE_SIGNING_ALLOWED=NO test -quiet
+xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug -destination 'platform=iOS Simulator,id=BC1974AB-ED12-4805-8C3A-C5CF97D5616C' -derivedDataPath /tmp/fitcheck-simulator-derived -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 -only-testing:FitCheckTests CODE_SIGNING_ALLOWED=NO test -quiet
 ```
 
 A signed build using `DEVELOPMENT_TEAM=T8U9HZY2S9 -allowProvisioningUpdates` installed and launched on connected **iPhone 17 Pro Max, iOS 27.0**; screenshot showed My Fit form. Physical measurement quality is owner-reported as “pretty good”/trustworthy, but numeric tape-span, error, and repeat logs are unavailable. No quantified accuracy claim is established; timed rehearsal remains unverified.
+An added unsupported-depth UI test was removed after simulator diagnostic timeouts. Unsupported-depth alert was observed, but no passing post-merge UI test is claimed. Latest device capture showed Face ID lock, not camera interaction.
 
 GitHub PR #3 (`feat/ios-experience`) is Aashu's draft and owns Swift/Xcode integration/final review. PR #4 (`feat/body-scan`) is Ansh's draft; its scanner is integrated on this Bitrig branch. Keep drafts pending review and objective tape/repeat evidence.
 

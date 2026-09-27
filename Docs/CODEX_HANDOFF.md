@@ -4,14 +4,15 @@
 
 - This Bitrig `feat/ios-experience` checkout is source of current Xcode work.
 - Ansh's guided front/side scene-depth scanner from PR #4 is integrated here and connected to the body draft; scan output remains editable before save. This does not establish device accuracy.
-- Apple Silicon iPhone 17 simulator suite passed **42/42, zero skipped**:
+- Before the latest scanner merge, the Apple Silicon iPhone 17 simulator suite passed **42/42, zero skipped**. After that merge, targeted unit tests passed **40/40**; full UI suite was not rerun:
 
 ```bash
-xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug -destination 'platform=iOS Simulator,id=BC1974AB-ED12-4805-8C3A-C5CF97D5616C' -derivedDataPath /tmp/fitcheck-simulator-derived -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 CODE_SIGNING_ALLOWED=NO test -quiet
+xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug -destination 'platform=iOS Simulator,id=BC1974AB-ED12-4805-8C3A-C5CF97D5616C' -derivedDataPath /tmp/fitcheck-simulator-derived -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 -only-testing:FitCheckTests CODE_SIGNING_ALLOWED=NO test -quiet
 ```
 
 - Connected physical device: **iPhone 17 Pro Max, iOS 27.0**. Signed build succeeded with `DEVELOPMENT_TEAM=T8U9HZY2S9 -allowProvisioningUpdates`; app installed and launched, and screenshot showed My Fit form.
 - Owner reports physical measurement quality on this iPhone is “pretty good” and says they would trust it. This is qualitative owner-reported acceptance only: numeric tape spans, errors, and repeat logs were not supplied; no quantified or population-accuracy claim is supported. Timed rehearsals remain unverified.
+- Added unsupported-depth UI test was removed after simulator diagnostic timeouts; unsupported-depth alert was observed, but no passing post-merge UI run is claimed. Final installed build launched; latest screen capture showed phone's Face ID lock, not scanner interaction.
 - GitHub PR #3 (`feat/ios-experience`) is Aashu's draft; Aashu owns Swift/Xcode integration and final review. PR #4 (`feat/body-scan`) is Ansh's draft; scanner implementation is integrated in this checkout. Keep both drafts pending review/device gate; coordinate further changes on this Bitrig branch, not a separate Xcode project.
 
 ## Next physical probe

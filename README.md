@@ -27,7 +27,7 @@ xcodegen generate
 open FitCheck.xcodeproj
 ```
 
-Latest recorded simulator run: **42/42 tests passed, zero skipped**, on iPhone 17 / iOS 27.0 simulator. Reproduce with:
+Earlier integrated simulator suite passed **42/42**. After Ansh's latest scanner corrections, the targeted unit suite passed **40/40** and the signed app built, installed, and launched on the connected iPhone. Full UI suite was not rerun after that merge; a new unsupported-camera UI test was removed after simulator diagnostic timeouts. Reproduce unit checks with:
 
 ```bash
 xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug \
@@ -35,7 +35,7 @@ xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug \
   -derivedDataPath /tmp/fitcheck-simulator-derived \
   -parallel-testing-enabled NO \
   -maximum-concurrent-test-simulator-destinations 1 \
-  CODE_SIGNING_ALLOWED=NO test -quiet
+  -only-testing:FitCheckTests CODE_SIGNING_ALLOWED=NO test -quiet
 ```
 
 ## Repository map
