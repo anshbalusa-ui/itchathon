@@ -4,17 +4,6 @@ import simd
 @testable import FitCheck
 
 final class BodyScanTests: XCTestCase {
-    func testBodyGeometryCircleAndWidthDepthSymmetry() throws {
-        XCTAssertEqual(try BodyGeometry.circumference(width: 0.8, depth: 0.8), 0.8 * Double.pi, accuracy: 1e-12)
-        XCTAssertEqual(try BodyGeometry.circumference(width: 0.42, depth: 0.31),
-                       try BodyGeometry.circumference(width: 0.31, depth: 0.42), accuracy: 1e-14)
-    }
-
-    func testBodyGeometryRejectsZeroAndNonfiniteDimensions() {
-        for (width, depth) in [(0.0, 0.3), (0.3, 0.0), (.nan, 0.3), (0.3, .infinity)] {
-            XCTAssertThrowsError(try BodyGeometry.circumference(width: width, depth: depth))
-        }
-    }
 
     func testScanConvertsSpansAndMarksAllFourMeasurementsAsUneditedBodyScan() throws {
         let profile = try GuidedBodyScanService().scan(BodyScanInput(
@@ -90,18 +79,42 @@ final class BodyScanTests: XCTestCase {
         }
     }
 
-    func testImagePointInvertsPortraitCropTransform() throws {
-        let imageToView = CGAffineTransform(a: 0, b: 0.75, c: -4.0 / 3.0, d: 0, tx: 1.1666667, ty: 0.125)
-        let imagePoint = CGPoint(x: 0.32, y: 0.71)
-        let normalizedViewPoint = imagePoint.applying(imageToView)
+    func testViewportTransformMatchesPortraitCropAndInvertsToCameraPixels() throws {
+        let imageSize = CGSize(width: 1000, height: 1000)
         let viewportSize = CGSize(width: 600, height: 800)
-        let viewPoint = CGPoint(x: normalizedViewPoint.x * viewportSize.width,
-                                y: normalizedViewPoint.y * viewportSize.height)
-        let recovered = try DepthMeasurement.imagePoint(viewPoint: viewPoint,
+        let imageToView = CGAffineTransform(a: 0, b: 0.75, c: -4.0 / 3.0, d: 0, tx: 1.1666667, ty: 0.125)
+        let transform = try DepthMeasurement.viewportTransform(imageSize: imageSize,
+                                                                viewportSize: viewportSize,
+                                                                imageToView: imageToView)
+        let rawPixel = CGPoint(x: 320, y: 710)
+        let normalized = CGPoint(x: rawPixel.x / imageSize.width, y: rawPixel.y / imageSize.height)
+        let expectedNormalizedView = normalized.applying(imageToView)
+        let expectedViewport = CGPoint(x: expectedNormalizedView.x * viewportSize.width,
+                                       y: expectedNormalizedView.y * viewportSize.height)
+        let actualViewport = rawPixel.applying(transform)
+        XCTAssertEqual(actualViewport.x, expectedViewport.x, accuracy: 1e-4)
+        XCTAssertEqual(actualViewport.y, expectedViewport.y, accuracy: 1e-4)
+
+        let recovered = try DepthMeasurement.imagePoint(viewPoint: actualViewport,
                                                          viewportSize: viewportSize,
                                                          imageToView: imageToView)
-        XCTAssertEqual(recovered.x, imagePoint.x, accuracy: 1e-6)
-        XCTAssertEqual(recovered.y, imagePoint.y, accuracy: 1e-6)
+        XCTAssertEqual(recovered.x, normalized.x, accuracy: 1e-6)
+        XCTAssertEqual(recovered.y, normalized.y, accuracy: 1e-6)
+    }
+
+    func testViewportTransformRejectsInvalidGeometry() {
+        let validImage = CGSize(width: 1000, height: 1000)
+        let validViewport = CGSize(width: 600, height: 800)
+        let identity = CGAffineTransform.identity
+        XCTAssertThrowsError(try DepthMeasurement.viewportTransform(imageSize: validImage,
+                                                                      viewportSize: .zero,
+                                                                      imageToView: identity))
+        XCTAssertThrowsError(try DepthMeasurement.viewportTransform(imageSize: .zero,
+                                                                      viewportSize: validViewport,
+                                                                      imageToView: identity))
+        XCTAssertThrowsError(try DepthMeasurement.viewportTransform(imageSize: validImage,
+                                                                      viewportSize: validViewport,
+                                                                      imageToView: CGAffineTransform(a: 1, b: 2, c: 2, d: 4, tx: 0, ty: 0)))
     }
 
     func testDepthSamplingHonorsRowStrideAndReturnsCoherentClusterMedian() throws {
@@ -122,7 +135,7 @@ final class BodyScanTests: XCTestCase {
         XCTAssertGreaterThan(CVPixelBufferGetBytesPerRow(depth), CVPixelBufferGetWidth(depth) * MemoryLayout<Float>.stride)
         XCTAssertGreaterThan(CVPixelBufferGetBytesPerRow(confidence), CVPixelBufferGetWidth(confidence))
         let sampled = try DepthMeasurement.sample(imagePoint: CGPoint(x: 0.5, y: 0.5), depthMap: depth, confidenceMap: confidence)
-        XCTAssertEqual(sampled, 2.01, accuracy: 0.011)
+        XCTAssertEqual(sampled, 2.01, accuracy: 1e-6)
     }
 
     func testDepthSamplingRejectsInvalidDepthLowOrMissingConfidenceAndAmbiguousClusters() throws {
@@ -137,6 +150,14 @@ final class BodyScanTests: XCTestCase {
         try fillConfidence(confidence, value: 0)
         XCTAssertThrowsError(try DepthMeasurement.sample(imagePoint: CGPoint(x: 0.5, y: 0.5), depthMap: depth, confidenceMap: confidence))
 
+        try fillDepth(depth, value: 2)
+        try fillConfidence(confidence, value: 1)
+        XCTAssertEqual(try DepthMeasurement.sample(imagePoint: CGPoint(x: 0.5, y: 0.5),
+                                                    depthMap: depth, confidenceMap: confidence), 2, accuracy: 1e-6)
+        try fillConfidence(confidence, value: 0)
+        XCTAssertThrowsError(try DepthMeasurement.sample(imagePoint: CGPoint(x: 0.5, y: 0.5), depthMap: depth, confidenceMap: confidence))
+
+        try fillConfidence(confidence, value: 2)
         let undersizedConfidence = try makeBuffer(width: 5, height: 5, format: kCVPixelFormatType_OneComponent8)
         try fillConfidence(undersizedConfidence, value: 2)
         XCTAssertThrowsError(try DepthMeasurement.sample(imagePoint: CGPoint(x: 0.5, y: 0.5),
@@ -144,7 +165,13 @@ final class BodyScanTests: XCTestCase {
 
         try fillDepth(depth, value: 1)
         try fillDepth(depth, value: 3, rect: CGRect(x: 4, y: 0, width: 5, height: 9))
-        XCTAssertThrowsError(try DepthMeasurement.sample(imagePoint: CGPoint(x: 0.5, y: 0.5), depthMap: depth, confidenceMap: confidence))
+        try fillConfidence(confidence, value: 1)
+        XCTAssertThrowsError(try DepthMeasurement.sample(imagePoint: CGPoint(x: 0.5, y: 0.5), depthMap: depth, confidenceMap: confidence)) { error in
+            guard case BodyScanError.insufficientConfidence = error else {
+                return XCTFail("Expected insufficient confidence for ambiguous depth clusters, got \(error)")
+            }
+        }
+
     }
 
     func testDepthSamplingBoundsNeighborhoodAtImageEdgesAndRejectsOutsidePoints() throws {

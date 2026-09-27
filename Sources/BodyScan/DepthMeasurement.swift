@@ -84,6 +84,44 @@ enum DepthMeasurement {
         return imagePoint
     }
 
+    static func viewportTransform(
+        imageSize: CGSize,
+        viewportSize: CGSize,
+        imageToView: CGAffineTransform
+    ) throws -> CGAffineTransform {
+        guard imageSize.width.isFinite, imageSize.height.isFinite,
+              imageSize.width > 0, imageSize.height > 0,
+              viewportSize.width.isFinite, viewportSize.height.isFinite,
+              viewportSize.width > 0, viewportSize.height > 0 else {
+            throw BodyScanError.invalidGeometry
+        }
+        guard imageToView.a.isFinite, imageToView.b.isFinite,
+              imageToView.c.isFinite, imageToView.d.isFinite,
+              imageToView.tx.isFinite, imageToView.ty.isFinite else {
+            throw BodyScanError.invalidGeometry
+        }
+        let determinant = imageToView.a * imageToView.d - imageToView.b * imageToView.c
+        guard determinant.isFinite, determinant != 0 else {
+            throw BodyScanError.invalidGeometry
+        }
+
+        let transform = CGAffineTransform(
+            a: viewportSize.width * imageToView.a / imageSize.width,
+            b: viewportSize.height * imageToView.b / imageSize.width,
+            c: viewportSize.width * imageToView.c / imageSize.height,
+            d: viewportSize.height * imageToView.d / imageSize.height,
+            tx: viewportSize.width * imageToView.tx,
+            ty: viewportSize.height * imageToView.ty
+        )
+        guard transform.a.isFinite, transform.b.isFinite,
+              transform.c.isFinite, transform.d.isFinite,
+              transform.tx.isFinite, transform.ty.isFinite else {
+            throw BodyScanError.invalidGeometry
+        }
+        return transform
+    }
+
+
     static func sample(
         imagePoint: CGPoint,
         depthMap: CVPixelBuffer,
