@@ -1,91 +1,46 @@
 # itchathon — FitCheck iOS
 
-An iOS prototype for answering one question before buying clothes: **will this actually fit me?**
+**My body + my favorite shirt + a shirt I want → how will it fit?**
 
-FitCheck creates a reusable body measurement profile, measures a garment with the camera/AR stack, then compares the two with garment-specific ease allowances to produce a dimension-by-dimension fit report and a 0–100 fit score.
+FitCheck is a native iOS hackathon prototype for shoppers underserved by inconsistent clothing sizes. Body measurements provide physical constraints; a known-good shirt captures preferred fit; candidate dimensions reveal what will feel tighter, looser, shorter, or longer.
 
-## Hackathon scope
+## Approved product direction
 
-### Core demo flow
-1. **Create body profile**
-   - Guided scan / measurement flow
-   - Chest, waist, hip, shoulder width, torso length
-   - Values stored locally on device
-2. **Measure garment**
-   - Lay garment flat
-   - AR ruler measures chest width, shoulders, waist width, length
-   - Flat widths are converted to approximate circumferences where appropriate
-3. **Fit check**
-   - Compare garment measurements against body profile
-   - Apply garment-category ease rules
-   - Return fit score + explanation for each dimension
-4. **Size matching**
-   - When actual measurements are available for S / M / L / XL / 2XL / etc., score every size against the same body profile
-   - Show the closest measurement match
-   - Describe how each size would fit: e.g. fitted through chest, comfortable shoulders, relaxed waist
-   - Never assume neighboring sizes scale by a fixed amount; use real brand/product measurements
-5. **Results**
-   - Overall score for a scanned garment
-   - Per-size Fit Scores for a size chart
-   - Tight / fitted / comfortable / relaxed / incompatible indicators
-   - Explain *why* instead of trusting the size label alone
+1. **My Body:** guided helper-operated front/side depth scan, or equally prominent manual entry. Review/edit chest, waist, shoulders, and torso before saving.
+2. **My Fit:** measure or enter a favorite T-shirt's chest width, shoulders, and length.
+3. **Check a Garment:** measure or enter the same dimensions for a candidate.
+4. **Results:** separate signed Fit Scores for chest, shoulders, and length:
+   - **−100:** much smaller/shorter than preferred.
+   - **0:** preferred fit, subject to measured body constraints.
+   - **+100:** much larger/longer than preferred.
+   - **No averaged overall score.** Tight chest and excessive length must not cancel into “perfect.”
+5. **Compare sizes:** evaluate actual finished-garment dimensions against the same body and favorite. Recommend physically viable options nearest the preferred dimensions, not the largest positive score.
 
-## Technical direction
+Scores are prototype heuristics, not fit probabilities or guarantees. Missing waist dimensions mean waist is not assessed. A retailer's body-size guide is not a finished-garment measurement chart.
 
-- SwiftUI for the app shell
-- ARKit for metric measurement and LiDAR-aware raycasts
-- Vision / body pose as an optional assist for guided body measurement
-- Local-only persistence for the hackathon prototype
-- XcodeGen so the project can be generated from source
-- Pure Swift fit engine so logic can be tested independently of AR
+## Current implementation versus target
 
-## Bento reference
+This documentation update does **not** implement the approved behavior.
 
-We reviewed the public Bento project by cijjas because it explores a related AR measurement + fit-check workflow. This repo uses the same broad architectural lessons — separate models, AR measurement, fit logic, and SwiftUI views — but the implementation here is purpose-built for clothing fit and body profiles.
+Existing code includes the SwiftUI shell, body persistence, a plane-raycast garment ruler, body-only fit engine, size comparison, and basic tests. `GuidedBodyScanService.scan()` still throws unavailable. The favorite-garment flow, working body scanner, signed dimension scores, richer persistence, and revised UI remain implementation tasks.
 
-Reference: https://github.com/cijjas/bento
+Do not use the current engine's 0–100 aggregate as the new scoring contract.
 
-## Repo layout
+## Execution documents
 
-```
-Sources/
-  FitCheckApp.swift
-  Models/
-    Measurements.swift
-    BodyProfile.swift
-    GarmentProfile.swift
-    SizeChart.swift
-  Services/
-    ProfileStore.swift
-    FitEngine.swift
-  AR/
-    ARMeasurementView.swift
-    ARMeasurementViewController.swift
-  BodyScan/
-    BodyScanService.swift
-  Views/
-    RootView.swift
-    HomeView.swift
-    BodyProfileView.swift
-    GarmentScanView.swift
-    FitResultView.swift
-    SizeComparisonView.swift
-  Support/
-    Info.plist
-Tests/
-  FitEngineTests.swift
-Docs/
-  CODEX_HANDOFF.md
-project.yml
-```
+- [Approved product/engineering specification](Docs/superpowers/specs/2026-09-27-fitcheck-ios-design.md)
+- [Primary-source research and feasibility audit](Docs/superpowers/research/2026-09-27-fitcheck-feasibility.md)
+- [Superpowers implementation plan](Docs/superpowers/plans/2026-09-27-fitcheck-ios.md)
+- [Agent/Bitrig handoff](Docs/CODEX_HANDOFF.md)
 
-## Setup
+Read the spec and plan together. Later confirmed decisions in these documents supersede the original body-only handoff.
 
-Requirements:
-- macOS
-- Xcode 16+
-- iOS 17+
-- Physical iPhone recommended; LiDAR-capable device preferred for the demo
+## Stack and setup
+
+- SwiftUI, native iOS **17+**, existing XcodeGen project.
+- ARKit direct depth for the planned body scanner; existing ARKit raycasts for flat garments.
+- Pure Swift fit logic, local measurements, no required backend/account.
+- Bitrig against this repository; do not generate a separate replacement app.
 
 ```bash
 brew install xcodegen
@@ -93,27 +48,26 @@ xcodegen generate
 open FitCheck.xcodeproj
 ```
 
-The simulator can run the UI and fit engine, but AR measurement needs a real device.
+Use an installed Xcode version supporting the device OS. Open the generated existing project in Bitrig, or have its repository agent run XcodeGen. `project.yml` remains canonical; generated `FitCheck.xcodeproj` is ignored. Bitrig's public docs do not establish automatic XcodeGen-only repository bootstrap.
 
-## Hackathon MVP priorities
+Simulator proves forms and deterministic logic, not body/garment measurements. Sign and install the actual app on both demo phones early.
 
-**Must work**
-- Local body profile
-- Garment AR ruler
-- Fit engine
-- Multi-size comparison when a real garment size chart is available
-- Polished single-item and size-comparison result screens
+## Hackathon boundaries
 
-**Nice to have**
-- Automatic body landmark detection
-- Depth-assisted width estimation
-- Multiple garment categories
-- Saved scan history
+- Two builders; iPhone 17 Pro and Pro Max available.
+- Approximately 4h15m build window was reported at planning start; recheck remaining time before execution.
+- Required **3–5 minute all-live** demo: body, favorite, candidate, fresh result. The 60–90 second target is pitch summary only.
+- Helper-assisted body scan approved; close-fitting clothing and tape validation available.
+- Tops/T-shirts only; manual/external measurements are first-class.
+- No Android, auth/backend, retailer APIs/OCR/scraping, virtual try-on, avatars, ML scoring, or wardrobe expansion.
+- No raw body images persisted or uploaded by the app. Keep real participant data out of the public repo and coding-agent prompts.
 
-**Do not burn time on**
-- Full photorealistic avatar
-- Perfect circumference reconstruction
-- Backend/auth
-- Retail integrations before the core demo works
+Body scanning remains required. A manual-only app is not completion of this plan.
 
-See `Docs/CODEX_HANDOFF.md` for the next-agent build plan.
+## Bento reference
+
+[Bento](https://github.com/cijjas/bento) is an architectural reference for native measurement UX, not a dependency or replacement codebase. No license was detected during research. Do not copy or redistribute its code without an appropriate grant of permission.
+
+## Verification status
+
+Planning checked source, public documentation, local tooling, document links, and proposed mathematical examples. It did not build the app, validate signing, run a physical scan, or establish measurement accuracy. The implementation plan requires those checks before claiming completion.

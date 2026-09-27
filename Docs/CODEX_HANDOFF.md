@@ -1,212 +1,73 @@
-# Codex handoff — FitCheck
+# FitCheck — Bitrig and coding-agent handoff
 
-## Product intent
+## Read first
 
-Build a polished iOS hackathon demo that helps people who are underserved by inconsistent apparel sizing determine whether an item is likely to fit before buying it.
+1. [Approved specification](superpowers/specs/2026-09-27-fitcheck-ios-design.md).
+2. [Implementation plan](superpowers/plans/2026-09-27-fitcheck-ios.md).
+3. [Research, primary sources, and repository audit](superpowers/research/2026-09-27-fitcheck-feasibility.md).
 
-Core value:
+This handoff supersedes the previous body-only product/0–100 scoring direction. It describes a target, not completed Swift work.
 
-**scan yourself once → measure/ingest a garment → get an explainable fit result**
+## Non-negotiable contract
 
-## Current repo state
+- Preserve this native SwiftUI/ARKit app and `project.yml`; iOS 17+, Android out.
+- Product loop: **body + known-good garment + candidate**.
+- Guided body scan is required. Helper-selected front/side measurement locations are approved; no fully automatic landmarking requirement.
+- Manual body/garment measurements are equal input paths; scan review/edit is mandatory.
+- Save one body, one favorite, one candidate locally; no account/backend.
+- Required garment dimensions: chest width, shoulders, length. Body: chest/waist circumference, shoulders, torso.
+- Separate dimension Fit Scores: **−100 too small/short; 0 preferred target; +100 too big/long**.
+- **No overall score or signed average.** Opposite errors cannot cancel. Physical body checks remain separate and authoritative.
+- Scores use favorite-garment dimensions as zero. A contradictory reference or uncertain physical boundary requires review, not “perfect fit.”
+- Compare real finished-garment size rows; never manufacture adjacent sizes or treat body-size ranges as item dimensions.
+- Keep incomplete/unknown/incompatible sizes out of recommendations; nearest zero is better, not highest positive score.
+- No raw image storage, upload, fake scan output, fabricated confidence, or borrowed accuracy claims.
+- Bento is reference-only unless source permission is established.
 
-The repo already contains:
-- XcodeGen project definition
-- SwiftUI navigation shell
-- local body profile persistence
-- garment profile model
-- pure-Swift fit engine
-- LiDAR-aware ARKit two-point ruler for flat garment measurements
-- body scanning service boundary
-- fit-result UI
-- garment size-chart models
-- per-size fit scoring and natural-language fit descriptions
-- size-comparison UI with a closest measurement match
-- basic tests
+## Existing source state
 
-Build on this structure. Do not restart it.
+Baseline inspected: `d4313b3dda7c5fe179c9288295132458ddeb04b5`.
 
-## Immediate tasks
+Keep the SwiftUI shell, models, local store, AR ruler, deterministic engine boundary, result/size views, tests, and XcodeGen.
 
-### 1. Compile first
+Change these concrete gaps:
 
-Run:
+- Body scanner currently always throws unavailable.
+- Body entry directly mutates saved state before Save; use drafts.
+- Favorite garment and manual garment entry do not exist.
+- Only body is persisted; candidate/chart state is transient.
+- Existing engine scores body ease from 0–100 and selects maximum score. Replace semantics and every caller; no compatibility overload.
+- Existing AR controller already has markers/reticle; add line, reset, pending save, interruption/permission handling, and safe field transitions.
+- Existing ruler distances use plane raycasts, not direct depth samples. Do not reuse that measurement method for body silhouettes.
+- Old tests include nonempty/fixture-wording checks. Replace with consumer-visible signed scoring, body constraints, invalid data, ranking, and persistence checks.
+
+## Bitrig preflight and ownership
+
+Bitrig/Xcode exist on the planning machine; XcodeGen was not on PATH. App build/device installation remain unverified.
 
 ```bash
+brew install xcodegen
 xcodegen generate
-xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -sdk iphonesimulator build
+xcodebuild -list -project FitCheck.xcodeproj
+xcrun simctl list devices available
+xcrun devicectl list devices
 ```
 
-Fix compiler errors before redesigning the app. Then test AR on a physical iPhone.
+Use actual simulator/device IDs in the plan's commands. Open this generated Xcode project in Bitrig, not a new project. Confirm developer team, camera permission, and runtime scene-depth support on both physical phones.
 
-### 2. Polish the demo flow
+Two owners:
 
-```
-Landing
-  ↓
-Create My Fit
-  ↓
-guided body profile
-  ↓
-Measure Clothing
-  ↓
-Chest → Shoulders → Waist → Length
-  ↓
-Analyze Fit
-  ↓
-Single garment Fit Score
-  ↓
-If size chart exists: compare S / M / L / XL / 2XL / etc.
-  ↓
-Per-size scores + fit descriptions
-```
+- **A / integration:** shared models/contracts, store, fit engine, manual entry, results, actual size rows, project configuration.
+- **B / scanner:** body capture/depth geometry/device calibration, then ruler polish. Read frozen interfaces before starting; ask A before changing shared contracts.
 
-Use a modern Apple-native visual system: large type, neutral surfaces, strong hierarchy, and minimal clutter.
+Only A edits `project.yml` and integrates branches. Bitrig conversation branches must start from the same contract commit. Use device evidence, not simulator success, to accept sensor work.
 
-### 3. Improve garment measurement
+## Live demo and stopping rules
 
-The current AR ruler is intentionally small.
+User approved **3–5 minutes**, all measurements live, on team's iPhones. Both phones available; helper, consenting adult, close-fitting clothes, two standard T-shirts, tape measure available.
 
-Add:
-- visible A/B markers
-- line between points
-- live distance preview
-- explicit save action for each requested dimension
-- reset / undo
-- LiDAR availability indicator
-- confidence/coaching state
-- haptic feedback
-- measurement summary before analysis
+Record actual scan/tape differences and repeated-scan spread. A good-looking scan overlay is not measurement proof. Protect final rehearsal time; late scope reductions require explicit owner approval.
 
-Flat garment chest and waist are widths. The model doubles them before circumference comparison.
+If scanner cannot return usable real measurements, report the observed failure and options. Do not declare manual-entry fallback to be a completed scanner. If local installation fails, resolve signing/device setup before visual polish.
 
-### 4. Body scan implementation
-
-Do not start by promising perfect automatic circumference.
-
-Recommended build order:
-
-**Phase A — demo reliability**
-- manual profile entry/correction
-- guided posture screen
-- camera-assisted shoulder width if practical
-
-**Phase B — camera/depth assist**
-- Vision human-body pose landmarks
-- ARKit scene depth
-- map shoulder landmarks into metric world coordinates
-- estimate visible torso widths
-
-**Phase C — circumference experiment**
-- guided front + side captures OR an elliptical approximation
-- attach confidence
-- keep manual correction available
-
-Keep scanning behind the existing `BodyScanning` protocol.
-
-### 5. Multi-size matching
-
-This is a core product feature, not a nice-to-have.
-
-When a retailer/seller provides actual measurements for each size, evaluate every available size against the saved body profile using `FitEngine.evaluateSizes`.
-
-The result should answer both:
-- **Which available size is the closest measurement match?**
-- **How would each available size fit?**
-
-Example presentation:
-
-```
-XL — 72 Fit
-Very snug through chest
-Fitted at shoulders
-Comfortable through waist
-
-2XL — 94 Fit
-Comfortable through chest
-Comfortable at shoulders
-Slightly relaxed through waist
-
-3XL — 79 Fit
-Relaxed through chest
-Relaxed at shoulders
-Relaxed through waist
-```
-
-Important: never infer a complete size chart by adding a fixed number of centimeters to one scanned size. Apparel grading differs across brands and products. Multi-size comparison must use actual measurements from a retailer size chart, seller-provided data, or individually measured sizes.
-
-The size label itself is only an identifier. FitCheck should base the score on measurements.
-
-Future input paths can include:
-- retailer product APIs
-- structured size-chart entry
-- OCR/extraction from a retailer size chart
-- seller-provided garment measurements
-
-### 6. Fit engine
-
-Current fit allowances are hackathon heuristics. Improve by:
-- moving garment-category allowance ranges into config
-- adding user-readable reason strings
-- testing weighting
-- optionally adding material/stretch metadata
-- never presenting the score as a tailoring guarantee
-
-For this hackathon, deterministic and explainable beats ML.
-
-## Bento reference
-
-Reference:
-https://github.com/cijjas/bento
-
-Useful ideas:
-- XcodeGen-based iOS structure
-- UIKit/ARKit measurement controller wrapped in SwiftUI
-- measurement/profile separation
-- pure fit logic
-- LiDAR enhancement with graceful fallback
-
-Treat Bento as architectural reference, not source to copy verbatim.
-
-## Demo script target
-
-1. Create/load body profile.
-2. Lay tee flat.
-3. Measure chest.
-4. Measure shoulders.
-5. Measure waist/length if time permits.
-6. Tap Check Fit.
-7. Show a large Fit Score.
-8. Explain which dimensions are comfortable, fitted, tight, or relaxed.
-9. Show an available size chart and compare every size.
-10. Highlight the closest measurement match while still showing how adjacent sizes would fit.
-
-## Long-term product
-
-The long-term version should not require users to physically scan every garment.
-
-Potential garment inputs:
-- retailer-provided measurements
-- reseller measurement cards
-- structured size charts
-- marketplace integrations
-
-The saved body profile becomes reusable across products.
-
-The strongest product experience is:
-
-`saved body profile + product-specific size chart → personalized fit score for every available size`
-
-A user should be able to see that one brand's XL may fit differently from another brand's XL because the comparison is based on actual garment measurements, not the label.
-
-## Non-goals
-
-Do not prioritize:
-- auth/backend
-- social feed
-- photorealistic avatar
-- virtual try-on rendering
-- broad retailer scraping
-- generative AI unless it directly improves the fit explanation
-
-The demo should feel fast, clear, and believable.
+The plan contains task contracts, concrete math/tests, Bitrig execution prompts, integration gates, and the acceptance matrix. Follow it rather than reviving obsolete body-only scoring or adding backend/ML/virtual try-on.

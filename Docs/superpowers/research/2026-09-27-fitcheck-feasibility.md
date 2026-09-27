@@ -146,3 +146,7 @@ The supplied product examples and existing `Demo Brand` chart are synthetic fixt
 - Legal permission if any Bento source reuse is later requested.
 
 No physical-device, build, accuracy, usability, or independent-review success is claimed by this memo. The design specifies gates to establish those facts during execution.
+
+## 9. Planning-only smoke checks
+
+A temporary native Swift smoke ran successfully for signed-score direction/zero/saturation, ellipse circle/symmetry invariants, a synthetic intrinsics-to-span projection, strict locale-aware number parsing, and minimax non-cancellation. Apple's [NumberFormatter consumed-range API](https://developer.apple.com/documentation/foundation/numberformatter/1412588-getobjectvalue?changes=l_6) was read directly and confirmed available on iOS. Document checks verified local Markdown links, fences, unresolved-marker absence, and task/header structure. These are planning examples, not an iOS application build or real sensor validation. No generated smoke files are part of the app or public data set.

@@ -1,6 +1,6 @@
 # FitCheck iOS: product and engineering design
 
-Status: architectural direction approved in conversation; written specification awaiting review.
+Status: written specification approved in conversation, including the later signed-dimension scoring decision. Ready for task-by-task implementation planning.
 
 ## 1. Authority and confirmed decisions
 
