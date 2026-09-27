@@ -50,6 +50,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private var needsRetake = false
     private var didCancel = false
     private var didComplete = false
+    private var didRequestPermission = false
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
@@ -66,9 +67,16 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         view.backgroundColor = .black
         session.delegate = self
         configureViews()
-        checkPermissionAndStart()
         NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !didRequestPermission else { return }
+        didRequestPermission = true
+        checkPermissionAndStart()
+    }
+
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
