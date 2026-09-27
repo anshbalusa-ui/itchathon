@@ -31,4 +31,30 @@ final class FitEngineTests: XCTestCase {
         let report = FitEngine.evaluate(body: body, garment: garment)
         XCTAssertEqual(report.band, .incompatible)
     }
+
+    func testSizeChartScoresEveryAvailableSize() {
+        let comparison = FitEngine.evaluateSizes(
+            body: .demo,
+            chart: .demo
+        )
+
+        XCTAssertEqual(comparison.sizes.count, GarmentSizeChart.demo.sizes.count)
+        XCTAssertNotNil(comparison.closestMatch)
+
+        for size in comparison.sizes {
+            XCTAssertGreaterThanOrEqual(size.report.score, 0)
+            XCTAssertLessThanOrEqual(size.report.score, 100)
+            XCTAssertFalse(size.summary.isEmpty)
+        }
+    }
+
+    func testDifferentSizesProduceDifferentFitDescriptions() {
+        let comparison = FitEngine.evaluateSizes(
+            body: .demo,
+            chart: .demo
+        )
+
+        let uniqueSummaries = Set(comparison.sizes.map(\.summary))
+        XCTAssertGreaterThan(uniqueSummaries.count, 1)
+    }
 }
