@@ -19,10 +19,16 @@ FitCheck creates a reusable body measurement profile, measures a garment with th
    - Compare garment measurements against body profile
    - Apply garment-category ease rules
    - Return fit score + explanation for each dimension
-4. **Results**
-   - Overall score
+4. **Size matching**
+   - When actual measurements are available for S / M / L / XL / 2XL / etc., score every size against the same body profile
+   - Show the closest measurement match
+   - Describe how each size would fit: e.g. fitted through chest, comfortable shoulders, relaxed waist
+   - Never assume neighboring sizes scale by a fixed amount; use real brand/product measurements
+5. **Results**
+   - Overall score for a scanned garment
+   - Per-size Fit Scores for a size chart
    - Tight / fitted / comfortable / relaxed / incompatible indicators
-   - Explain *why* instead of relying on S / M / L / XL labels
+   - Explain *why* instead of trusting the size label alone
 
 ## Technical direction
 
@@ -48,6 +54,7 @@ Sources/
     Measurements.swift
     BodyProfile.swift
     GarmentProfile.swift
+    SizeChart.swift
   Services/
     ProfileStore.swift
     FitEngine.swift
@@ -62,6 +69,7 @@ Sources/
     BodyProfileView.swift
     GarmentScanView.swift
     FitResultView.swift
+    SizeComparisonView.swift
   Support/
     Info.plist
 Tests/
@@ -93,7 +101,8 @@ The simulator can run the UI and fit engine, but AR measurement needs a real dev
 - Local body profile
 - Garment AR ruler
 - Fit engine
-- Polished result screen
+- Multi-size comparison when a real garment size chart is available
+- Polished single-item and size-comparison result screens
 
 **Nice to have**
 - Automatic body landmark detection
