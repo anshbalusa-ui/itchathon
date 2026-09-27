@@ -1,8 +1,6 @@
 import Foundation
 
 struct BodyScanInput {
-    let chestWidth: Double
-    let chestDepth: Double
     let waistWidth: Double
     let waistDepth: Double
     let shoulderWidth: Double
@@ -46,22 +44,16 @@ enum BodyScanError: LocalizedError {
 }
 
 struct GuidedBodyScanService: BodyScanning {
-    static let chestCalibrationMultiplier = 1.0
     static let waistCalibrationMultiplier = 1.0
 
     func scan(_ input: BodyScanInput) throws -> BodyProfile {
-        guard validLength(input.chestWidth), validLength(input.chestDepth),
-              validLength(input.waistWidth), validLength(input.waistDepth),
+        guard validLength(input.waistWidth), validLength(input.waistDepth),
               validLength(input.shoulderWidth), validLength(input.torsoLength) else {
             throw BodyScanError.invalidGeometry
         }
 
-        let chest: Double
         let waist: Double
         do {
-            chest = try BodyGeometry.circumference(
-                width: input.chestWidth, depth: input.chestDepth
-            ) * Self.chestCalibrationMultiplier
             waist = try BodyGeometry.circumference(
                 width: input.waistWidth, depth: input.waistDepth
             ) * Self.waistCalibrationMultiplier
@@ -69,19 +61,18 @@ struct GuidedBodyScanService: BodyScanning {
             throw BodyScanError.invalidGeometry
         }
 
-        guard chest.isFinite, chest > 0, waist.isFinite, waist > 0 else {
+        guard waist.isFinite, waist > 0 else {
             throw BodyScanError.invalidGeometry
         }
 
         let origin = MeasurementOrigin(source: .bodyScan)
         return BodyProfile(
-            chestCircumference: chest,
+            chestCircumference: 0,
             waistCircumference: waist,
             hipCircumference: 0,
             shoulderWidth: input.shoulderWidth,
             torsoLength: input.torsoLength,
             origins: [
-                MeasurementKey.chestCircumference.rawValue: origin,
                 MeasurementKey.waistCircumference.rawValue: origin,
                 MeasurementKey.shoulderWidth.rawValue: origin,
                 MeasurementKey.torsoLength.rawValue: origin

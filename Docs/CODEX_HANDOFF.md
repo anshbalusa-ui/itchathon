@@ -3,8 +3,9 @@
 ## Current state
 
 - This Bitrig `feat/ios-experience` checkout is source of current Xcode work.
-- Ansh's guided front/side scene-depth scanner from PR #4 is integrated here and connected to the body draft; scan output remains editable before save. This does not establish device accuracy.
-- Before the latest scanner merge, the Apple Silicon iPhone 17 simulator suite passed **42/42, zero skipped**. After that merge, targeted unit tests passed **40/40**; full UI suite was not rerun:
+- Guided front/side scene-depth scan measures waist width/depth and returns an editable partial body draft with estimated waist circumference, shoulder width, and torso length. It does not measure chest circumference; manually measure and enter chest circumference before saving the body profile. Depth sensing remains required for 3D spans; a single width does not establish circumference.
+- For physical comparison, double finished-garment flat chest width to approximate garment chest circumference. Double garment waist width only when measured at the navel-aligned waist. Do not treat raw flat width as circumference.
+- Before the latest scanner merge, the Apple Silicon iPhone 17 simulator suite passed **42/42, zero skipped**. With the chest-depth cutover, targeted unit tests passed **43/43**; full UI suite was not rerun:
 
 ```bash
 xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug -destination 'platform=iOS Simulator,id=BC1974AB-ED12-4805-8C3A-C5CF97D5616C' -derivedDataPath /tmp/fitcheck-simulator-derived -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 -only-testing:FitCheckTests CODE_SIGNING_ALLOWED=NO test -quiet
@@ -20,7 +21,7 @@ xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug -de
 On the installed app:
 
 1. Record or recover the known-tape **Probe** evidence: phone/OS, known span, projected span, absolute error, and whether overlay/tap alignment and boundaries were reliable. If no numeric log exists, repeat the probe and log it.
-2. Record front/side body scan spans and corresponding tape measurements for chest, waist, shoulders, and torso; report generated outputs and per-dimension errors.
+2. Record front/side scan spans and corresponding tape measurements for waist width, waist depth, shoulders, and torso; manually measure chest circumference. Report generated outputs and per-dimension errors.
 3. Record a repeated complete scan and per-dimension spread. Keep participant measurements private. If depth boundaries/alignment fail, report failure; do not substitute manual values or claim measured accuracy.
 
 Complete scanner/tape evidence collection on the connected **iPhone 17 Pro Max**. The approved plan originally expected both iPhone 17 Pro and Pro Max; current owner narrowed device acceptance to the connected phone. Two all-live body + favorite + candidate rehearsals in **3–5 minutes** remain open. Do not report unprovided numeric or timing evidence.

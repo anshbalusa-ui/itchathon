@@ -6,19 +6,29 @@ import simd
 
 final class BodyScanTests: XCTestCase {
 
-    func testScanConvertsSpansAndMarksAllFourMeasurementsAsUneditedBodyScan() throws {
+    func testScanDoesNotInferChestCircumferenceFromOtherSpans() throws {
         let profile = try GuidedBodyScanService().scan(BodyScanInput(
-            chestWidth: 0.40, chestDepth: 0.30,
             waistWidth: 0.34, waistDepth: 0.28,
             shoulderWidth: 0.46, torsoLength: 0.62
         ))
 
-        XCTAssertEqual(profile.chestCircumference, try BodyGeometry.circumference(width: 0.40, depth: 0.30), accuracy: 1e-12)
+        XCTAssertEqual(profile.chestCircumference, 0)
+        XCTAssertNil(profile.origins?["chestCircumference"])
+    }
+
+    func testScanConvertsWaistSpanAndMarksOnlyMeasuredDimensionsAsUneditedBodyScan() throws {
+        let profile = try GuidedBodyScanService().scan(BodyScanInput(
+            waistWidth: 0.34, waistDepth: 0.28,
+            shoulderWidth: 0.46, torsoLength: 0.62
+        ))
+
+        XCTAssertEqual(profile.chestCircumference, 0)
+        XCTAssertNil(profile.origins?["chestCircumference"])
         XCTAssertEqual(profile.waistCircumference, try BodyGeometry.circumference(width: 0.34, depth: 0.28), accuracy: 1e-12)
         XCTAssertEqual(profile.shoulderWidth, 0.46, accuracy: 1e-12)
         XCTAssertEqual(profile.torsoLength, 0.62, accuracy: 1e-12)
 
-        let expectedKeys: Set<String> = ["chestCircumference", "waistCircumference", "shoulderWidth", "torsoLength"]
+        let expectedKeys: Set<String> = ["waistCircumference", "shoulderWidth", "torsoLength"]
         XCTAssertEqual(Set(profile.origins?.keys ?? Dictionary<String, MeasurementOrigin>().keys), expectedKeys)
         for key in expectedKeys {
             let origin = try XCTUnwrap(profile.origins?[key])
@@ -30,7 +40,7 @@ final class BodyScanTests: XCTestCase {
     }
 
     func testScanRejectsInvalidAndOverflowingValuesForEveryInput() {
-        let valid = [0.40, 0.30, 0.34, 0.28, 0.46, 0.62]
+        let valid = [0.34, 0.28, 0.46, 0.62]
         for index in valid.indices {
             var values = valid
             values[index] = 0
@@ -41,12 +51,10 @@ final class BodyScanTests: XCTestCase {
             XCTAssertThrowsError(try GuidedBodyScanService().scan(input(values)), "infinity at input \(index)")
         }
 
-        for indices in [[0, 1], [2, 3]] {
-            var values = valid
-            values[indices[0]] = .greatestFiniteMagnitude
-            values[indices[1]] = .greatestFiniteMagnitude
-            XCTAssertThrowsError(try GuidedBodyScanService().scan(input(values)), "overflow for pair \(indices)")
-        }
+        var values = valid
+        values[0] = .greatestFiniteMagnitude
+        values[1] = .greatestFiniteMagnitude
+        XCTAssertThrowsError(try GuidedBodyScanService().scan(input(values)), "overflowing waist spans")
     }
 
     func testDepthProjectionUsesIntrinsicsAndMetricDepth() throws {
@@ -217,8 +225,8 @@ final class BodyScanTests: XCTestCase {
     }
 
     private func input(_ values: [Double]) -> BodyScanInput {
-        BodyScanInput(chestWidth: values[0], chestDepth: values[1], waistWidth: values[2], waistDepth: values[3],
-                      shoulderWidth: values[4], torsoLength: values[5])
+        BodyScanInput(waistWidth: values[0], waistDepth: values[1],
+                      shoulderWidth: values[2], torsoLength: values[3])
     }
 
     private func projectionIntrinsics(fx: Float, fy: Float, cx: Float, cy: Float) -> simd_float3x3 {

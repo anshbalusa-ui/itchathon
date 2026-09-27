@@ -15,8 +15,10 @@ struct FitResultView: View {
           VStack(alignment: .leading, spacing: 4) {
             Text(check.id == MeasurementKey.waistCircumference.rawValue ? "Waist at navel" : "Chest circumference")
               .font(.headline)
-            Text("Body \(centimeters(check.bodyMeters)) · Shirt \(centimeters(check.candidateMeters))")
+            let flatWidthMeters = check.id == MeasurementKey.waistCircumference.rawValue ? candidate.waistFlat : candidate.chestFlat
+            Text("Body circumference \(centimeters(check.bodyMeters)) · Shirt flat width \(centimeters(flatWidthMeters)) × 2 = estimated shirt circumference \(centimeters(check.candidateMeters))")
               .font(.subheadline)
+              .accessibilityLabel("Body circumference \(centimeters(check.bodyMeters)). Shirt flat width \(centimeters(flatWidthMeters)) times 2 equals estimated shirt circumference \(centimeters(check.candidateMeters)).")
             Text("\(signedCentimeters(check.easeMeters)) room · \(physicalTitle(check.status))")
               .font(.footnote)
               .foregroundStyle(.secondary)

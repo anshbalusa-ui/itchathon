@@ -57,7 +57,7 @@ enum FitInputError: Error, Equatable, LocalizedError {
         case .unsupportedCategory:
             return "Fit comparison currently supports T-shirts only."
         case .contradictoryReference:
-            return "The preferred garment chest is smaller than the measured body chest; verify both measurements before comparison."
+            return "The preferred shirt's flat chest width × 2 is smaller than your body chest circumference. Recheck both measurements before comparison."
         case .invalidChart:
             return "The size chart must contain a name and finished T-shirt garment measurements."
         }

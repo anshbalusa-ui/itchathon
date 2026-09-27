@@ -70,7 +70,7 @@ struct SizeComparisonView: View {
       Section("Source and limits") {
         Text(chart?.sourceNote ?? "Chart source not recorded")
         Text("Use finished garment measurements only. A body-size recommendation chart cannot provide actual shirt dimensions.")
-        Text("Chest, shoulder, and length numbers compare each size with your favorite. Negative is smaller or shorter; positive is larger or longer. No single score combines them.")
+        Text("Chest differences approximate shirt circumference, 2 × entered flat width, compared with your favorite. Shoulder and length compare each size directly. Negative is smaller or shorter; positive is larger or longer. No single score combines them.")
       }
       .font(.footnote)
       .foregroundStyle(.secondary)
@@ -86,7 +86,7 @@ struct SizeComparisonView: View {
 
   private func dimensionTitle(_ value: FitDimension) -> String {
     switch value {
-    case .chest: return "Chest"
+    case .chest: return "Approx. shirt chest circumference difference"
     case .shoulders: return "Shoulders"
     case .length: return "Length"
     }

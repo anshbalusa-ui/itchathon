@@ -46,13 +46,11 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private var buttons: [String: UIButton] = [:]
     private var endpointMarkers: [UIView] = []
     private let frontSpans: [(key: String, label: String)] = [
-        ("chestWidth", "Chest width — widest point across chest"),
         ("waistWidth", "Waist width — level with navel"),
         ("shoulderWidth", "Shoulder width — outer shoulder to outer shoulder"),
         ("torsoLength", "Torso length — suprasternal notch to navel")
     ]
     private let sideSpans: [(key: String, label: String)] = [
-        ("chestDepth", "Chest depth — side view"),
         ("waistDepth", "Waist depth — level with navel")
     ]
     private var stage: Stage = .permission
@@ -209,7 +207,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         progressView.accessibilityLabel = "Body scan progress"
         progressView.isAccessibilityElement = true
         content.addArrangedSubview(progressView)
-        valueLabel.numberOfLines = 1
+        valueLabel.numberOfLines = 0
         valueLabel.font = .preferredFont(forTextStyle: .footnote)
         valueLabel.adjustsFontForContentSizeCategory = true
         valueLabel.textColor = .secondaryLabel
@@ -325,10 +323,10 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
             probeError = nil
             stage = .probeCoaching
         case .coachingFront, .markingFront:
-            ["chestWidth", "waistWidth", "shoulderWidth", "torsoLength"].forEach { completed.removeValue(forKey: $0) }
+            ["waistWidth", "shoulderWidth", "torsoLength"].forEach { completed.removeValue(forKey: $0) }
             stage = .coachingFront
         case .coachingSide, .markingSide, .review:
-            ["chestDepth", "waistDepth"].forEach { completed.removeValue(forKey: $0) }
+            ["waistDepth"].forEach { completed.removeValue(forKey: $0) }
             stage = .coachingSide
         case .permission:
             stage = .permission
@@ -542,10 +540,10 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         clearFrozen()
         let isFront = stage == .markingFront
         let completedInView = isFront
-            ? ["chestWidth", "waistWidth", "shoulderWidth", "torsoLength"].filter { completed[$0] != nil }.count
-            : ["chestDepth", "waistDepth"].filter { completed[$0] != nil }.count
-        if isFront && completedInView == 4 { stage = .coachingSide }
-        else if !isFront && completedInView == 2 { stage = .review }
+            ? frontSpans.filter { completed[$0.key] != nil }.count
+            : sideSpans.filter { completed[$0.key] != nil }.count
+        if isFront && completedInView == frontSpans.count { stage = .coachingSide }
+        else if !isFront && completedInView == sideSpans.count { stage = .review }
         else { stage = isFront ? .coachingFront : .coachingSide }
         presentStatus(stage == .coachingSide && isFront ? "Front view complete. Turn sideways, freeze a new frame, and continue." : stage == .review ? "Side view complete. Review your measurements." : "Span saved. Freeze a fresh frame for the next measurement.")
         updateInterface()
@@ -612,10 +610,10 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func undoMostRecentSpan() {
-        let order = ["chestWidth", "waistWidth", "shoulderWidth", "torsoLength", "chestDepth", "waistDepth"]
+        let order = ["waistWidth", "shoulderWidth", "torsoLength", "waistDepth"]
         guard let key = order.reversed().first(where: { completed[$0] != nil }) else { return }
         completed.removeValue(forKey: key)
-        stage = ["chestWidth", "waistWidth", "shoulderWidth", "torsoLength"].contains(key) ? .coachingFront : .coachingSide
+        stage = ["waistWidth", "shoulderWidth", "torsoLength"].contains(key) ? .coachingFront : .coachingSide
         clearFrozen()
         resumeSession()
     }
@@ -632,10 +630,10 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         } else if stage == .probeCoaching || stage == .probeMarking {
             probeDistance = nil; probeError = nil; stage = .probeCoaching
         } else if stage == .markingFront || stage == .coachingFront {
-            ["chestWidth", "waistWidth", "shoulderWidth", "torsoLength"].forEach { completed.removeValue(forKey: $0) }
+            ["waistWidth", "shoulderWidth", "torsoLength"].forEach { completed.removeValue(forKey: $0) }
             stage = .coachingFront
         } else if stage == .markingSide || stage == .coachingSide || stage == .review {
-            ["chestDepth", "waistDepth"].forEach { completed.removeValue(forKey: $0) }
+            ["waistDepth"].forEach { completed.removeValue(forKey: $0) }
             stage = .coachingSide
         }
         interruptionMessage = nil
@@ -679,10 +677,9 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func makeProfile() -> BodyProfile? {
-        guard let cw = completed["chestWidth"], let cd = completed["chestDepth"],
-              let ww = completed["waistWidth"], let wd = completed["waistDepth"],
+        guard let ww = completed["waistWidth"], let wd = completed["waistDepth"],
               let sw = completed["shoulderWidth"], let torso = completed["torsoLength"] else { return nil }
-        return try? GuidedBodyScanService().scan(BodyScanInput(chestWidth: cw, chestDepth: cd, waistWidth: ww, waistDepth: wd, shoulderWidth: sw, torsoLength: torso))
+        return try? GuidedBodyScanService().scan(BodyScanInput(waistWidth: ww, waistDepth: wd, shoulderWidth: sw, torsoLength: torso))
     }
 
 
@@ -736,15 +733,15 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
             instructionTitleLabel.text = currentSpan?.label.components(separatedBy: " — ").first ?? "Front view"
             let number = frontCount + 1
             let action = stage == .markingFront ? "Tap two visible endpoints on the frozen image." : "Face the camera with your upper body visible."
-            instructionDetailLabel.text = "Front view · Span \(number) of 4\n\(action)"
+            instructionDetailLabel.text = "Front view · Span \(number) of 3\n\(action)"
         case .coachingSide, .markingSide:
             instructionTitleLabel.text = currentSpan?.label.components(separatedBy: " — ").first ?? "Side view"
             let number = sideCount + 1
             let action = stage == .markingSide ? "Tap two visible endpoints on the frozen image." : "Turn sideways and keep your torso visible."
-            instructionDetailLabel.text = "Side view · Span \(number) of 2\n\(action)"
+            instructionDetailLabel.text = "Side view · Span \(number) of 1\n\(action)"
         case .review:
             instructionTitleLabel.text = "Review body scan"
-            instructionDetailLabel.text = "All six spans captured. Nothing is saved until you choose Use Scan."
+            instructionDetailLabel.text = "Chest circumference requires manual tape. Nothing is saved until you choose Use Scan."
         case .probeCoaching:
             instructionTitleLabel.text = "Optional depth probe"
             instructionDetailLabel.text = probeDistance == nil
@@ -793,12 +790,17 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         case .permission:
             currentDimension = "Body scan"
         }
-        progressLabel.text = "\(currentDimension) · \(totalCount) of 6 spans"
-        progressLabel.accessibilityValue = "\(currentDimension), \(totalCount) of 6 spans complete"
-        progressView.progress = Float(totalCount) / 6
-        progressView.accessibilityValue = "\(totalCount) of 6 spans complete"
+        progressLabel.text = "\(currentDimension) · \(totalCount) of 4 spans"
+        progressLabel.accessibilityValue = "\(currentDimension), \(totalCount) of 4 spans complete"
+        progressView.progress = Float(totalCount) / 4
+        progressView.accessibilityValue = "\(totalCount) of 4 spans complete"
 
-        if stage == .probeCoaching, let probeDistance {
+        if stage == .review, let profile = makeProfile() {
+            valueLabel.text = String(format: "Scanned · Waist circumference %.1f cm\nShoulder width %.1f cm · Torso length %.1f cm",
+                                     profile.waistCircumference * 100,
+                                     profile.shoulderWidth * 100,
+                                     profile.torsoLength * 100)
+        } else if stage == .probeCoaching, let probeDistance {
             valueLabel.text = probeError.map {
                 String(format: "Probe: %.1f cm · Tape difference: %+.1f cm", probeDistance * 100, $0 * 100)
             } ?? String(format: "Probe: %.1f cm", probeDistance * 100)

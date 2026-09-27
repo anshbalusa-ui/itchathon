@@ -135,6 +135,20 @@ final class FitEngineTests: XCTestCase {
         XCTAssertEqual(tooSmall.physical, .smallerThanBody)
     }
 
+    func testPhysicalChecksCompareBodyCircumferenceWithTwiceFlatGarmentWidth() throws {
+        let report = try FitEngine.evaluate(
+            body: body, preferred: favorite,
+            garment: garment(chestFlat: 0.55, waistFlat: 0.46, waistAtNavel: true)
+        )
+        let chest = try XCTUnwrap(report.checks.first { $0.id == MeasurementKey.chestCircumference.rawValue })
+        let waist = try XCTUnwrap(report.checks.first { $0.id == MeasurementKey.waistCircumference.rawValue })
+        XCTAssertEqual(chest.candidateMeters, 1.10, accuracy: 1e-12)
+        XCTAssertEqual(chest.easeMeters, 0.10, accuracy: 1e-12)
+        XCTAssertEqual(waist.candidateMeters, 0.92, accuracy: 1e-12)
+        XCTAssertEqual(waist.easeMeters, 0.02, accuracy: 1e-12)
+        XCTAssertEqual(waist.status, .needsVerification)
+    }
+
     func testContradictoryFavoriteThrowsInsteadOfRedefiningTheReference() {
         let tooSmallFavorite = garment(chestFlat: 0.49, name: "Contradictory favorite")
         XCTAssertThrowsError(

@@ -28,9 +28,9 @@ struct BodyProfileView: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
-        .accessibilityHint("Measure your body with the camera. Scan results stay unsaved until you save this form.")
+        .accessibilityHint("Scan estimates waist circumference and records shoulder width and torso length only. Use a tape for chest circumference; width alone cannot determine circumference. Results stay unsaved until you save this form.")
       } footer: {
-        Text("If you measure with a tape, replace scan estimates in these fields. Replacements are saved as manual measurements; unchanged scans stay unverified. Scan images are not stored.")
+        Text("Scan estimates waist circumference and records shoulder width and torso length only. Use a tape to measure chest circumference; width alone is not enough to determine circumference. Scan images are not stored.")
       }
 
       Section {
@@ -140,16 +140,15 @@ struct BodyProfileView: View {
   }
 
   private func valid(_ value: Double) -> Bool { value.isFinite && value > 0 }
+
   private func applyScan(_ scanned: BodyProfile) {
-    draft.chestCircumference = scanned.chestCircumference
     draft.waistCircumference = scanned.waistCircumference
     draft.shoulderWidth = scanned.shoulderWidth
     draft.torsoLength = scanned.torsoLength
 
     var origins = draft.origins ?? [:]
     for key in [
-      MeasurementKey.chestCircumference,
-      .waistCircumference,
+      MeasurementKey.waistCircumference,
       .shoulderWidth,
       .torsoLength
     ] {
@@ -157,7 +156,6 @@ struct BodyProfileView: View {
     }
     draft.origins = origins
 
-    chestValid = valid(scanned.chestCircumference)
     waistValid = valid(scanned.waistCircumference)
     shoulderValid = valid(scanned.shoulderWidth)
     torsoValid = valid(scanned.torsoLength)
