@@ -1,11 +1,12 @@
 import Foundation
 
 enum FitBand: String, Codable {
-    case incompatible = "Won't Fit"
+    case incompatible = "Too Small"
     case veryTight = "Very Tight"
     case fitted = "Fitted"
-    case comfortable = "Comfortable"
+    case comfortable = "Ideal"
     case relaxed = "Relaxed"
+    case tooLarge = "Too Large"
     case unknown = "Unknown"
 }
 
@@ -15,14 +16,22 @@ struct FitDimensionResult: Identifiable, Equatable {
     let bodyMeters: Double
     let garmentMeters: Double
     let easeMeters: Double
+
+    /// Signed fit score on a -100...100 scale.
+    /// -100 = much too small, 0 = ideal target ease, +100 = much too large.
     let score: Int
+
     let band: FitBand
 }
 
 struct FitReport: Equatable {
+    /// Signed aggregate fit score on a -100...100 scale.
+    /// The closer this is to zero, the closer the garment is to the target fit.
     let score: Int
     let band: FitBand
     let dimensions: [FitDimensionResult]
+
+    var distanceFromIdeal: Int { abs(score) }
 }
 
 /// A single labeled clothing size evaluated against one saved body profile.
@@ -34,14 +43,23 @@ struct SizeFitResult: Identifiable, Equatable {
     let summary: String
 }
 
-/// Keeps the retailer/garment size order for display while separately exposing
-/// the highest measurement-based match.
+/// Keeps retailer/garment size order for display while exposing the size whose
+/// aggregate signed score is closest to zero.
 struct SizeComparisonReport: Equatable {
     let sizes: [SizeFitResult]
 
     var closestMatch: SizeFitResult? {
-        sizes.max { lhs, rhs in
-            lhs.report.score < rhs.report.score
+        sizes.min { lhs, rhs in
+            let lhsDistance = abs(lhs.report.score)
+            let rhsDistance = abs(rhs.report.score)
+
+            if lhsDistance == rhsDistance {
+                let lhsWorst = lhs.report.dimensions.map { abs($0.score) }.max() ?? 100
+                let rhsWorst = rhs.report.dimensions.map { abs($0.score) }.max() ?? 100
+                return lhsWorst < rhsWorst
+            }
+
+            return lhsDistance < rhsDistance
         }
     }
 }
@@ -50,6 +68,10 @@ enum FitEngine {
     private struct EaseTarget {
         let ideal: ClosedRange<Double>
         let acceptable: ClosedRange<Double>
+
+        var center: Double {
+            (ideal.lowerBound + ideal.upperBound) / 2
+        }
     }
 
     static func evaluate(body: BodyProfile, garment: GarmentProfile) -> FitReport {
@@ -100,16 +122,20 @@ enum FitEngine {
 
         var weighted = 0.0
         var totalWeight = 0.0
+
         for result in results {
             let weight = weights[result.label] ?? 1
             weighted += Double(result.score) * weight
             totalWeight += weight
         }
 
-        let score = Int((weighted / max(totalWeight, 0.001)).rounded())
+        let signedScore = clamp(
+            Int((weighted / max(totalWeight, 0.001)).rounded())
+        )
+
         return FitReport(
-            score: score,
-            band: overallBand(score: score, dimensions: results),
+            score: signedScore,
+            band: overallBand(score: signedScore, dimensions: results),
             dimensions: results
         )
     }
@@ -117,8 +143,8 @@ enum FitEngine {
     /// Evaluate every real size in a garment's size chart against the same user.
     ///
     /// Size measurements must come from the retailer/seller or be measured.
-    /// We intentionally do not generate fake neighboring sizes by adding a
-    /// constant increment because apparel grading differs by brand and product.
+    /// We intentionally do not generate neighboring sizes by adding a constant
+    /// increment because apparel grading differs by brand and product.
     static func evaluateSizes(
         body: BodyProfile,
         chart: GarmentSizeChart
@@ -128,6 +154,7 @@ enum FitEngine {
                 named: chart.garmentName,
                 category: chart.category
             )
+
             let report = evaluate(body: body, garment: garment)
 
             return SizeFitResult(
@@ -153,6 +180,12 @@ enum FitEngine {
         }
     }
 
+    /// Maps garment ease to a signed scale centered on the desired ease.
+    ///
+    /// The target's ideal midpoint is 0.
+    /// Its acceptable lower bound maps to -100.
+    /// Its acceptable upper bound maps to +100.
+    /// Values beyond those bounds remain clamped at -100 / +100.
     private static func evaluateDimension(
         label: String,
         body: Double,
@@ -160,54 +193,28 @@ enum FitEngine {
         target: EaseTarget
     ) -> FitDimensionResult {
         let ease = garment - body
-        let score: Int
-        let band: FitBand
+        let center = target.center
 
-        if target.ideal.contains(ease) {
-            // Scores peak at the center of the intended ease range rather than
-            // giving every acceptable "ideal" measurement an identical 100.
-            let center = (target.ideal.lowerBound + target.ideal.upperBound) / 2
-            let halfWidth = max((target.ideal.upperBound - target.ideal.lowerBound) / 2, 0.001)
-            let normalizedDistance = min(abs(ease - center) / halfWidth, 1)
-            score = Int((100 - (normalizedDistance * 10)).rounded())
-
-            let span = max(target.ideal.upperBound - target.ideal.lowerBound, 0.001)
-            let position = (ease - target.ideal.lowerBound) / span
-            if position < 0.33 {
-                band = .fitted
-            } else if position > 0.67 {
-                band = .relaxed
-            } else {
-                band = .comfortable
-            }
-        } else if ease >= target.acceptable.lowerBound,
-                  ease < target.ideal.lowerBound {
-            let gap = max(target.ideal.lowerBound - target.acceptable.lowerBound, 0.001)
-            let normalizedDistance = (target.ideal.lowerBound - ease) / gap
-            score = max(55, Int((90 - normalizedDistance * 30).rounded()))
-            band = .veryTight
-        } else if ease > target.ideal.upperBound,
-                  ease <= target.acceptable.upperBound {
-            let gap = max(target.acceptable.upperBound - target.ideal.upperBound, 0.001)
-            let normalizedDistance = (ease - target.ideal.upperBound) / gap
-            score = max(55, Int((90 - normalizedDistance * 30).rounded()))
-            band = .relaxed
-        } else if ease < target.acceptable.lowerBound {
-            let miss = target.acceptable.lowerBound - ease
-            score = max(0, 45 - Int(miss * 500))
-            band = .incompatible
+        let rawScore: Double
+        if ease < center {
+            let smallRange = max(center - target.acceptable.lowerBound, 0.001)
+            rawScore = -100 * ((center - ease) / smallRange)
+        } else if ease > center {
+            let largeRange = max(target.acceptable.upperBound - center, 0.001)
+            rawScore = 100 * ((ease - center) / largeRange)
         } else {
-            let excess = ease - target.acceptable.upperBound
-            score = max(35, 55 - Int(excess * 250))
-            band = .relaxed
+            rawScore = 0
         }
+
+        let score = clamp(Int(rawScore.rounded()))
+        let band = band(for: score)
 
         return FitDimensionResult(
             label: label,
             bodyMeters: body,
             garmentMeters: garment,
             easeMeters: ease,
-            score: min(100, score),
+            score: score,
             band: band
         )
     }
@@ -217,16 +224,41 @@ enum FitEngine {
         dimensions: [FitDimensionResult]
     ) -> FitBand {
         guard !dimensions.isEmpty else { return .unknown }
-        if dimensions.contains(where: { $0.band == .incompatible }) { return .incompatible }
-        if dimensions.contains(where: { $0.band == .veryTight }) { return .veryTight }
 
-        let relaxedCount = dimensions.filter { $0.band == .relaxed }.count
-        let fittedCount = dimensions.filter { $0.band == .fitted }.count
+        // A severe local mismatch should remain visible even if another
+        // dimension pulls the weighted average back toward zero.
+        if dimensions.contains(where: { $0.score <= -80 }) {
+            return .incompatible
+        }
 
-        if relaxedCount >= 2 { return .relaxed }
-        if fittedCount >= 2 { return .fitted }
-        if score >= 90 { return .comfortable }
-        return .fitted
+        if dimensions.contains(where: { $0.score >= 80 }) {
+            return .tooLarge
+        }
+
+        return band(for: score)
+    }
+
+    private static func band(for score: Int) -> FitBand {
+        switch score {
+        case ...(-70):
+            return .incompatible
+        case -69...(-30):
+            return .veryTight
+        case -29...(-10):
+            return .fitted
+        case -9...9:
+            return .comfortable
+        case 10...69:
+            return .relaxed
+        case 70...:
+            return .tooLarge
+        default:
+            return .unknown
+        }
+    }
+
+    private static func clamp(_ score: Int) -> Int {
+        min(100, max(-100, score))
     }
 
     private static func sizeSummary(_ report: FitReport) -> String {
@@ -251,9 +283,11 @@ enum FitEngine {
             case .fitted:
                 return "fitted \(area)"
             case .comfortable:
-                return "comfortable \(area)"
+                return "near ideal \(area)"
             case .relaxed:
                 return "relaxed \(area)"
+            case .tooLarge:
+                return "too large \(area)"
             case .unknown:
                 return "unknown \(area)"
             }
@@ -263,9 +297,10 @@ enum FitEngine {
             return phrases[0].capitalized + "."
         }
 
-        let last = phrases.last ?? ""
-        let leading = phrases.dropLast().joined(separator: ", ")
-        return (leading + ", and " + last).prefix(1).uppercased()
-            + String((leading + ", and " + last).dropFirst()) + "."
+        let joined = phrases.dropLast().joined(separator: ", ")
+            + ", and "
+            + (phrases.last ?? "")
+
+        return joined.prefix(1).uppercased() + String(joined.dropFirst()) + "."
     }
 }
