@@ -149,15 +149,21 @@ final class FitEngineTests: XCTestCase {
         XCTAssertEqual(waist.status, .needsVerification)
     }
 
-    func testContradictoryFavoriteThrowsInsteadOfRedefiningTheReference() {
-        let tooSmallFavorite = garment(chestFlat: 0.49, name: "Contradictory favorite")
-        XCTAssertThrowsError(
-            try FitEngine.evaluate(body: body, preferred: tooSmallFavorite, garment: favorite)
-        ) { error in
-            guard case FitInputError.contradictoryReference = error else {
-                return XCTFail("Expected contradictoryReference, got \(error)")
-            }
-        }
+    func testFavoriteSmallerThanBodyStillShowsDimensionsButCannotRecommendSize() throws {
+        let tooSmallFavorite = garment(chestFlat: 0.49, name: "Favorite that stretches")
+        let report = try FitEngine.evaluate(body: body, preferred: tooSmallFavorite, garment: favorite)
+        XCTAssertEqual(report.referencePhysical, .smallerThanBody)
+        XCTAssertEqual(report.physical, .passesMeasuredChecks)
+        XCTAssertEqual(report.dimensions.map(\.id), [.chest, .shoulders, .length])
+        XCTAssertEqual(report.dimensions[0].deltaMeters, 0.22, accuracy: 1e-12)
+
+        let size = row("Medium", chestFlat: 0.60)
+        let comparison = try FitEngine.evaluateSizes(
+            body: body, preferred: tooSmallFavorite, chart: chart([size])
+        )
+        XCTAssertEqual(comparison.sizes.count, 1)
+        XCTAssertEqual(comparison.sizes[0].report?.referencePhysical, .smallerThanBody)
+        XCTAssertTrue(comparison.recommendedIDs.isEmpty)
     }
 
     func testClosePhysicalBoundaryRequiresReview() throws {

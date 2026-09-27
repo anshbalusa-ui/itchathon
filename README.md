@@ -9,6 +9,7 @@ FitCheck is a native SwiftUI prototype. Body measurements set physical constrain
 - Enter and save body measurements, then enter and save a named favorite shirt and candidate shirt. Measurements are edited as local drafts and stored on-device.
 - Enter chest width, shoulder width, and length for each shirt. Compare candidate with favorite using separate signed chest, shoulder, and length scores: negative means smaller/shorter, zero means equal to favorite, positive means larger/longer. **There is no overall or averaged score.**
 - Keep physical checks separate from preference scores: chest and, when corresponding measurements exist, waist are checked against the body. For physical comparison, flat shirt chest width is doubled to approximate garment chest circumference; garment waist width is doubled only when measured at the navel-aligned waist. Shoulder and length scores compare garments, not body dimensions.
+- If the favorite measures smaller around the chest than the body, still show signed candidate-vs-favorite differences with a visible physical warning. Do not treat that reference as verified or recommend a size until measurements check out. This owner-approved behavior supersedes the older plan's hard error for a contradictory favorite.
 - Enter size-chart rows from **finished-garment measurements** and compare actual sizes. Body-size recommendation charts are not interchangeable with garment measurements.
 
 ## Scanner status and limits

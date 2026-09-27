@@ -29,6 +29,7 @@ Complete scanner/tape evidence collection on the connected **iPhone 17 Pro Max**
 ## Product invariants
 
 - Body, favorite shirt, and candidate shirt inform result. Report physical checks plus separate signed chest, shoulder, and length scores (−100…+100); **never aggregate**.
+- Owner superseded the original contradictory-favorite hard error: show signed garment-to-favorite differences even if favorite measures smaller than body, clearly flag reference physical status, and do not recommend an unverified size.
 - Body scan is guided front/side depth capture with operator-selected endpoints; automatic Vision landmarks are not part of implementation or acceptance.
 - Garment ruler measurement is pending Use Measurement until explicitly accepted into editable draft. Do not imply ruler/device accuracy until physically checked.
 - Size comparison uses actual entered garment measurements; no invented size grading or “closest match” contract.

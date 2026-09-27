@@ -25,8 +25,12 @@ struct FitResultView: View {
           }
           .padding(.vertical, 3)
         }
-        if report.referencePhysical != .passesMeasuredChecks {
-          Text("Your favorite shirt also needs a measurement check before its fit can be treated as a verified reference.")
+        if report.referencePhysical == .smallerThanBody {
+          Text("Your favorite shirt measures smaller around the chest than your body. It may stretch or a measurement may be off. Scores below still show how this shirt differs from your favorite; verify both measurements before relying on fit or a size recommendation.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        } else if report.referencePhysical == .needsVerification {
+          Text("Your favorite shirt needs a tape check before its fit can be treated as a verified reference. Directional comparisons remain visible below.")
             .font(.footnote)
             .foregroundStyle(.secondary)
         }

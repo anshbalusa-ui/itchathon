@@ -45,7 +45,6 @@ enum FitInputError: Error, Equatable, LocalizedError {
     case incompleteBody
     case incompleteGarment
     case unsupportedCategory
-    case contradictoryReference
     case invalidChart
 
     var errorDescription: String? {
@@ -56,8 +55,6 @@ enum FitInputError: Error, Equatable, LocalizedError {
             return "Garment chest, shoulders, and length must be finite and positive; optional waist cannot be negative."
         case .unsupportedCategory:
             return "Fit comparison currently supports T-shirts only."
-        case .contradictoryReference:
-            return "The preferred shirt's flat chest width × 2 is smaller than your body chest circumference. Recheck both measurements before comparison."
         case .invalidChart:
             return "The size chart must contain a name and finished T-shirt garment measurements."
         }
@@ -114,9 +111,8 @@ enum FitEngine {
         }
 
         guard let preferredChest = doubledWidth(preferred.chestFlat),
-              let candidateChest = doubledWidth(garment.chestFlat),
-              preferredChest >= body.chestCircumference else {
-            throw FitInputError.contradictoryReference
+              let candidateChest = doubledWidth(garment.chestFlat) else {
+            throw FitInputError.incompleteGarment
         }
 
         let referenceWaist = try waistObservation(body: body, garment: preferred)
@@ -176,10 +172,6 @@ enum FitEngine {
         guard body.isUsable else { throw FitInputError.incompleteBody }
         try validate(garment: preferred)
         guard preferred.category == .tshirt else { throw FitInputError.unsupportedCategory }
-        guard let referenceChest = doubledWidth(preferred.chestFlat),
-              referenceChest >= body.chestCircumference else {
-            throw FitInputError.contradictoryReference
-        }
 
         let sizes = try chart.sizes.map { size -> SizeFitResult in
             let id = size.id
