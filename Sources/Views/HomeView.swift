@@ -41,7 +41,9 @@ struct HomeView: View {
                     } label: {
                         HomeCard(
                             title: comparison.closestMatch.map { "Closest size match: \($0.sizeLabel)" } ?? "Compare sizes",
-                            subtitle: "See how every available size would fit",
+                            subtitle: comparison.closestMatch.map {
+                                "Fit Score \(formatScore($0.report.score)) · 0 is ideal"
+                            } ?? "See how every available size would fit",
                             icon: "square.grid.2x2"
                         )
                     }
@@ -52,7 +54,7 @@ struct HomeView: View {
                         FitResultView(report: report)
                     } label: {
                         HomeCard(
-                            title: "\(report.score) Fit Score",
+                            title: "\(formatScore(report.score)) Fit Score",
                             subtitle: "Single scanned garment · \(report.band.rawValue)",
                             icon: "checkmark.seal"
                         )
@@ -67,6 +69,10 @@ struct HomeView: View {
             .padding(24)
         }
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func formatScore(_ score: Int) -> String {
+        score > 0 ? "+\(score)" : "\(score)"
     }
 }
 
