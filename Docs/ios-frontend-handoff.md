@@ -1,33 +1,33 @@
-# FitCheck iOS frontend handoff
+# FitCheck iOS handoff
 
-This branch focuses on native SwiftUI presentation. It includes draft editors for body and T-shirt measurements, the My Body → My Fit → Check a Garment → Results navigation, separate signed dimension result rows, actual-garment size-chart entry and comparison, and the garment measurement confirmation screen. It also includes an app icon and accent color. No demo measurements are preloaded by these screens.
+## Integrated state
 
-## App-side contracts
+Current Xcode work lives in this Bitrig `feat/ios-experience` checkout. Ansh's PR #4 guided front/side scene-depth scanner is integrated and connected to the editable body draft. Owner reports physical measurement quality on the connected iPhone is “pretty good” and says they would trust it; this is qualitative owner-reported acceptance only. Numeric tape spans, errors, and repeat logs were not supplied, so this supports no quantified or population-accuracy claim. Garment ruler implementation is complete, reviewed, and simulator-compiled; physical lifecycle behavior remains unverified.
 
-The frontend uses the models and engine from `feat/fit-core` PR #2. `ProfileStore` now supplies these `@MainActor` members:
+The iPhone 17 simulator suite passed **42/42 tests, zero skipped**:
 
-| Member | UI use |
-| --- | --- |
-| `bodyProfile: BodyProfile` | Display body status and initialize an edit draft. |
-| `preferredGarment: GarmentProfile?` | Display My Fit and provide the favorite reference. |
-| `currentGarment: GarmentProfile` | Display candidate and initialize an edit draft. |
-| `currentSizeChart: GarmentSizeChart?` | Initialize chart editor and show comparison entry. |
-| `lastReport: FitReport?`, `sizeComparison: SizeComparisonReport?` | Navigate to current results only. |
-| `saveBody(_:) throws` | Persist validated body draft on explicit Save. |
-| `saveGarment(_:role:) throws` | Persist favorite or candidate draft on explicit Save. |
-| `saveSizeChart(_:) throws` | Persist only complete finished-garment size charts. |
-| `evaluateCurrentGarment() throws`, `evaluateAvailableSizes() throws` | Calculate reports from current saved inputs; clear old reports on failure. |
-| `deleteMeasurements()` | Delete only FitCheck's saved body, favorite, candidate, and chart. |
+```bash
+xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug -destination 'platform=iOS Simulator,id=BC1974AB-ED12-4805-8C3A-C5CF97D5616C' -derivedDataPath /tmp/fitcheck-simulator-derived -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 CODE_SIGNING_ALLOWED=NO test -quiet
+```
 
-The store preserves the old `fitcheck.bodyProfile` key, decodes old profiles without source metadata, persists both garment roles and chart, and invalidates stale reports after relevant save/delete. Views never bind text fields directly to saved profiles. `MeasurementField` keeps invalid text visible; unit switching uses the canonical meter value. Manual edits mark per-dimension origins and clear prior tape verification.
+A signed build using `DEVELOPMENT_TEAM=T8U9HZY2S9 -allowProvisioningUpdates` installed and launched on connected **iPhone 17 Pro Max, iOS 27.0**; screenshot showed My Fit form. Physical measurement quality is owner-reported as “pretty good”/trustworthy, but numeric tape-span, error, and repeat logs are unavailable. No quantified accuracy claim is established; timed rehearsal remains unverified.
 
-`GarmentScanView` receives `onSave(MeasurementKey, Double)` in meters. It treats the existing `ARMeasurementView.onMeasurement` callback as a pending value and sends it to the garment draft only after **Use Measurement**. Switching dimensions or Reset recreates the camera wrapper so an old A point cannot pair with another field. The camera/controller owner still needs to add visible A/B markers and connecting line, permission/interruption handling, and device validation.
+GitHub PR #3 (`feat/ios-experience`) is Aashu's draft and owns Swift/Xcode integration/final review. PR #4 (`feat/body-scan`) is Ansh's draft; its scanner is integrated on this Bitrig branch. Keep drafts pending review and objective tape/repeat evidence.
 
-The body camera owner should provide a real scan UI that returns an editable `BodyProfile` draft with per-dimension scan origins. `BodyProfileView` currently exposes manual entry only; a Scan action should be added when the real capture UI is connected. The camera passes six measured scalar spans in meters to `GuidedBodyScanService.scan(_:)`, which calls `BodyGeometry.circumference(width:depth:)` from PR #2. A denied or unsupported camera must leave manual entry available. No fabricated values or raw image persistence are acceptable.
+## Next action: physical scanner probe
 
-## Verification and unfinished gates
+On the installed app:
 
-- The old `ProfileStore` build blocker is resolved. Bitrig build and one local iPhone 17 simulator build/install/launch succeeded. Home and manual entry screens were visually inspected. 31 unit tests passed, including `ProfileStoreTests`. One UI test passed, exercising body → favorite → candidate → results, relaunch persistence, cancel-without-saving, and deletion.
-- Bitrig's built-in simulator API returned no registered simulators in this workspace, so interactive tests use the single Xcode iPhone 17 simulator. No other simulator was booted.
-- One connected physical phone was identified as an iPhone 17 Pro Max on iOS 27.0. Command-line installation is blocked because Xcode has no account/provisioning profile for `com.itchathon.fitcheck`. No physical depth capture, tape comparison, accuracy result, or timed rehearsal has been completed here.
-- Body depth capture, real body-scan review hookup, final garment ruler controller behavior, physical-device build, tape accuracy comparison, and two 3–5 minute rehearsals remain open. Simulator build alone does not close these gates.
+1. Record or recover the known-tape **Probe** evidence: phone/OS, known span, projected span, absolute error, and whether overlay/tap alignment and boundaries were reliable. If no numeric log exists, repeat the probe and log it.
+2. Record front/side body scan spans and corresponding tape measurements for chest, waist, shoulders, and torso; report generated outputs and per-dimension errors.
+3. Record a repeated complete scan and per-dimension spread. Keep participant measurements private. If known-span or silhouette boundaries fail, report failure; never present manual values as scan proof or claim unlogged accuracy.
+
+Complete scanner/tape evidence collection on connected **iPhone 17 Pro Max**. The approved plan originally expected iPhone 17 Pro and Pro Max; current owner narrowed device acceptance to this phone. Two all-live body/favorite/candidate rehearsals in **3–5 minutes** remain open.
+
+## Contract reminders
+
+- Guided front/side depth capture uses operator-selected endpoints; no automatic Vision landmarks.
+- Scan results remain an editable draft until explicit save.
+- Result shows physical checks and separate signed chest/shoulder/length scores (−100…+100), never an aggregate score.
+- Size rows come from actual measurements; do not claim a “closest match” winner or invent adjacent sizes.
+- No unquantified accuracy claims; no fabricated scan values or raw image persistence. Preserve owner-reported qualitative assessment separately from tape/error/repeat evidence.

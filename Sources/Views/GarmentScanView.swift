@@ -7,7 +7,7 @@ struct GarmentScanView: View {
 
   @State private var selectedField: GarmentDimension = .chest
   @State private var pendingMeasurement: Double?
-  @State private var status = "Lay the shirt flat. Aim the center reticle at point A, then tap."
+  @State private var status = "Lay shirt flat on a horizontal surface. Aim the center reticle at point A, then tap."
   @State private var resetToken = UUID()
 
   var body: some View {
@@ -18,9 +18,10 @@ struct GarmentScanView: View {
             guard meters.isFinite, meters > 0, pendingMeasurement == nil else { return }
             pendingMeasurement = meters
           },
-          onStatus: { status = $0 }
+          onStatus: { status = $0 },
+          onReset: { pendingMeasurement = nil },
+          resetToken: resetToken
         )
-        .id(resetToken)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         if pendingMeasurement != nil {
@@ -29,16 +30,21 @@ struct GarmentScanView: View {
             .accessibilityHidden(true)
         }
 
-        Text(selectedField.instruction)
-          .font(.footnote.weight(.medium))
-          .multilineTextAlignment(.center)
-          .padding(.horizontal, 14)
-          .padding(.vertical, 9)
-          .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-          .padding()
-          .allowsHitTesting(false)
-      }
+        VStack(spacing: 4) {
+          Text(selectedField.instruction)
+            .font(.footnote.weight(.medium))
+          Text("Aim the center reticle at each edge, then tap anywhere. Finger position is not measured.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding()
+        .allowsHitTesting(false)
 
+      }
       VStack(alignment: .leading, spacing: 12) {
         Picker("Dimension", selection: $selectedField) {
           ForEach(GarmentDimension.allCases) { field in
@@ -89,7 +95,7 @@ struct GarmentScanView: View {
   private func reset() {
     pendingMeasurement = nil
     resetToken = UUID()
-    status = "Aim the center reticle at point A, then tap."
+    status = "Lay shirt flat on a horizontal surface. Aim the center reticle at point A, then tap."
   }
 }
 

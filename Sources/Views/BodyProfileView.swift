@@ -13,12 +13,26 @@ struct BodyProfileView: View {
   @State private var torsoValid = true
   @State private var hipValid = true
   @State private var showValidation = false
+  @State private var showingBodyScan = false
   @State private var errorMessage: String?
 
   private var unit: LengthUnit { LengthUnit(rawValue: unitRaw) ?? .centimeters }
 
   var body: some View {
     Form {
+      Section {
+        Button {
+          showingBodyScan = true
+        } label: {
+          Label("Scan Body", systemImage: "viewfinder")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityHint("Measure your body with the camera. Scan results stay unsaved until you save this form.")
+      } footer: {
+        Text("If you measure with a tape, replace scan estimates in these fields. Replacements are saved as manual measurements; unchanged scans stay unverified. Scan images are not stored.")
+      }
+
       Section {
         Picker("Units", selection: $unitRaw) {
           ForEach(LengthUnit.allCases) { option in
@@ -35,21 +49,26 @@ struct BodyProfileView: View {
         MeasurementField(title: "Chest circumference", meters: $draft.chestCircumference, unit: unit, isValid: $chestValid) {
           markEdited(.chestCircumference)
         }
+        sourceLabel(.chestCircumference)
         MeasurementField(title: "Shoulder width", meters: $draft.shoulderWidth, unit: unit, isValid: $shoulderValid) {
           markEdited(.shoulderWidth)
         }
+        sourceLabel(.shoulderWidth)
         MeasurementField(title: "Torso length", meters: $draft.torsoLength, unit: unit, isValid: $torsoValid) {
           markEdited(.torsoLength)
         }
+        sourceLabel(.torsoLength)
       }
 
       Section {
         MeasurementField(title: "Waist circumference", meters: $draft.waistCircumference, unit: unit, isValid: $waistValid) {
           markEdited(.waistCircumference)
         }
+        sourceLabel(.waistCircumference)
         MeasurementField(title: "Hip circumference", meters: $draft.hipCircumference, unit: unit, required: false, isValid: $hipValid) {
           markEdited(.hipCircumference)
         }
+        sourceLabel(.hipCircumference)
       } header: {
         Text("Additional measurements")
       } footer: {
@@ -78,6 +97,9 @@ struct BodyProfileView: View {
     } message: {
       Text(errorMessage ?? "Enter positive values for chest, waist, shoulders, and torso. Correct any highlighted fields before saving.")
     }
+    .sheet(isPresented: $showingBodyScan) {
+      BodyScanView(onComplete: applyScan, onCancel: { showingBodyScan = false })
+    }
     .onAppear {
       guard !didLoad else { return }
       didLoad = true
@@ -105,11 +127,60 @@ struct BodyProfileView: View {
   }
 
   private func valid(_ value: Double) -> Bool { value.isFinite && value > 0 }
+  private func applyScan(_ scanned: BodyProfile) {
+    draft.chestCircumference = scanned.chestCircumference
+    draft.waistCircumference = scanned.waistCircumference
+    draft.shoulderWidth = scanned.shoulderWidth
+    draft.torsoLength = scanned.torsoLength
+
+    var origins = draft.origins ?? [:]
+    for key in [
+      MeasurementKey.chestCircumference,
+      .waistCircumference,
+      .shoulderWidth,
+      .torsoLength
+    ] {
+      origins[key.rawValue] = scanned.origins?[key.rawValue] ?? MeasurementOrigin(source: .bodyScan)
+    }
+    draft.origins = origins
+
+    chestValid = valid(scanned.chestCircumference)
+    waistValid = valid(scanned.waistCircumference)
+    shoulderValid = valid(scanned.shoulderWidth)
+    torsoValid = valid(scanned.torsoLength)
+    showingBodyScan = false
+  }
+
+  @ViewBuilder
+  private func sourceLabel(_ key: MeasurementKey) -> some View {
+    let origin = draft.origins?[key.rawValue]
+    let title: String = {
+      guard let origin else { return "Manual entry" }
+      if origin.source == .manual && origin.wasEdited { return "Manually edited" }
+      if origin.wasEdited { return "Edited after \(origin.source == .bodyScan ? "scan" : "entry")" }
+      switch origin.source {
+      case .manual: return "Manual entry"
+      case .bodyScan: return "Body scan"
+      case .external: return "Imported measurement"
+      case .garmentScan: return "Garment scan"
+      case .retailer: return "Retailer measurement"
+      }
+    }()
+    Label(title, systemImage: origin?.source == .bodyScan && origin?.wasEdited != true ? "viewfinder" : "pencil")
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .accessibilityLabel("\(key.displayName), \(title)")
+  }
 
   private func markEdited(_ key: MeasurementKey) {
     var origins = draft.origins ?? [:]
-    var origin = origins[key.rawValue] ?? MeasurementOrigin(source: .manual)
-    if origins[key.rawValue] != nil { origin.wasEdited = true }
+    let existingOrigin = origins[key.rawValue]
+    var origin = existingOrigin ?? MeasurementOrigin(source: .manual)
+    if existingOrigin != nil { origin.wasEdited = true }
+    if origin.source == .bodyScan {
+      origin.source = .manual
+      origin.wasEdited = true
+    }
     origin.verifiedWithTape = false
     origin.observedErrorMeters = nil
     origins[key.rawValue] = origin

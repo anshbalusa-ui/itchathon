@@ -1,93 +1,25 @@
-# itchathon — FitCheck iOS
+# FitCheck iOS
 
-An iOS prototype for answering one question before buying clothes: **will this actually fit me?**
+**Your body + your favorite shirt + a candidate shirt → how the candidate compares.**
 
-FitCheck creates a reusable body measurement profile, measures a garment with the camera/AR stack, then compares the two with garment-specific ease allowances to produce a dimension-by-dimension fit report and a signed -100 to +100 Fit Score.
+FitCheck is a native SwiftUI prototype. Body measurements set physical constraints; a saved favorite shirt sets preferred garment dimensions; a candidate is checked against both. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.
 
-## Hackathon scope
+## Implemented flow
 
-### Core demo flow
-1. **Create body profile**
-   - Guided scan / measurement flow
-   - Chest, waist, hip, shoulder width, torso length
-   - Values stored locally on device
-2. **Measure garment**
-   - Lay garment flat
-   - AR ruler measures chest width, shoulders, waist width, length
-   - Flat widths are converted to approximate circumferences where appropriate
-3. **Fit check**
-   - Compare garment measurements against body profile
-   - Apply garment-category ease rules
-   - Return a signed Fit Score for each dimension and overall fit
-   - **-100 = far too small, 0 = ideal target fit, +100 = far too large**
-   - Scores closer to 0 are better matches
-4. **Size matching**
-   - When actual measurements are available for S / M / L / XL / 2XL / etc., score every size against the same body profile
-   - Show the closest measurement match by choosing the size whose score is closest to 0
-   - Describe how each size would fit: e.g. fitted through chest, comfortable shoulders, relaxed waist
-   - Never assume neighboring sizes scale by a fixed amount; use real brand/product measurements
-5. **Results**
-   - Overall signed score for a scanned garment (-100...+100, with 0 ideal)
-   - Per-size Fit Scores for a size chart
-   - Tight / fitted / comfortable / relaxed / incompatible indicators
-   - Explain *why* instead of trusting the size label alone
+- Enter and save body measurements, then enter and save a named favorite shirt and candidate shirt. Measurements are edited as local drafts and stored on-device.
+- Enter chest width, shoulder width, and length for each shirt. Compare candidate with favorite using separate signed chest, shoulder, and length scores: negative means smaller/shorter, zero means equal to favorite, positive means larger/longer. **There is no overall or averaged score.**
+- Keep physical checks separate from preference scores: chest and, when corresponding measurements exist, waist are checked against the body. Shoulder and length scores compare garments, not body dimensions.
+- Enter size-chart rows from **finished-garment measurements** and compare actual sizes. Body-size recommendation charts are not interchangeable with garment measurements.
 
-## Technical direction
+## Scanner status and limits
 
-- SwiftUI for the app shell
-- ARKit for metric measurement and LiDAR-aware raycasts
-- Vision / body pose as an optional assist for guided body measurement
-- Local-only persistence for the hackathon prototype
-- XcodeGen so the project can be generated from source
-- Pure Swift fit engine so logic can be tested independently of AR
+The app includes an ARKit `sceneDepth` guided body scanner and an AR garment ruler. The app has been built, installed, and launched on the connected iPhone 17 Pro Max (iOS 27.0). An owner reports a physical measurement check on that phone had “pretty good accuracy” and they would trust it; no numeric tape-error or repeatability values were recorded. Treat this as qualitative anecdotal evidence, not a general accuracy claim. Garment-ruler measurement validation and timed live-demo rehearsal remain unverified. Only the connected phone was in scope; no second-phone validation was performed.
 
-## Bento reference
+No raw body images are stored or uploaded by the app. Do not put secrets or real measurements/photos in this repository, commits, or coding-agent prompts.
 
-We reviewed the public Bento project by cijjas because it explores a related AR measurement + fit-check workflow. This repo uses the same broad architectural lessons — separate models, AR measurement, fit logic, and SwiftUI views — but the implementation here is purpose-built for clothing fit and body profiles.
+## Setup and verification
 
-Reference: https://github.com/cijjas/bento
-
-## Repo layout
-
-```
-Sources/
-  FitCheckApp.swift
-  Models/
-    Measurements.swift
-    BodyProfile.swift
-    GarmentProfile.swift
-    SizeChart.swift
-  Services/
-    ProfileStore.swift
-    FitEngine.swift
-  AR/
-    ARMeasurementView.swift
-    ARMeasurementViewController.swift
-  BodyScan/
-    BodyScanService.swift
-  Views/
-    RootView.swift
-    HomeView.swift
-    BodyProfileView.swift
-    GarmentScanView.swift
-    FitResultView.swift
-    SizeComparisonView.swift
-  Support/
-    Info.plist
-Tests/
-  FitEngineTests.swift
-Docs/
-  CODEX_HANDOFF.md
-project.yml
-```
-
-## Setup
-
-Requirements:
-- macOS
-- Xcode 16+
-- iOS 17+
-- Physical iPhone recommended; LiDAR-capable device preferred for the demo
+Requires macOS, Xcode, and XcodeGen. `project.yml` is canonical; generate the existing project before opening it:
 
 ```bash
 brew install xcodegen
@@ -95,27 +27,27 @@ xcodegen generate
 open FitCheck.xcodeproj
 ```
 
-The simulator can run the UI and fit engine, but AR measurement needs a real device.
+Latest recorded simulator run: **42/42 tests passed, zero skipped**, on iPhone 17 / iOS 27.0 simulator. Reproduce with:
 
-## Hackathon MVP priorities
+```bash
+xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug \
+  -destination 'platform=iOS Simulator,id=BC1974AB-ED12-4805-8C3A-C5CF97D5616C' \
+  -derivedDataPath /tmp/fitcheck-simulator-derived \
+  -parallel-testing-enabled NO \
+  -maximum-concurrent-test-simulator-destinations 1 \
+  CODE_SIGNING_ALLOWED=NO test -quiet
+```
 
-**Must work**
-- Local body profile
-- Garment AR ruler
-- Fit engine
-- Multi-size comparison when a real garment size chart is available
-- Polished single-item and size-comparison result screens
+## Repository map
 
-**Nice to have**
-- Automatic body landmark detection
-- Depth-assisted width estimation
-- Multiple garment categories
-- Saved scan history
-
-**Do not burn time on**
-- Full photorealistic avatar
-- Perfect circumference reconstruction
-- Backend/auth
-- Retail integrations before the core demo works
-
-See `Docs/CODEX_HANDOFF.md` for the next-agent build plan.
+```text
+project.yml                 XcodeGen project and schemes
+Sources/Models/             Body, garment, chart, and measurement types
+Sources/Services/           Local profile store and fit/scoring engine
+Sources/Views/              Manual entry, results, size chart, home flow
+Sources/BodyScan/           Guided depth capture and body measurement
+Sources/AR/                 Garment ruler
+Tests/                      Unit tests
+UITests/                    Manual-flow UI tests
+Docs/                       Frontend handoff
+```

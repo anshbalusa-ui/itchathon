@@ -48,6 +48,9 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private let imageContext = CIContext(options: [.cacheIntermediates: false])
     private var needsRetake = false
     private var didCancel = false
+    private var issueMessage: String?
+    private var interruptionMessage: String?
+    private var pendingIssueAlert: UIAlertController?
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
@@ -66,6 +69,11 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         configureViews()
         checkPermissionAndStart()
         NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        presentPendingIssueAlert()
     }
 
     override func viewDidLayoutSubviews() {
@@ -141,7 +149,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
             for title in titles {
                 let button = UIButton(type: .system)
                 button.setTitle(title, for: .normal)
-                button.accessibilityLabel = title == "Mark" ? "Mark two endpoints" : title
+                button.accessibilityLabel = title == "Mark" ? "Mark two endpoints" : title == "Cancel" ? "Cancel Body Scan" : title
                 button.setTitleColor(.white, for: .normal)
                 button.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.85)
                 button.layer.cornerRadius = 8
@@ -171,14 +179,17 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
                     self.startSession()
                 }
             }
-        case .denied, .restricted:
-            presentIssue("Camera access is required. Allow access in Settings or enter measurements manually.")
+        case .denied:
+            presentIssue("Camera access was denied. Allow access in Settings or enter measurements manually.")
+        case .restricted:
+            presentIssue("Camera access is restricted. Enter measurements manually.")
         @unknown default:
             presentIssue("Camera access is unavailable. Enter measurements manually.")
         }
     }
 
     private func startSession() {
+        guard UIApplication.shared.applicationState != .background else { return }
         guard ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) else {
             presentIssue("Scene depth is unsupported. Enter measurements manually.")
             return
@@ -222,8 +233,8 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
             stage = .permission
         }
         needsRetake = true
+        interruptionMessage = message
         updateInterface()
-        presentStatus(message)
     }
 
     @objc private func controlTapped(_ sender: UIButton) {
@@ -455,6 +466,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
             ["chestDepth", "waistDepth"].forEach { completed.removeValue(forKey: $0) }
             stage = .coachingSide
         }
+        interruptionMessage = nil
         needsRetake = false
         updateInterface()
         resumeSession()
@@ -485,6 +497,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func resumeSession() {
+        guard UIApplication.shared.applicationState != .background else { return }
         let configuration = ARWorldTrackingConfiguration()
         configuration.frameSemantics.insert(.sceneDepth)
         session.delegate = self
@@ -551,7 +564,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         case .probeCoaching: title = "Known tape-span probe: freeze a frame and mark two endpoints on a measured object."
         case .probeMarking: title = "Probe: tap the first and second ends of the known span."
         }
-        statusLabel.text = title
+        statusLabel.text = issueMessage ?? interruptionMessage ?? title
         let values: [(String, String)] = [
             ("Chest width", "chestWidth"), ("Chest depth", "chestDepth"), ("Waist width", "waistWidth"),
             ("Waist depth", "waistDepth"), ("Shoulder width", "shoulderWidth"), ("Torso length", "torsoLength")
@@ -589,10 +602,18 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private func presentStatus(_ message: String) { statusLabel.text = message }
 
     private func presentIssue(_ message: String) {
-        presentStatus(message)
+        if stage == .permission { issueMessage = message }
         updateInterface()
         let alert = UIAlertController(title: "Body Scan", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
-        if presentedViewController == nil { present(alert, animated: true) }
+        pendingIssueAlert = alert
+        presentPendingIssueAlert()
+    }
+
+    private func presentPendingIssueAlert() {
+        guard view.window != nil, presentedViewController == nil,
+              let alert = pendingIssueAlert else { return }
+        pendingIssueAlert = nil
+        present(alert, animated: true)
     }
 }
