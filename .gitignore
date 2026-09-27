@@ -1,0 +1,16 @@
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# XcodeGen generated project
+FitCheck.xcodeproj/
+
+# macOS
+.DS_Store
+
+# Swift
+.build/
+.swiftpm/
