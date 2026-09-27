@@ -6,11 +6,10 @@ struct GarmentEntryView: View {
     case candidate
 
     var title: String { self == .favorite ? "My Fit" : "Check a Garment" }
-    var saveTitle: String { self == .favorite ? "Save Favorite" : "Save Garment" }
   }
 
   @Environment(\.dismiss) private var dismiss
-  @AppStorage("fitcheck.preferredUnit") private var unitRaw = EntryUnit.centimeters.rawValue
+  @AppStorage("fitcheck.preferredUnit") private var unitRaw = LengthUnit.centimeters.rawValue
 
   var purpose: Purpose
   var onSave: (GarmentProfile) throws -> Void
@@ -20,6 +19,8 @@ struct GarmentEntryView: View {
   @State private var shoulderValid = true
   @State private var lengthValid = true
   @State private var waistValid = true
+  @State private var sourceRaw = MeasurementSource.manual.rawValue
+  @State private var showScanner = false
   @State private var errorMessage: String?
 
   init(purpose: Purpose, initial: GarmentProfile = GarmentProfile(), onSave: @escaping (GarmentProfile) throws -> Void) {
@@ -30,7 +31,7 @@ struct GarmentEntryView: View {
     _draft = State(initialValue: copy)
   }
 
-  private var unit: EntryUnit { EntryUnit(rawValue: unitRaw) ?? .centimeters }
+  private var unit: LengthUnit { LengthUnit(rawValue: unitRaw) ?? .centimeters }
 
   var body: some View {
     Form {
@@ -49,7 +50,7 @@ struct GarmentEntryView: View {
 
       Section {
         Picker("Units", selection: $unitRaw) {
-          ForEach(EntryUnit.allCases) { option in
+          ForEach(LengthUnit.allCases) { option in
             Text(option == .centimeters ? "Centimeters" : "Inches")
               .tag(option.rawValue)
           }
@@ -60,10 +61,55 @@ struct GarmentEntryView: View {
       }
 
       Section("Shirt measurements") {
-        MeasurementField(title: "Chest width", meters: $draft.chestFlat, unit: unit, isValid: $chestValid)
-        MeasurementField(title: "Shoulders", meters: $draft.shoulderWidth, unit: unit, isValid: $shoulderValid)
-        MeasurementField(title: "Length", meters: $draft.length, unit: unit, isValid: $lengthValid)
-        MeasurementField(title: "Waist width", meters: $draft.waistFlat, unit: unit, required: false, isValid: $waistValid)
+        MeasurementField(title: "Chest width", meters: $draft.chestFlat, unit: unit, isValid: $chestValid) {
+          markEdited(.garmentChestFlat)
+        }
+        MeasurementField(title: "Shoulders", meters: $draft.shoulderWidth, unit: unit, isValid: $shoulderValid) {
+          markEdited(.garmentShoulderWidth)
+        }
+        MeasurementField(title: "Length", meters: $draft.length, unit: unit, isValid: $lengthValid) {
+          markEdited(.garmentLength)
+        }
+        MeasurementField(title: "Waist width", meters: $draft.waistFlat, unit: unit, required: false, isValid: $waistValid) {
+          markEdited(.garmentWaistFlat)
+          if draft.waistFlat == 0 { draft.waistAtNavel = nil }
+        }
+        if draft.waistFlat > 0 {
+          Toggle("Waist measured at navel level", isOn: Binding(
+            get: { draft.waistAtNavel == true },
+            set: { draft.waistAtNavel = $0 }
+          ))
+        }
+      }
+
+      Section {
+        Button("Measure with Camera", systemImage: "camera.viewfinder") {
+          showScanner = true
+        }
+      } footer: {
+        Text("A helper can aim the center reticle at each edge of a shirt laid flat. Review every value before saving.")
+      }
+
+      Section {
+        Picker("Source of values you enter", selection: $sourceRaw) {
+          Text("Measured by me").tag(MeasurementSource.manual.rawValue)
+          Text("Another measurement").tag(MeasurementSource.external.rawValue)
+          Text("Retailer chart").tag(MeasurementSource.retailer.rawValue)
+        }
+        .onChange(of: sourceRaw) { _, value in
+          guard let selected = MeasurementSource(rawValue: value),
+                var origins = draft.origins else { return }
+          for key in origins.keys {
+            guard var origin = origins[key], origin.source != .garmentScan else { continue }
+            origin.source = selected
+            origin.verifiedWithTape = false
+            origin.observedErrorMeters = nil
+            origins[key] = origin
+          }
+          draft.origins = origins
+        }
+      } footer: {
+        Text("Existing scanned values keep their scan source when you correct them. Changing a value clears any previous tape verification.")
       }
 
       Section {
@@ -91,6 +137,11 @@ struct GarmentEntryView: View {
     } message: {
       Text(errorMessage ?? "Check your measurements and try again.")
     }
+    .sheet(isPresented: $showScanner) {
+      NavigationStack {
+        GarmentScanView { key, meters in applyScan(key: key, meters: meters) }
+      }
+    }
   }
 
   private func save() {
@@ -114,4 +165,37 @@ struct GarmentEntryView: View {
   }
 
   private func valid(_ value: Double) -> Bool { value.isFinite && value > 0 }
+
+  private func markEdited(_ key: MeasurementKey) {
+    var origins = draft.origins ?? [:]
+    var origin = origins[key.rawValue] ?? MeasurementOrigin(source: MeasurementSource(rawValue: sourceRaw) ?? .manual)
+    if origins[key.rawValue] != nil { origin.wasEdited = true }
+    origin.verifiedWithTape = false
+    origin.observedErrorMeters = nil
+    origins[key.rawValue] = origin
+    draft.origins = origins
+  }
+
+  private func applyScan(key: MeasurementKey, meters: Double) {
+    guard valid(meters) else { return }
+    switch key {
+    case .garmentChestFlat:
+      draft.chestFlat = meters
+      chestValid = true
+    case .garmentShoulderWidth:
+      draft.shoulderWidth = meters
+      shoulderValid = true
+    case .garmentLength:
+      draft.length = meters
+      lengthValid = true
+    case .garmentWaistFlat:
+      draft.waistFlat = meters
+      waistValid = true
+    default:
+      return
+    }
+    var origins = draft.origins ?? [:]
+    origins[key.rawValue] = MeasurementOrigin(source: .garmentScan)
+    draft.origins = origins
+  }
 }

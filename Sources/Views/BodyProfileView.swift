@@ -3,7 +3,7 @@ import SwiftUI
 struct BodyProfileView: View {
   @EnvironmentObject private var store: ProfileStore
   @Environment(\.dismiss) private var dismiss
-  @AppStorage("fitcheck.preferredUnit") private var unitRaw = EntryUnit.centimeters.rawValue
+  @AppStorage("fitcheck.preferredUnit") private var unitRaw = LengthUnit.centimeters.rawValue
 
   @State private var draft = BodyProfile()
   @State private var didLoad = false
@@ -13,14 +13,15 @@ struct BodyProfileView: View {
   @State private var torsoValid = true
   @State private var hipValid = true
   @State private var showValidation = false
+  @State private var errorMessage: String?
 
-  private var unit: EntryUnit { EntryUnit(rawValue: unitRaw) ?? .centimeters }
+  private var unit: LengthUnit { LengthUnit(rawValue: unitRaw) ?? .centimeters }
 
   var body: some View {
     Form {
       Section {
         Picker("Units", selection: $unitRaw) {
-          ForEach(EntryUnit.allCases) { option in
+          ForEach(LengthUnit.allCases) { option in
             Text(option == .centimeters ? "Centimeters" : "Inches")
               .tag(option.rawValue)
           }
@@ -31,14 +32,24 @@ struct BodyProfileView: View {
       }
 
       Section("Upper body") {
-        MeasurementField(title: "Chest circumference", meters: $draft.chestCircumference, unit: unit, isValid: $chestValid)
-        MeasurementField(title: "Shoulder width", meters: $draft.shoulderWidth, unit: unit, isValid: $shoulderValid)
-        MeasurementField(title: "Torso length", meters: $draft.torsoLength, unit: unit, isValid: $torsoValid)
+        MeasurementField(title: "Chest circumference", meters: $draft.chestCircumference, unit: unit, isValid: $chestValid) {
+          markEdited(.chestCircumference)
+        }
+        MeasurementField(title: "Shoulder width", meters: $draft.shoulderWidth, unit: unit, isValid: $shoulderValid) {
+          markEdited(.shoulderWidth)
+        }
+        MeasurementField(title: "Torso length", meters: $draft.torsoLength, unit: unit, isValid: $torsoValid) {
+          markEdited(.torsoLength)
+        }
       }
 
       Section {
-        MeasurementField(title: "Waist circumference", meters: $draft.waistCircumference, unit: unit, isValid: $waistValid)
-        MeasurementField(title: "Hip circumference", meters: $draft.hipCircumference, unit: unit, required: false, isValid: $hipValid)
+        MeasurementField(title: "Waist circumference", meters: $draft.waistCircumference, unit: unit, isValid: $waistValid) {
+          markEdited(.waistCircumference)
+        }
+        MeasurementField(title: "Hip circumference", meters: $draft.hipCircumference, unit: unit, required: false, isValid: $hipValid) {
+          markEdited(.hipCircumference)
+        }
       } header: {
         Text("Additional measurements")
       } footer: {
@@ -64,7 +75,7 @@ struct BodyProfileView: View {
     .alert("Check measurements", isPresented: $showValidation) {
       Button("OK", role: .cancel) {}
     } message: {
-      Text("Enter positive values for chest, waist, shoulders, and torso. Correct any highlighted fields before saving.")
+      Text(errorMessage ?? "Enter positive values for chest, waist, shoulders, and torso. Correct any highlighted fields before saving.")
     }
     .onAppear {
       guard !didLoad else { return }
@@ -83,10 +94,24 @@ struct BodyProfileView: View {
       showValidation = true
       return
     }
-    store.bodyProfile = draft
-    store.saveBodyProfile()
-    dismiss()
+    do {
+      try store.saveBody(draft)
+      dismiss()
+    } catch {
+      errorMessage = error.localizedDescription
+      showValidation = true
+    }
   }
 
   private func valid(_ value: Double) -> Bool { value.isFinite && value > 0 }
+
+  private func markEdited(_ key: MeasurementKey) {
+    var origins = draft.origins ?? [:]
+    var origin = origins[key.rawValue] ?? MeasurementOrigin(source: .manual)
+    if origins[key.rawValue] != nil { origin.wasEdited = true }
+    origin.verifiedWithTape = false
+    origin.observedErrorMeters = nil
+    origins[key.rawValue] = origin
+    draft.origins = origins
+  }
 }

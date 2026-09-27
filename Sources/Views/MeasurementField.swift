@@ -4,9 +4,10 @@ import SwiftUI
 struct MeasurementField: View {
   var title: String
   @Binding var meters: Double
-  var unit: EntryUnit
+  var unit: LengthUnit
   var required = true
   @Binding var isValid: Bool
+  var onEdit: (() -> Void)? = nil
 
   @State private var text = ""
   @State private var hasLoaded = false
@@ -22,7 +23,7 @@ struct MeasurementField: View {
           .focused($isFocused)
           .multilineTextAlignment(.trailing)
           .frame(minWidth: 70, maxWidth: 112)
-          .accessibilityLabel("\(title) in \(unit.accessibilityName)")
+          .accessibilityLabel("\(title) in \(unit.rawValue)")
           .onChange(of: text) { _, value in update(value) }
         Text(unit.symbol)
           .foregroundStyle(.secondary)
@@ -60,7 +61,10 @@ struct MeasurementField: View {
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
     if trimmed.isEmpty {
       isValid = !required
-      if !required { meters = 0 }
+      if !required {
+        meters = 0
+        onEdit?()
+      }
       return
     }
     guard let number = Self.positiveNumber(trimmed),
@@ -70,6 +74,7 @@ struct MeasurementField: View {
     }
     isValid = true
     meters = unit.meters(number)
+    onEdit?()
   }
 
   private var validMeters: Bool { meters.isFinite && meters > 0 }
@@ -90,22 +95,5 @@ struct MeasurementField: View {
           number.doubleValue.isFinite,
           number.doubleValue > 0 else { return nil }
     return number.doubleValue
-  }
-}
-
-enum EntryUnit: String, CaseIterable, Identifiable {
-  case centimeters
-  case inches
-
-  var id: String { rawValue }
-  var symbol: String { self == .centimeters ? "cm" : "in" }
-  var accessibilityName: String { rawValue }
-
-  func meters(_ value: Double) -> Double {
-    self == .centimeters ? value / 100 : value * 0.0254
-  }
-
-  func display(_ value: Double) -> Double {
-    self == .centimeters ? value * 100 : value / 0.0254
   }
 }

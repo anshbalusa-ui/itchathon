@@ -1,106 +1,186 @@
 import SwiftUI
 
 struct HomeView: View {
-    @EnvironmentObject private var store: ProfileStore
+  @EnvironmentObject private var store: ProfileStore
+  @State private var showDeleteConfirmation = false
+  @State private var actionError: String?
 
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("FitCheck")
-                        .font(.largeTitle.bold())
-                    Text("Know how it fits before you buy it.")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
+  private var hasBody: Bool { store.bodyProfile.isUsable }
+  private var hasFavorite: Bool { store.preferredGarment?.isUsable == true }
+  private var hasCandidate: Bool { store.currentGarment.isUsable }
 
-                NavigationLink {
-                    BodyProfileView()
-                } label: {
-                    HomeCard(
-                        title: store.bodyProfile.isUsable ? "Your fit profile" : "Create your fit profile",
-                        subtitle: store.bodyProfile.isUsable ? "Measurements saved on this phone" : "Start with the measurements that matter most",
-                        icon: "person.crop.rectangle"
-                    )
-                }
-
-                NavigationLink {
-                    GarmentScanView()
-                } label: {
-                    HomeCard(
-                        title: "Scan a garment",
-                        subtitle: "Measure chest, shoulders, waist, and length",
-                        icon: "tshirt"
-                    )
-                }
-                .disabled(!store.bodyProfile.isUsable)
-
-                if let comparison = store.sizeComparison {
-                    NavigationLink {
-                        SizeComparisonView(comparison: comparison)
-                    } label: {
-                        HomeCard(
-                            title: comparison.closestMatch.map { "Closest size match: \($0.sizeLabel)" } ?? "Compare sizes",
-                            subtitle: comparison.closestMatch.map {
-                                "Fit Score \(formatScore($0.report.score)) · 0 is ideal"
-                            } ?? "See how every available size would fit",
-                            icon: "square.grid.2x2"
-                        )
-                    }
-                }
-
-                if let report = store.lastReport {
-                    NavigationLink {
-                        FitResultView(report: report)
-                    } label: {
-                        HomeCard(
-                            title: "\(formatScore(report.score)) Fit Score",
-                            subtitle: "Single scanned garment · \(report.band.rawValue)",
-                            icon: "checkmark.seal"
-                        )
-                    }
-                }
-
-                Button("Load demo data") {
-                    store.loadDemoData()
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(24)
+  var body: some View {
+    List {
+      Section {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("Find your fit")
+            .font(.title2.bold())
+          Text("Your body sets the limits. Your favorite shirt sets the feel. Check another shirt against both.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
         }
-        .navigationBarTitleDisplayMode(.inline)
-    }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
 
-    private func formatScore(_ score: Int) -> String {
-        score > 0 ? "+\(score)" : "\(score)"
+      Section("Your measurements") {
+        NavigationLink {
+          BodyProfileView()
+        } label: {
+          StepRow(
+            title: "My Body",
+            detail: hasBody ? "Measurements saved" : "Add your measurements",
+            symbol: "figure.stand",
+            complete: hasBody
+          )
+        }
+
+        NavigationLink {
+          GarmentEntryView(purpose: .favorite, initial: store.preferredGarment ?? GarmentProfile()) { draft in
+            try store.saveGarment(draft, role: .preferred)
+          }
+        } label: {
+          StepRow(
+            title: "My Fit",
+            detail: store.preferredGarment?.name ?? "Add a favorite shirt",
+            symbol: "tshirt",
+            complete: hasFavorite
+          )
+        }
+
+        NavigationLink {
+          GarmentEntryView(purpose: .candidate, initial: store.currentGarment) { draft in
+            try store.saveGarment(draft, role: .candidate)
+            if hasBody && hasFavorite {
+              do { try store.evaluateCurrentGarment() }
+              catch { actionError = error.localizedDescription }
+            }
+          }
+        } label: {
+          StepRow(
+            title: "Check a Garment",
+            detail: hasCandidate ? store.currentGarment.name : "Measure a shirt to compare",
+            symbol: "ruler",
+            complete: hasCandidate
+          )
+        }
+      }
+
+      Section("Comparison") {
+        if let report = store.lastReport, let preferred = store.preferredGarment {
+          NavigationLink {
+            FitResultView(
+              report: report,
+              bodyProfile: store.bodyProfile,
+              preferred: preferred,
+              candidate: store.currentGarment
+            )
+          } label: {
+            Label("View Results", systemImage: "chart.bar.xaxis")
+          }
+        } else {
+          Label(
+            missingPrerequisiteMessage,
+            systemImage: "info.circle"
+          )
+          .foregroundStyle(.secondary)
+          if hasBody && hasFavorite && hasCandidate {
+            Button("Calculate Results") {
+              do { try store.evaluateCurrentGarment() }
+              catch { actionError = error.localizedDescription }
+            }
+          }
+        }
+      }
+
+      Section("Compare sizes") {
+        NavigationLink {
+          SizeChartEntryView()
+        } label: {
+          Label("Enter a garment size chart", systemImage: "square.grid.2x2")
+        }
+        if store.currentSizeChart != nil && hasBody && hasFavorite && store.sizeComparison == nil {
+          Button("Compare Entered Sizes", systemImage: "chart.bar.xaxis") {
+            do { try store.evaluateAvailableSizes() }
+            catch { actionError = error.localizedDescription }
+          }
+        }
+        if let comparison = store.sizeComparison {
+          NavigationLink {
+            SizeComparisonView(comparison: comparison, chart: store.currentSizeChart)
+          } label: {
+            Label("View size comparison", systemImage: "chart.bar.xaxis")
+          }
+        }
+      }
+
+      if hasBody || hasFavorite || hasCandidate || store.currentSizeChart != nil {
+        Section {
+          Button("Delete FitCheck measurements", systemImage: "trash", role: .destructive) {
+            showDeleteConfirmation = true
+          }
+        } footer: {
+          Text("Deleting removes your saved body, favorite, candidate, and size chart from this iPhone.")
+        }
+      }
     }
+    .listStyle(.insetGrouped)
+    .navigationTitle("FitCheck")
+    .confirmationDialog("Delete all FitCheck measurements?", isPresented: $showDeleteConfirmation) {
+      Button("Delete Measurements", role: .destructive) {
+        store.deleteMeasurements()
+      }
+    } message: {
+      Text("This removes your body, favorite shirt, candidate shirt, and size chart from this iPhone.")
+    }
+    .alert("Unable to compare", isPresented: Binding(
+      get: { actionError != nil },
+      set: { if !$0 { actionError = nil } }
+    )) {
+      Button("OK", role: .cancel) { actionError = nil }
+    } message: {
+      Text(actionError ?? "Review your measurements and try again.")
+    }
+  }
+
+  private var missingPrerequisiteMessage: String {
+    if !hasBody && !hasFavorite { return "Add your body and favorite shirt to see results." }
+    if !hasBody { return "Add your body measurements to see results." }
+    if !hasFavorite { return "Add your favorite shirt to see results." }
+    if !hasCandidate { return "Check a garment to see results." }
+    return "Review measurements to calculate results."
+  }
 }
 
-private struct HomeCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
+private struct StepRow: View {
+  var title: String
+  var detail: String
+  var symbol: String
+  var complete: Bool
 
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.title2)
-                .frame(width: 44, height: 44)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-            Image(systemName: "chevron.right")
-                .foregroundStyle(.tertiary)
-        }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+  var body: some View {
+    HStack(spacing: 14) {
+      Image(systemName: symbol)
+        .font(.title3)
+        .foregroundStyle(.tint)
+        .frame(width: 34)
+        .accessibilityHidden(true)
+      VStack(alignment: .leading, spacing: 3) {
+        Text(title)
+          .font(.headline)
+        Text(detail)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .lineLimit(2)
+      }
+      Spacer(minLength: 8)
+      if complete {
+        Image(systemName: "checkmark.circle.fill")
+          .foregroundStyle(.green)
+          .accessibilityLabel("Complete")
+      }
     }
+    .padding(.vertical, 5)
+    .accessibilityElement(children: .combine)
+  }
 }
