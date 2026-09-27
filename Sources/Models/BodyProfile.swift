@@ -7,9 +7,15 @@ struct BodyProfile: Codable, Equatable {
     var shoulderWidth: Double = 0
     var torsoLength: Double = 0
     var updatedAt: Date = .now
+    var origins: [String: MeasurementOrigin]? = nil
 
     var isUsable: Bool {
-        chestCircumference > 0 && shoulderWidth > 0
+        validLength(chestCircumference)
+            && validLength(waistCircumference)
+            && validLength(shoulderWidth)
+            && validLength(torsoLength)
+            && (hipCircumference == 0 || validLength(hipCircumference))
+            && (origins?.values.allSatisfy(\.isValid) ?? true)
     }
 
     static let demo = BodyProfile(
