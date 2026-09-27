@@ -111,6 +111,7 @@ struct SizeChartEntryView: View {
     }
     .navigationTitle("Size Chart")
     .navigationBarTitleDisplayMode(.inline)
+    .navigationBarBackButtonHidden()
     .toolbar {
       ToolbarItem(placement: .cancellationAction) {
         Button("Cancel") { dismiss() }
@@ -139,6 +140,14 @@ struct SizeChartEntryView: View {
     brand = chart.brand ?? ""
     sourceNote = chart.sourceNote ?? ""
     measurementBasisRaw = chart.measurementBasis?.rawValue ?? ""
+    switch chart.sizes.first?.origins?[MeasurementKey.garmentChestFlat.rawValue]?.source {
+    case .manual:
+      sourceRaw = MeasurementSource.manual.rawValue
+    case .external:
+      sourceRaw = MeasurementSource.external.rawValue
+    default:
+      sourceRaw = MeasurementSource.retailer.rawValue
+    }
     rows = chart.sizes.map { variant in
       SizeChartRowDraft(
         id: variant.id,

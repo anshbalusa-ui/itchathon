@@ -29,6 +29,14 @@ struct GarmentEntryView: View {
     var copy = initial
     if copy.name == "Scanned garment" { copy.name = "" }
     _draft = State(initialValue: copy)
+    switch copy.origins?[MeasurementKey.garmentChestFlat.rawValue]?.source {
+    case .external:
+      _sourceRaw = State(initialValue: MeasurementSource.external.rawValue)
+    case .retailer:
+      _sourceRaw = State(initialValue: MeasurementSource.retailer.rawValue)
+    default:
+      _sourceRaw = State(initialValue: MeasurementSource.manual.rawValue)
+    }
   }
 
   private var unit: LengthUnit { LengthUnit(rawValue: unitRaw) ?? .centimeters }
@@ -120,6 +128,7 @@ struct GarmentEntryView: View {
     }
     .navigationTitle(purpose.title)
     .navigationBarTitleDisplayMode(.inline)
+    .navigationBarBackButtonHidden()
     .toolbar {
       ToolbarItem(placement: .cancellationAction) {
         Button("Cancel") { dismiss() }

@@ -18,7 +18,7 @@ struct MeasurementField: View {
       HStack(alignment: .firstTextBaseline, spacing: 12) {
         Text(title)
         Spacer(minLength: 8)
-        TextField(unit.symbol, text: $text)
+        TextField("0", text: $text)
           .keyboardType(.decimalPad)
           .focused($isFocused)
           .multilineTextAlignment(.trailing)

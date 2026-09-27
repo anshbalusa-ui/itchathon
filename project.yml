@@ -35,3 +35,11 @@ targets:
       - path: Tests
     dependencies:
       - target: FitCheck
+
+  FitCheckUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: FitCheck

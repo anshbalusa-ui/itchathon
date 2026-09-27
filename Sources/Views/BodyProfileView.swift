@@ -63,6 +63,7 @@ struct BodyProfileView: View {
     }
     .navigationTitle("My Body")
     .navigationBarTitleDisplayMode(.inline)
+    .navigationBarBackButtonHidden()
     .toolbar {
       ToolbarItem(placement: .cancellationAction) {
         Button("Cancel") { dismiss() }
