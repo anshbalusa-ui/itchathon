@@ -132,40 +132,49 @@ enum DepthMeasurement {
         let maxX = min(width - 1, centerX + 2)
         let minY = max(0, centerY - 2)
         let maxY = min(height - 1, centerY + 2)
-        var samples: [Float] = []
-        samples.reserveCapacity(25)
-
-        for y in minY...maxY {
-            let depthRow = depthBase.advanced(by: y * depthRowBytes).assumingMemoryBound(to: UInt8.self)
-            let confidenceRow = confidenceBase.advanced(by: y * confidenceRowBytes).assumingMemoryBound(to: UInt8.self)
-            for x in minX...maxX {
-                guard confidenceRow[x] >= 1 else { continue }
-                let depth = depthRow.advanced(by: x * MemoryLayout<Float32>.size)
-                    .withMemoryRebound(to: Float32.self, capacity: 1) { $0.pointee }
-                if depth.isFinite, depth > 0 {
-                    samples.append(depth)
+        return try withUnsafeTemporaryAllocation(of: Float.self, capacity: 25) { samples in
+            var sampleCount = 0
+            for y in minY...maxY {
+                let depthRow = depthBase.advanced(by: y * depthRowBytes).assumingMemoryBound(to: UInt8.self)
+                let confidenceRow = confidenceBase.advanced(by: y * confidenceRowBytes).assumingMemoryBound(to: UInt8.self)
+                for x in minX...maxX {
+                    guard confidenceRow[x] >= 1 else { continue }
+                    let depth = depthRow.advanced(by: x * MemoryLayout<Float32>.size)
+                        .withMemoryRebound(to: Float32.self, capacity: 1) { $0.pointee }
+                    if depth.isFinite, depth > 0 {
+                        samples[sampleCount] = depth
+                        sampleCount += 1
+                    }
                 }
             }
-        }
-        guard samples.count >= 5 else {
-            throw BodyScanError.insufficientConfidence
-        }
-
-        samples.sort()
-        var nearestCount = samples.count
-        if samples.count > 1 {
-            for index in 1..<samples.count where samples[index] - samples[index - 1] > 0.04 {
-                nearestCount = index
-                break
+            guard sampleCount >= 5 else {
+                throw BodyScanError.insufficientConfidence
             }
+
+            for index in 1..<sampleCount {
+                let value = samples[index]
+                var insertionIndex = index
+                while insertionIndex > 0, samples[insertionIndex - 1] > value {
+                    samples[insertionIndex] = samples[insertionIndex - 1]
+                    insertionIndex -= 1
+                }
+                samples[insertionIndex] = value
+            }
+            var nearestCount = sampleCount
+            if sampleCount > 1 {
+                for index in 1..<sampleCount where samples[index] - samples[index - 1] > 0.04 {
+                    nearestCount = index
+                    break
+                }
+            }
+            guard nearestCount >= 5, nearestCount * 2 > sampleCount else {
+                throw BodyScanError.insufficientConfidence
+            }
+            let middle = nearestCount / 2
+            if nearestCount.isMultiple(of: 2) {
+                return samples[middle - 1] + (samples[middle] - samples[middle - 1]) / 2
+            }
+            return samples[middle]
         }
-        guard nearestCount >= 5, nearestCount * 2 > samples.count else {
-            throw BodyScanError.insufficientConfidence
-        }
-        let middle = nearestCount / 2
-        if nearestCount.isMultiple(of: 2) {
-            return samples[middle - 1] + (samples[middle] - samples[middle - 1]) / 2
-        }
-        return samples[middle]
     }
 }
