@@ -25,6 +25,27 @@ struct FitReport: Equatable {
     let dimensions: [FitDimensionResult]
 }
 
+/// A single labeled clothing size evaluated against one saved body profile.
+struct SizeFitResult: Identifiable, Equatable {
+    var id: String { sizeLabel }
+
+    let sizeLabel: String
+    let report: FitReport
+    let summary: String
+}
+
+/// Keeps the retailer/garment size order for display while separately exposing
+/// the highest measurement-based match.
+struct SizeComparisonReport: Equatable {
+    let sizes: [SizeFitResult]
+
+    var closestMatch: SizeFitResult? {
+        sizes.max { lhs, rhs in
+            lhs.report.score < rhs.report.score
+        }
+    }
+}
+
 enum FitEngine {
     private struct EaseTarget {
         let ideal: ClosedRange<Double>
@@ -93,6 +114,32 @@ enum FitEngine {
         )
     }
 
+    /// Evaluate every real size in a garment's size chart against the same user.
+    ///
+    /// Size measurements must come from the retailer/seller or be measured.
+    /// We intentionally do not generate fake neighboring sizes by adding a
+    /// constant increment because apparel grading differs by brand and product.
+    static func evaluateSizes(
+        body: BodyProfile,
+        chart: GarmentSizeChart
+    ) -> SizeComparisonReport {
+        let results = chart.sizes.map { size -> SizeFitResult in
+            let garment = size.asGarment(
+                named: chart.garmentName,
+                category: chart.category
+            )
+            let report = evaluate(body: body, garment: garment)
+
+            return SizeFitResult(
+                sizeLabel: size.label,
+                report: report,
+                summary: sizeSummary(report)
+            )
+        }
+
+        return SizeComparisonReport(sizes: results)
+    }
+
     private static func chestTarget(for category: GarmentCategory) -> EaseTarget {
         switch category {
         case .tshirt:
@@ -156,5 +203,45 @@ enum FitEngine {
         if score >= 75 { return .fitted }
         if score >= 60 { return .veryTight }
         return .incompatible
+    }
+
+    private static func sizeSummary(_ report: FitReport) -> String {
+        guard !report.dimensions.isEmpty else {
+            return "Not enough measurements to describe this size."
+        }
+
+        let phrases = report.dimensions.map { result -> String in
+            let area: String
+            switch result.label {
+            case "Chest": area = "through the chest"
+            case "Waist": area = "through the waist"
+            case "Shoulders": area = "at the shoulders"
+            default: area = "at the \(result.label.lowercased())"
+            }
+
+            switch result.band {
+            case .incompatible:
+                return "too small \(area)"
+            case .veryTight:
+                return "very snug \(area)"
+            case .fitted:
+                return "fitted \(area)"
+            case .comfortable:
+                return "comfortable \(area)"
+            case .relaxed:
+                return "relaxed \(area)"
+            case .unknown:
+                return "unknown \(area)"
+            }
+        }
+
+        if phrases.count == 1 {
+            return phrases[0].capitalized + "."
+        }
+
+        let last = phrases.last ?? ""
+        let leading = phrases.dropLast().joined(separator: ", ")
+        return (leading + ", and " + last).prefix(1).uppercased()
+            + String((leading + ", and " + last).dropFirst()) + "."
     }
 }
