@@ -18,6 +18,11 @@ enum GarmentCategory: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum GarmentRole: Equatable {
+    case preferred
+    case candidate
+}
+
 struct GarmentProfile: Codable, Equatable {
     var name: String = "Scanned garment"
     var category: GarmentCategory = .tshirt
@@ -27,12 +32,21 @@ struct GarmentProfile: Codable, Equatable {
     var waistFlat: Double = 0
     var shoulderWidth: Double = 0
     var length: Double = 0
+    var waistAtNavel: Bool? = nil
+    var origins: [String: MeasurementOrigin]? = nil
 
     var chestCircumferenceApprox: Double { chestFlat * 2 }
     var waistCircumferenceApprox: Double { waistFlat * 2 }
 
     var isUsable: Bool {
-        chestFlat > 0 && shoulderWidth > 0
+        validLength(chestFlat)
+            && validLength(shoulderWidth)
+            && validLength(length)
+            && waistFlat.isFinite
+            && waistFlat >= 0
+            && chestCircumferenceApprox.isFinite
+            && waistCircumferenceApprox.isFinite
+            && (origins?.values.allSatisfy(\.isValid) ?? true)
     }
 
     static let demo = GarmentProfile(

@@ -1,306 +1,331 @@
 import Foundation
 
-enum FitBand: String, Codable {
-    case incompatible = "Too Small"
-    case veryTight = "Very Tight"
-    case fitted = "Fitted"
-    case comfortable = "Ideal"
-    case relaxed = "Relaxed"
-    case tooLarge = "Too Large"
-    case unknown = "Unknown"
+enum FitDimension: String, Codable, CaseIterable, Identifiable {
+    case chest
+    case shoulders
+    case length
+
+    var id: String { rawValue }
+}
+
+enum PhysicalStatus: String, Codable {
+    case passesMeasuredChecks
+    case needsVerification
+    case smallerThanBody
+}
+
+struct PhysicalCheck: Identifiable, Equatable {
+    let id: String
+    let bodyMeters: Double
+    let candidateMeters: Double
+    let easeMeters: Double
+    let status: PhysicalStatus
 }
 
 struct FitDimensionResult: Identifiable, Equatable {
-    let id = UUID()
-    let label: String
-    let bodyMeters: Double
-    let garmentMeters: Double
-    let easeMeters: Double
-
-    /// Signed fit score on a -100...100 scale.
-    /// -100 = much too small, 0 = ideal target ease, +100 = much too large.
-    let score: Int
-
-    let band: FitBand
+    let id: FitDimension
+    let preferredMeters: Double
+    let candidateMeters: Double
+    let deltaMeters: Double
+    let signedScore: Int
+    let normalizedDelta: Double
 }
 
 struct FitReport: Equatable {
-    /// Signed aggregate fit score on a -100...100 scale.
-    /// The closer this is to zero, the closer the garment is to the target fit.
-    let score: Int
-    let band: FitBand
+    let physical: PhysicalStatus
+    let referencePhysical: PhysicalStatus
+    let checks: [PhysicalCheck]
     let dimensions: [FitDimensionResult]
-
-    var distanceFromIdeal: Int { abs(score) }
+    let preferredName: String
+    let waistAssessed: Bool
+    let isMixed: Bool
 }
 
-/// A single labeled clothing size evaluated against one saved body profile.
-struct SizeFitResult: Identifiable, Equatable {
-    var id: String { sizeLabel }
+enum FitInputError: Error, Equatable, LocalizedError {
+    case incompleteBody
+    case incompleteGarment
+    case unsupportedCategory
+    case contradictoryReference
+    case invalidChart
 
-    let sizeLabel: String
-    let report: FitReport
-    let summary: String
-}
-
-/// Keeps retailer/garment size order for display while exposing the size whose
-/// aggregate signed score is closest to zero.
-struct SizeComparisonReport: Equatable {
-    let sizes: [SizeFitResult]
-
-    var closestMatch: SizeFitResult? {
-        sizes.min { lhs, rhs in
-            let lhsDistance = abs(lhs.report.score)
-            let rhsDistance = abs(rhs.report.score)
-
-            if lhsDistance == rhsDistance {
-                let lhsWorst = lhs.report.dimensions.map { abs($0.score) }.max() ?? 100
-                let rhsWorst = rhs.report.dimensions.map { abs($0.score) }.max() ?? 100
-                return lhsWorst < rhsWorst
-            }
-
-            return lhsDistance < rhsDistance
+    var errorDescription: String? {
+        switch self {
+        case .incompleteBody:
+            return "Body measurements must be finite and positive for chest, waist, shoulders, and torso."
+        case .incompleteGarment:
+            return "Garment chest, shoulders, and length must be finite and positive; optional waist cannot be negative."
+        case .unsupportedCategory:
+            return "Fit comparison currently supports T-shirts only."
+        case .contradictoryReference:
+            return "The preferred garment chest is smaller than the measured body chest; verify both measurements before comparison."
+        case .invalidChart:
+            return "The size chart must contain a name and finished T-shirt garment measurements."
         }
     }
+}
+
+struct SizeFitResult: Identifiable, Equatable {
+    let id: UUID
+    let sizeLabel: String
+    let report: FitReport?
+    let issue: String?
+}
+
+struct SizeComparisonReport: Equatable {
+    let sizes: [SizeFitResult]
+    let recommendedIDs: [UUID]
 }
 
 enum FitEngine {
-    private struct EaseTarget {
-        let ideal: ClosedRange<Double>
-        let acceptable: ClosedRange<Double>
-
-        var center: Double {
-            (ideal.lowerBound + ideal.upperBound) / 2
+    private struct ScoringConfiguration {
+        func scale(for dimension: FitDimension) -> Double {
+            switch dimension {
+            case .chest: return 0.12
+            case .shoulders: return 0.06
+            case .length: return 0.12
+            }
         }
+
+        func deadband(for dimension: FitDimension) -> Double {
+            switch dimension {
+            case .chest: return 0.01
+            case .shoulders: return 0.005
+            case .length: return 0.005
+            }
+        }
+
+        let reviewMarginMeters = 0.03
+        let tieTolerance = 0.02
     }
 
-    static func evaluate(body: BodyProfile, garment: GarmentProfile) -> FitReport {
-        var results: [FitDimensionResult] = []
+    private static let configuration = ScoringConfiguration()
 
-        if body.chestCircumference > 0, garment.chestFlat > 0 {
-            results.append(
-                evaluateDimension(
-                    label: "Chest",
-                    body: body.chestCircumference,
-                    garment: garment.chestCircumferenceApprox,
-                    target: chestTarget(for: garment.category)
-                )
+
+    static func evaluate(
+        body: BodyProfile,
+        preferred: GarmentProfile,
+        garment: GarmentProfile
+    ) throws -> FitReport {
+        guard body.isUsable else { throw FitInputError.incompleteBody }
+        try validate(garment: preferred)
+        try validate(garment: garment)
+        guard preferred.category == .tshirt, garment.category == .tshirt else {
+            throw FitInputError.unsupportedCategory
+        }
+
+        guard let preferredChest = doubledWidth(preferred.chestFlat),
+              let candidateChest = doubledWidth(garment.chestFlat),
+              preferredChest >= body.chestCircumference else {
+            throw FitInputError.contradictoryReference
+        }
+
+        let referenceWaist = try waistObservation(body: body, garment: preferred)
+        let candidateWaist = try waistObservation(body: body, garment: garment)
+        let referenceChecks = [try physicalCheck(
+            id: MeasurementKey.chestCircumference.rawValue,
+            body: body.chestCircumference,
+            garment: preferredChest,
+            bodyOrigin: body.origins?[MeasurementKey.chestCircumference.rawValue],
+            garmentOrigin: preferred.origins?[MeasurementKey.garmentChestFlat.rawValue]
+        )] + (referenceWaist.map { [$0] } ?? [])
+        let checks = [try physicalCheck(
+            id: MeasurementKey.chestCircumference.rawValue,
+            body: body.chestCircumference,
+            garment: candidateChest,
+            bodyOrigin: body.origins?[MeasurementKey.chestCircumference.rawValue],
+            garmentOrigin: garment.origins?[MeasurementKey.garmentChestFlat.rawValue]
+        )] + (candidateWaist.map { [$0] } ?? [])
+
+        let dimensions = try FitDimension.allCases.map { dimension in
+            try dimensionResult(
+                dimension,
+                preferred: dimensionValue(dimension, in: preferred),
+                candidate: dimensionValue(dimension, in: garment)
             )
         }
-
-        if body.waistCircumference > 0, garment.waistFlat > 0 {
-            results.append(
-                evaluateDimension(
-                    label: "Waist",
-                    body: body.waistCircumference,
-                    garment: garment.waistCircumferenceApprox,
-                    target: EaseTarget(ideal: 0.06...0.18, acceptable: 0.00...0.28)
-                )
-            )
+        let physical = combinedStatus(checks.map(\.status))
+        let referencePhysical = combinedStatus(referenceChecks.map(\.status))
+        let signs = dimensions.compactMap { result -> Int? in
+            abs(result.deltaMeters) <= configuration.deadband(for: result.id)
+                ? nil
+                : (result.deltaMeters < 0 ? -1 : 1)
         }
-
-        if body.shoulderWidth > 0, garment.shoulderWidth > 0 {
-            results.append(
-                evaluateDimension(
-                    label: "Shoulders",
-                    body: body.shoulderWidth,
-                    garment: garment.shoulderWidth,
-                    target: EaseTarget(ideal: 0.00...0.035, acceptable: -0.015...0.065)
-                )
-            )
-        }
-
-        guard !results.isEmpty else {
-            return FitReport(score: 0, band: .unknown, dimensions: [])
-        }
-
-        let weights: [String: Double] = [
-            "Chest": 0.50,
-            "Waist": 0.25,
-            "Shoulders": 0.25
-        ]
-
-        var weighted = 0.0
-        var totalWeight = 0.0
-
-        for result in results {
-            let weight = weights[result.label] ?? 1
-            weighted += Double(result.score) * weight
-            totalWeight += weight
-        }
-
-        let signedScore = clamp(
-            Int((weighted / max(totalWeight, 0.001)).rounded())
-        )
 
         return FitReport(
-            score: signedScore,
-            band: overallBand(score: signedScore, dimensions: results),
-            dimensions: results
+            physical: physical,
+            referencePhysical: referencePhysical,
+            checks: checks,
+            dimensions: dimensions,
+            preferredName: preferred.name,
+            waistAssessed: candidateWaist != nil,
+            isMixed: signs.contains(-1) && signs.contains(1)
         )
     }
 
-    /// Evaluate every real size in a garment's size chart against the same user.
-    ///
-    /// Size measurements must come from the retailer/seller or be measured.
-    /// We intentionally do not generate neighboring sizes by adding a constant
-    /// increment because apparel grading differs by brand and product.
     static func evaluateSizes(
         body: BodyProfile,
+        preferred: GarmentProfile,
         chart: GarmentSizeChart
-    ) -> SizeComparisonReport {
-        let results = chart.sizes.map { size -> SizeFitResult in
-            let garment = size.asGarment(
-                named: chart.garmentName,
-                category: chart.category
-            )
-
-            let report = evaluate(body: body, garment: garment)
-
-            return SizeFitResult(
-                sizeLabel: size.label,
-                report: report,
-                summary: sizeSummary(report)
-            )
+    ) throws -> SizeComparisonReport {
+        guard !chart.garmentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              chart.category == .tshirt,
+              chart.measurementBasis == .finishedGarment,
+              !chart.sizes.isEmpty else {
+            throw FitInputError.invalidChart
+        }
+        guard body.isUsable else { throw FitInputError.incompleteBody }
+        try validate(garment: preferred)
+        guard preferred.category == .tshirt else { throw FitInputError.unsupportedCategory }
+        guard let referenceChest = doubledWidth(preferred.chestFlat),
+              referenceChest >= body.chestCircumference else {
+            throw FitInputError.contradictoryReference
         }
 
-        return SizeComparisonReport(sizes: results)
+        let sizes = try chart.sizes.map { size -> SizeFitResult in
+            let id = size.id
+            guard !size.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return SizeFitResult(
+                    id: id,
+                    sizeLabel: size.label,
+                    report: nil,
+                    issue: FitInputError.incompleteGarment.localizedDescription
+                )
+            }
+            let garment = size.asGarment(named: chart.garmentName, category: chart.category)
+            do {
+                return SizeFitResult(
+                    id: id,
+                    sizeLabel: size.label,
+                    report: try evaluate(body: body, preferred: preferred, garment: garment),
+                    issue: nil
+                )
+            } catch let error as FitInputError {
+                return SizeFitResult(
+                    id: id,
+                    sizeLabel: size.label,
+                    report: nil,
+                    issue: error.localizedDescription
+                )
+            }
+        }
+
+        let eligible = sizes.compactMap { row -> (UUID, Double)? in
+            guard let report = row.report,
+                  report.physical == .passesMeasuredChecks,
+                  report.referencePhysical == .passesMeasuredChecks else { return nil }
+            return (row.id, report.dimensions.map { abs($0.normalizedDelta) }.max() ?? .infinity)
+        }
+        guard let best = eligible.map({ $0.1 }).min() else {
+            return SizeComparisonReport(sizes: sizes, recommendedIDs: [])
+        }
+        let recommended = eligible.compactMap { distance in
+            distance.1 - best <= configuration.tieTolerance ? distance.0 : nil
+        }
+        return SizeComparisonReport(sizes: sizes, recommendedIDs: recommended)
     }
 
-    private static func chestTarget(for category: GarmentCategory) -> EaseTarget {
-        switch category {
-        case .tshirt:
-            return EaseTarget(ideal: 0.05...0.14, acceptable: 0.00...0.24)
-        case .shirt:
-            return EaseTarget(ideal: 0.06...0.16, acceptable: 0.00...0.25)
-        case .hoodie:
-            return EaseTarget(ideal: 0.10...0.24, acceptable: 0.03...0.34)
-        case .jacket:
-            return EaseTarget(ideal: 0.10...0.26, acceptable: 0.03...0.36)
-        }
+    private static func validate(garment: GarmentProfile) throws {
+        guard garment.isUsable else { throw FitInputError.incompleteGarment }
     }
 
-    /// Maps garment ease to a signed scale centered on the desired ease.
-    ///
-    /// The target's ideal midpoint is 0.
-    /// Its acceptable lower bound maps to -100.
-    /// Its acceptable upper bound maps to +100.
-    /// Values beyond those bounds remain clamped at -100 / +100.
-    private static func evaluateDimension(
-        label: String,
-        body: Double,
-        garment: Double,
-        target: EaseTarget
-    ) -> FitDimensionResult {
-        let ease = garment - body
-        let center = target.center
+    private static func doubledWidth(_ width: Double) -> Double? {
+        let doubled = width * 2
+        return doubled.isFinite && doubled > 0 ? doubled : nil
+    }
 
-        let rawScore: Double
-        if ease < center {
-            let smallRange = max(center - target.acceptable.lowerBound, 0.001)
-            rawScore = -100 * ((center - ease) / smallRange)
-        } else if ease > center {
-            let largeRange = max(target.acceptable.upperBound - center, 0.001)
-            rawScore = 100 * ((ease - center) / largeRange)
-        } else {
-            rawScore = 0
+    private static func waistObservation(
+        body: BodyProfile,
+        garment: GarmentProfile
+    ) throws -> PhysicalCheck? {
+        guard garment.waistAtNavel == true else { return nil }
+        guard garment.waistFlat == 0 || doubledWidth(garment.waistFlat) != nil else {
+            throw FitInputError.incompleteGarment
         }
-
-        let score = clamp(Int(rawScore.rounded()))
-        let band = band(for: score)
-
-        return FitDimensionResult(
-            label: label,
-            bodyMeters: body,
-            garmentMeters: garment,
-            easeMeters: ease,
-            score: score,
-            band: band
+        guard garment.waistFlat > 0,
+              let circumference = doubledWidth(garment.waistFlat) else { return nil }
+        return try physicalCheck(
+            id: MeasurementKey.waistCircumference.rawValue,
+            body: body.waistCircumference,
+            garment: circumference,
+            bodyOrigin: body.origins?[MeasurementKey.waistCircumference.rawValue],
+            garmentOrigin: garment.origins?[MeasurementKey.garmentWaistFlat.rawValue]
         )
     }
 
-    private static func overallBand(
-        score: Int,
-        dimensions: [FitDimensionResult]
-    ) -> FitBand {
-        guard !dimensions.isEmpty else { return .unknown }
+    private static func physicalCheck(
+        id: String,
+        body: Double,
+        garment: Double,
+        bodyOrigin: MeasurementOrigin?,
+        garmentOrigin: MeasurementOrigin?
+    ) throws -> PhysicalCheck {
+        let ease = garment - body
+        guard ease.isFinite else { throw FitInputError.incompleteGarment }
 
-        // A severe local mismatch should remain visible even if another
-        // dimension pulls the weighted average back toward zero.
-        if dimensions.contains(where: { $0.score <= -80 }) {
-            return .incompatible
+        let status: PhysicalStatus
+        if ease < 0 {
+            status = .smallerThanBody
+        } else if requiresVerification(bodyOrigin, garmentOrigin) {
+            status = .needsVerification
+        } else {
+            let bodyError = verifiedError(bodyOrigin) ?? 0
+            let flatError = verifiedError(garmentOrigin) ?? 0
+            let margin = max(configuration.reviewMarginMeters, bodyError + 2 * flatError)
+            guard margin.isFinite else { throw FitInputError.incompleteGarment }
+            let boundaryTolerance = 8 * max(ease.ulp, margin.ulp)
+            status = ease <= margin + boundaryTolerance ? .needsVerification : .passesMeasuredChecks
         }
-
-        if dimensions.contains(where: { $0.score >= 80 }) {
-            return .tooLarge
-        }
-
-        return band(for: score)
+        return PhysicalCheck(id: id, bodyMeters: body, candidateMeters: garment, easeMeters: ease, status: status)
     }
 
-    private static func band(for score: Int) -> FitBand {
-        switch score {
-        case ...(-70):
-            return .incompatible
-        case -69...(-30):
-            return .veryTight
-        case -29...(-10):
-            return .fitted
-        case -9...9:
-            return .comfortable
-        case 10...69:
-            return .relaxed
-        case 70...:
-            return .tooLarge
-        default:
-            return .unknown
+    private static func requiresVerification(_ body: MeasurementOrigin?, _ garment: MeasurementOrigin?) -> Bool {
+        requiresVerification(body) || requiresVerification(garment)
+    }
+
+    private static func requiresVerification(_ origin: MeasurementOrigin?) -> Bool {
+        guard let origin else { return false }
+        return (origin.source == .bodyScan || origin.source == .garmentScan)
+            && !origin.verifiedWithTape
+            && verifiedError(origin) == nil
+    }
+
+    private static func verifiedError(_ origin: MeasurementOrigin?) -> Double? {
+        guard let origin, !origin.verifiedWithTape,
+              let error = origin.observedErrorMeters, error.isFinite, error >= 0 else { return nil }
+        return error
+    }
+
+    private static func combinedStatus(_ statuses: [PhysicalStatus]) -> PhysicalStatus {
+        if statuses.contains(.smallerThanBody) { return .smallerThanBody }
+        if statuses.contains(.needsVerification) { return .needsVerification }
+        return .passesMeasuredChecks
+    }
+
+    private static func dimensionValue(_ dimension: FitDimension, in garment: GarmentProfile) -> Double {
+        switch dimension {
+        case .chest: return garment.chestCircumferenceApprox
+        case .shoulders: return garment.shoulderWidth
+        case .length: return garment.length
         }
     }
 
-    private static func clamp(_ score: Int) -> Int {
-        min(100, max(-100, score))
-    }
-
-    private static func sizeSummary(_ report: FitReport) -> String {
-        guard !report.dimensions.isEmpty else {
-            return "Not enough measurements to describe this size."
-        }
-
-        let phrases = report.dimensions.map { result -> String in
-            let area: String
-            switch result.label {
-            case "Chest": area = "through the chest"
-            case "Waist": area = "through the waist"
-            case "Shoulders": area = "at the shoulders"
-            default: area = "at the \(result.label.lowercased())"
-            }
-
-            switch result.band {
-            case .incompatible:
-                return "too small \(area)"
-            case .veryTight:
-                return "very snug \(area)"
-            case .fitted:
-                return "fitted \(area)"
-            case .comfortable:
-                return "near ideal \(area)"
-            case .relaxed:
-                return "relaxed \(area)"
-            case .tooLarge:
-                return "too large \(area)"
-            case .unknown:
-                return "unknown \(area)"
-            }
-        }
-
-        if phrases.count == 1 {
-            return phrases[0].capitalized + "."
-        }
-
-        let joined = phrases.dropLast().joined(separator: ", ")
-            + ", and "
-            + (phrases.last ?? "")
-
-        return joined.prefix(1).uppercased() + String(joined.dropFirst()) + "."
+    private static func dimensionResult(
+        _ dimension: FitDimension,
+        preferred: Double,
+        candidate: Double
+    ) throws -> FitDimensionResult {
+        let delta = candidate - preferred
+        let normalized = delta / configuration.scale(for: dimension)
+        guard delta.isFinite, normalized.isFinite else { throw FitInputError.incompleteGarment }
+        let bounded = min(100.0, max(-100.0, normalized * 100))
+        guard bounded.isFinite else { throw FitInputError.incompleteGarment }
+        return FitDimensionResult(
+            id: dimension,
+            preferredMeters: preferred,
+            candidateMeters: candidate,
+            deltaMeters: delta,
+            signedScore: Int(bounded.rounded()),
+            normalizedDelta: normalized
+        )
     }
 }
