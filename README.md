@@ -2,7 +2,7 @@
 
 An iOS prototype for answering one question before buying clothes: **will this actually fit me?**
 
-FitCheck creates a reusable body measurement profile, measures a garment with the camera/AR stack, then compares the two with garment-specific ease allowances to produce a dimension-by-dimension fit report and a 0–100 fit score.
+FitCheck creates a reusable body measurement profile, measures a garment with the camera/AR stack, then compares the two with garment-specific ease allowances to produce a dimension-by-dimension fit report and a signed -100 to +100 Fit Score.
 
 ## Hackathon scope
 
@@ -18,14 +18,16 @@ FitCheck creates a reusable body measurement profile, measures a garment with th
 3. **Fit check**
    - Compare garment measurements against body profile
    - Apply garment-category ease rules
-   - Return fit score + explanation for each dimension
+   - Return a signed Fit Score for each dimension and overall fit
+   - **-100 = far too small, 0 = ideal target fit, +100 = far too large**
+   - Scores closer to 0 are better matches
 4. **Size matching**
    - When actual measurements are available for S / M / L / XL / 2XL / etc., score every size against the same body profile
-   - Show the closest measurement match
+   - Show the closest measurement match by choosing the size whose score is closest to 0
    - Describe how each size would fit: e.g. fitted through chest, comfortable shoulders, relaxed waist
    - Never assume neighboring sizes scale by a fixed amount; use real brand/product measurements
 5. **Results**
-   - Overall score for a scanned garment
+   - Overall signed score for a scanned garment (-100...+100, with 0 ideal)
    - Per-size Fit Scores for a size chart
    - Tight / fitted / comfortable / relaxed / incompatible indicators
    - Explain *why* instead of trusting the size label alone
