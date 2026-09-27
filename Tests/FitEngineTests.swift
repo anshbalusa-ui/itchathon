@@ -39,7 +39,7 @@ final class FitEngineTests: XCTestCase {
         )
 
         XCTAssertEqual(comparison.sizes.count, GarmentSizeChart.demo.sizes.count)
-        XCTAssertNotNil(comparison.closestMatch)
+        XCTAssertEqual(comparison.closestMatch?.sizeLabel, "2XL")
 
         for size in comparison.sizes {
             XCTAssertGreaterThanOrEqual(size.report.score, 0)
