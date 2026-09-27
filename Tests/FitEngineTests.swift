@@ -2,15 +2,15 @@ import XCTest
 @testable import FitCheck
 
 final class FitEngineTests: XCTestCase {
-    func testDemoGarmentProducesReport() {
+    func testDemoGarmentProducesSignedReport() {
         let report = FitEngine.evaluate(body: .demo, garment: .demo)
 
         XCTAssertFalse(report.dimensions.isEmpty)
-        XCTAssertGreaterThan(report.score, 0)
+        XCTAssertGreaterThanOrEqual(report.score, -100)
         XCTAssertLessThanOrEqual(report.score, 100)
     }
 
-    func testTooSmallChestIsRejected() {
+    func testTooSmallGarmentProducesNegativeScore() {
         let body = BodyProfile(
             chestCircumference: 1.20,
             waistCircumference: 1.00,
@@ -29,10 +29,28 @@ final class FitEngineTests: XCTestCase {
         )
 
         let report = FitEngine.evaluate(body: body, garment: garment)
+
+        XCTAssertLessThan(report.score, 0)
         XCTAssertEqual(report.band, .incompatible)
     }
 
-    func testSizeChartScoresEveryAvailableSize() {
+    func testOversizedGarmentProducesPositiveScore() {
+        let garment = GarmentProfile(
+            name: "Oversized tee",
+            category: .tshirt,
+            chestFlat: 0.76,
+            waistFlat: 0.72,
+            shoulderWidth: 0.62,
+            length: 0.82
+        )
+
+        let report = FitEngine.evaluate(body: .demo, garment: garment)
+
+        XCTAssertGreaterThan(report.score, 0)
+        XCTAssertEqual(report.band, .tooLarge)
+    }
+
+    func testSizeChartScoresEveryAvailableSizeOnSignedScale() {
         let comparison = FitEngine.evaluateSizes(
             body: .demo,
             chart: .demo
@@ -42,9 +60,29 @@ final class FitEngineTests: XCTestCase {
         XCTAssertEqual(comparison.closestMatch?.sizeLabel, "2XL")
 
         for size in comparison.sizes {
-            XCTAssertGreaterThanOrEqual(size.report.score, 0)
+            XCTAssertGreaterThanOrEqual(size.report.score, -100)
             XCTAssertLessThanOrEqual(size.report.score, 100)
             XCTAssertFalse(size.summary.isEmpty)
+        }
+    }
+
+    func testClosestMatchMeansClosestToZero() {
+        let comparison = FitEngine.evaluateSizes(
+            body: .demo,
+            chart: .demo
+        )
+
+        guard let closest = comparison.closestMatch else {
+            return XCTFail("Expected a closest size match")
+        }
+
+        let closestDistance = abs(closest.report.score)
+
+        for size in comparison.sizes {
+            XCTAssertLessThanOrEqual(
+                closestDistance,
+                abs(size.report.score)
+            )
         }
     }
 
