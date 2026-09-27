@@ -1,0 +1,88 @@
+import SwiftUI
+
+struct HomeView: View {
+    @EnvironmentObject private var store: ProfileStore
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("FitCheck")
+                        .font(.largeTitle.bold())
+                    Text("Know how it fits before you buy it.")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+
+                NavigationLink {
+                    BodyProfileView()
+                } label: {
+                    HomeCard(
+                        title: store.bodyProfile.isUsable ? "Your fit profile" : "Create your fit profile",
+                        subtitle: store.bodyProfile.isUsable ? "Measurements saved on this phone" : "Start with the measurements that matter most",
+                        icon: "person.crop.rectangle"
+                    )
+                }
+
+                NavigationLink {
+                    GarmentScanView()
+                } label: {
+                    HomeCard(
+                        title: "Scan a garment",
+                        subtitle: "Measure chest, shoulders, waist, and length",
+                        icon: "tshirt"
+                    )
+                }
+                .disabled(!store.bodyProfile.isUsable)
+
+                if let report = store.lastReport {
+                    NavigationLink {
+                        FitResultView(report: report)
+                    } label: {
+                        HomeCard(
+                            title: "\(report.score) Fit Score",
+                            subtitle: report.band.rawValue,
+                            icon: "checkmark.seal"
+                        )
+                    }
+                }
+
+                Button("Load demo data") {
+                    store.loadDemoData()
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(24)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct HomeCard: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.title2)
+                .frame(width: 44, height: 44)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+            Image(systemName: "chevron.right")
+                .foregroundStyle(.tertiary)
+        }
+        .padding(18)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+    }
+}
