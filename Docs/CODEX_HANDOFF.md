@@ -20,7 +20,7 @@ The repo already contains:
 - body scanning service boundary
 - fit-result UI
 - garment size-chart models
-- per-size fit scoring and natural-language fit descriptions
+- signed per-size fit scoring (-100...+100) and natural-language fit descriptions
 - size-comparison UI with a closest measurement match
 - basic tests
 
@@ -110,6 +110,15 @@ This is a core product feature, not a nice-to-have.
 
 When a retailer/seller provides actual measurements for each size, evaluate every available size against the saved body profile using `FitEngine.evaluateSizes`.
 
+The Fit Score scale is a core product invariant:
+
+- **-100** = much too small
+- **0** = ideal target fit
+- **+100** = much too large
+- the closer a score is to **0**, the closer the size is to the target fit
+- negative values mean undersized/tighter than ideal
+- positive values mean oversized/looser than ideal
+
 The result should answer both:
 - **Which available size is the closest measurement match?**
 - **How would each available size fit?**
@@ -117,17 +126,17 @@ The result should answer both:
 Example presentation:
 
 ```
-XL — 72 Fit
+XL — -68 Fit
 Very snug through chest
-Fitted at shoulders
-Comfortable through waist
+Too small at shoulders
+Fitted through waist
 
-2XL — 94 Fit
-Comfortable through chest
-Comfortable at shoulders
-Slightly relaxed through waist
+2XL — -12 Fit
+Near ideal through chest
+Near ideal at shoulders
+Near ideal through waist
 
-3XL — 79 Fit
+3XL — +42 Fit
 Relaxed through chest
 Relaxed at shoulders
 Relaxed through waist
@@ -145,7 +154,11 @@ Future input paths can include:
 
 ### 6. Fit engine
 
-Current fit allowances are hackathon heuristics. Improve by:
+Current fit allowances are hackathon heuristics. Preserve the signed scoring contract while improving them:
+
+`-100 → too small | 0 → ideal | +100 → too large`
+
+Improve by:
 - moving garment-category allowance ranges into config
 - adding user-readable reason strings
 - testing weighting
@@ -179,7 +192,7 @@ Treat Bento as architectural reference, not source to copy verbatim.
 7. Show a large Fit Score.
 8. Explain which dimensions are comfortable, fitted, tight, or relaxed.
 9. Show an available size chart and compare every size.
-10. Highlight the closest measurement match while still showing how adjacent sizes would fit.
+10. Highlight the size whose signed Fit Score is closest to 0 while still showing how adjacent sizes would fit.
 
 ## Long-term product
 
