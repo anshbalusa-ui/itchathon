@@ -13,6 +13,6 @@
 <key>LSRequiresIPhoneOS</key><true/>
 <key>NSCameraUsageDescription</key><string>FitCheck uses the camera and depth sensors to measure clothing and help create your measurement profile.</string>
 <key>UILaunchScreen</key><dict/>
-<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
 </dict>
 </plist>

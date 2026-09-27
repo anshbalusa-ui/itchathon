@@ -98,7 +98,16 @@ struct BodyProfileView: View {
       Text(errorMessage ?? "Enter positive values for chest, waist, shoulders, and torso. Correct any highlighted fields before saving.")
     }
     .sheet(isPresented: $showingBodyScan) {
-      BodyScanView(onComplete: applyScan, onCancel: { showingBodyScan = false })
+      NavigationStack {
+        BodyScanView(onComplete: applyScan, onCancel: cancelBodyScan)
+          .navigationTitle("Scan Body")
+          .navigationBarTitleDisplayMode(.inline)
+          .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+              Button("Cancel", action: cancelBodyScan)
+            }
+          }
+      }
     }
     .onAppear {
       guard !didLoad else { return }
@@ -124,6 +133,10 @@ struct BodyProfileView: View {
       errorMessage = error.localizedDescription
       showValidation = true
     }
+  }
+
+  private func cancelBodyScan() {
+    showingBodyScan = false
   }
 
   private func valid(_ value: Double) -> Bool { value.isFinite && value > 0 }

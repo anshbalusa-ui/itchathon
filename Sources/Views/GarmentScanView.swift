@@ -7,7 +7,7 @@ struct GarmentScanView: View {
 
   @State private var selectedField: GarmentDimension = .chest
   @State private var pendingMeasurement: Double?
-  @State private var status = "Lay shirt flat on a horizontal surface. Aim the center reticle at point A, then tap."
+  @State private var status = "Lay the shirt flat or hang it. Aim the center reticle at point A, then tap."
   @State private var resetToken = UUID()
 
   var body: some View {
@@ -95,7 +95,7 @@ struct GarmentScanView: View {
   private func reset() {
     pendingMeasurement = nil
     resetToken = UUID()
-    status = "Lay shirt flat on a horizontal surface. Aim the center reticle at point A, then tap."
+    status = "Lay the shirt flat or hang it. Aim the center reticle at point A, then tap."
   }
 }
 

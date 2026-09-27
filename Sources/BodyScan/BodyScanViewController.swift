@@ -18,9 +18,12 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         let depth: CVPixelBuffer
         let confidence: CVPixelBuffer
         let intrinsics: simd_float3x3
+        let cameraImageSize: CGSize
         let imageSize: CGSize
         let viewportSize: CGSize
         let imageToView: CGAffineTransform
+        let orientedToCamera: CGAffineTransform
+        let interfaceOrientation: UIInterfaceOrientation
     }
 
     private struct MeasurementPair {
@@ -33,11 +36,25 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private var session: ARSession { liveView.session }
     private let imageView = UIImageView()
     private let markerView = UIView()
+    private let instructionTitleLabel = UILabel()
+    private let instructionDetailLabel = UILabel()
     private let statusLabel = UILabel()
+    private let progressLabel = UILabel()
+    private let progressView = UIProgressView(progressViewStyle: .default)
     private let valueLabel = UILabel()
     private let tapeField = UITextField()
-    private var buttons: [UIButton] = []
+    private var buttons: [String: UIButton] = [:]
     private var endpointMarkers: [UIView] = []
+    private let frontSpans: [(key: String, label: String)] = [
+        ("chestWidth", "Chest width — widest point across chest"),
+        ("waistWidth", "Waist width — level with navel"),
+        ("shoulderWidth", "Shoulder width — outer shoulder to outer shoulder"),
+        ("torsoLength", "Torso length — suprasternal notch to navel")
+    ]
+    private let sideSpans: [(key: String, label: String)] = [
+        ("chestDepth", "Chest depth — side view"),
+        ("waistDepth", "Waist depth — level with navel")
+    ]
     private var stage: Stage = .permission
     private var frozen: FrozenBodyFrame?
     private var pairPoints: [SIMD3<Float>] = []
@@ -48,22 +65,19 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private var renderImage: UIImage?
     private let imageContext = CIContext(options: [.cacheIntermediates: false])
     private var needsRetake = false
-    private var didCancel = false
+    private var preserveCompletedOnRetake = false
     private var issueMessage: String?
     private var interruptionMessage: String?
     private var pendingIssueAlert: UIAlertController?
     private var didComplete = false
     private var didRequestPermission = false
 
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
-    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
-
     private var specs: [(key: String, label: String)] {
-        let all: [(key: String, label: String)] = stage == .markingFront || stage == .coachingFront
-            ? [("chestWidth", "Chest width — widest point across chest"), ("waistWidth", "Waist width — level with navel"), ("shoulderWidth", "Outer shoulder to outer shoulder"), ("torsoLength", "Suprasternal notch to navel")]
-            : [("chestDepth", "Chest depth — side view"), ("waistDepth", "Waist depth — level with navel")]
+        let all = stage == .markingFront || stage == .coachingFront ? frontSpans : sideSpans
         return all.filter { completed[$0.key] == nil }
     }
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .all }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -83,6 +97,11 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateFrozenRendering()
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        if frozen != nil { invalidateFrozenViewport() }
     }
 
     private func configureViews() {
@@ -113,57 +132,134 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         ])
         imageView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(imageTapped(_:))))
 
-        let panel = UIStackView()
-        panel.axis = .vertical
-        panel.spacing = 10
-        panel.alignment = .fill
+        let instructionCard = UIVisualEffectView(effect: UIBlurEffect(style: .regular))
+        instructionCard.translatesAutoresizingMaskIntoConstraints = false
+        instructionCard.layer.cornerRadius = 16
+        instructionCard.layer.cornerCurve = .continuous
+        instructionCard.clipsToBounds = true
+        instructionCard.isUserInteractionEnabled = false
+        view.addSubview(instructionCard)
+        let instructionStack = UIStackView(arrangedSubviews: [instructionTitleLabel, instructionDetailLabel])
+        instructionStack.axis = .vertical
+        instructionStack.spacing = 4
+        instructionStack.alignment = .center
+        instructionStack.translatesAutoresizingMaskIntoConstraints = false
+        instructionCard.contentView.addSubview(instructionStack)
+        NSLayoutConstraint.activate([
+            instructionCard.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            instructionCard.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            instructionCard.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
+            instructionStack.leadingAnchor.constraint(equalTo: instructionCard.contentView.leadingAnchor, constant: 14),
+            instructionStack.trailingAnchor.constraint(equalTo: instructionCard.contentView.trailingAnchor, constant: -14),
+            instructionStack.topAnchor.constraint(equalTo: instructionCard.contentView.topAnchor, constant: 10),
+            instructionStack.bottomAnchor.constraint(equalTo: instructionCard.contentView.bottomAnchor, constant: -10)
+        ])
+        instructionTitleLabel.font = .preferredFont(forTextStyle: .headline)
+        instructionTitleLabel.adjustsFontForContentSizeCategory = true
+        instructionTitleLabel.textColor = .label
+        instructionTitleLabel.textAlignment = .center
+        instructionTitleLabel.numberOfLines = 0
+        instructionDetailLabel.font = .preferredFont(forTextStyle: .footnote)
+        instructionDetailLabel.adjustsFontForContentSizeCategory = true
+        instructionDetailLabel.textColor = .secondaryLabel
+        instructionDetailLabel.textAlignment = .center
+        instructionDetailLabel.numberOfLines = 0
+
+        let panel = UIVisualEffectView(effect: UIBlurEffect(style: .regular))
         panel.translatesAutoresizingMaskIntoConstraints = false
-        panel.backgroundColor = UIColor.black.withAlphaComponent(0.78)
-        panel.isLayoutMarginsRelativeArrangement = true
-        panel.layoutMargins = UIEdgeInsets(top: 14, left: 16, bottom: 14, right: 16)
+        panel.layer.cornerRadius = 22
+        panel.layer.cornerCurve = .continuous
+        panel.clipsToBounds = true
         view.addSubview(panel)
         NSLayoutConstraint.activate([
             panel.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
             panel.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            panel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -10)
+            panel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
+            panel.topAnchor.constraint(greaterThanOrEqualTo: instructionCard.bottomAnchor, constant: 12)
         ])
-        statusLabel.numberOfLines = 0
-        statusLabel.textColor = .white
-        statusLabel.font = .preferredFont(forTextStyle: .headline)
-        panel.addArrangedSubview(statusLabel)
-        valueLabel.numberOfLines = 0
-        valueLabel.textColor = .white
-        valueLabel.font = .preferredFont(forTextStyle: .subheadline)
-        panel.addArrangedSubview(valueLabel)
+
+        let content = UIStackView()
+        content.axis = .vertical
+        content.spacing = 6
+        content.alignment = .fill
+        content.isLayoutMarginsRelativeArrangement = true
+        content.layoutMargins = UIEdgeInsets(top: 9, left: 15, bottom: 9, right: 15)
+        content.translatesAutoresizingMaskIntoConstraints = false
+        panel.contentView.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: panel.contentView.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: panel.contentView.trailingAnchor),
+            content.topAnchor.constraint(equalTo: panel.contentView.topAnchor),
+            content.bottomAnchor.constraint(equalTo: panel.contentView.bottomAnchor)
+        ])
+
+        statusLabel.font = .preferredFont(forTextStyle: .footnote)
+        statusLabel.adjustsFontForContentSizeCategory = true
+        statusLabel.textColor = .secondaryLabel
+        statusLabel.numberOfLines = 2
+        content.addArrangedSubview(statusLabel)
+        progressLabel.font = .preferredFont(forTextStyle: .caption1)
+        progressLabel.adjustsFontForContentSizeCategory = true
+        progressLabel.textColor = .secondaryLabel
+        progressLabel.numberOfLines = 1
+        progressLabel.accessibilityLabel = "Current body scan step"
+        content.addArrangedSubview(progressLabel)
+        progressView.progressTintColor = .systemBlue
+        progressView.trackTintColor = UIColor.label.withAlphaComponent(0.15)
+        progressView.accessibilityLabel = "Body scan progress"
+        progressView.isAccessibilityElement = true
+        content.addArrangedSubview(progressView)
+        valueLabel.numberOfLines = 1
+        valueLabel.font = .preferredFont(forTextStyle: .footnote)
+        valueLabel.adjustsFontForContentSizeCategory = true
+        valueLabel.textColor = .secondaryLabel
+        valueLabel.accessibilityLabel = "Latest measured value"
+        content.addArrangedSubview(valueLabel)
+
         tapeField.placeholder = "Optional tape distance (cm)"
         tapeField.accessibilityLabel = "Known tape distance in centimeters"
         tapeField.keyboardType = .decimalPad
-        tapeField.textColor = .white
-        tapeField.backgroundColor = UIColor.white.withAlphaComponent(0.12)
+        tapeField.textColor = .label
+        tapeField.backgroundColor = UIColor.label.withAlphaComponent(0.06)
+        tapeField.layer.cornerRadius = 8
         tapeField.isHidden = true
         tapeField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-        panel.addArrangedSubview(tapeField)
+        content.addArrangedSubview(tapeField)
         tapeField.addTarget(self, action: #selector(tapeDistanceChanged), for: .editingChanged)
-        for titles in [["Freeze", "Mark", "Undo", "Retake"], ["Continue", "Probe", "Cancel"]] {
-            let row = UIStackView()
-            row.axis = .horizontal
-            row.spacing = 8
-            row.distribution = .fillEqually
-            panel.addArrangedSubview(row)
-            for title in titles {
-                let button = UIButton(type: .system)
-                button.setTitle(title, for: .normal)
-                button.accessibilityLabel = title == "Mark" ? "Mark two endpoints" : title == "Cancel" ? "Cancel Body Scan" : title
-                button.setTitleColor(.white, for: .normal)
-                button.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.85)
-                button.layer.cornerRadius = 8
-                button.titleLabel?.font = .preferredFont(forTextStyle: .body)
-                button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-                button.addTarget(self, action: #selector(controlTapped(_:)), for: .touchUpInside)
-                row.addArrangedSubview(button)
-                buttons.append(button)
-            }
+
+        let primaryRow = UIStackView()
+        primaryRow.axis = .horizontal
+        primaryRow.spacing = 8
+        primaryRow.distribution = .fillEqually
+        content.addArrangedSubview(primaryRow)
+        let secondaryRow = UIStackView()
+        secondaryRow.axis = .horizontal
+        secondaryRow.spacing = 8
+        secondaryRow.distribution = .fillEqually
+        content.addArrangedSubview(secondaryRow)
+        func addButton(_ title: String, to row: UIStackView, primary: Bool) {
+            let button = UIButton(type: .system)
+            button.setTitle(title, for: .normal)
+            button.accessibilityLabel = title == "Mark" ? "Mark two endpoints" : title
+            button.accessibilityHint = title == "Mark" ? "Then tap the two endpoints on the frozen image." : nil
+            button.titleLabel?.font = .preferredFont(forTextStyle: .body)
+            button.titleLabel?.adjustsFontForContentSizeCategory = true
+            button.titleLabel?.numberOfLines = 0
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+            button.layer.cornerRadius = 11
+            button.layer.cornerCurve = .continuous
+            button.backgroundColor = primary ? UIColor.systemBlue : UIColor.secondarySystemBackground.withAlphaComponent(0.9)
+            button.setTitleColor(primary ? .white : .label, for: .normal)
+            button.addTarget(self, action: #selector(controlTapped(_:)), for: .touchUpInside)
+            row.addArrangedSubview(button)
+            buttons[title] = button
         }
+        addButton("Freeze", to: primaryRow, primary: true)
+        addButton("Mark", to: primaryRow, primary: true)
+        addButton("Continue", to: primaryRow, primary: true)
+        addButton("Undo", to: secondaryRow, primary: false)
+        addButton("Retake", to: secondaryRow, primary: false)
+        addButton("Probe", to: secondaryRow, primary: false)
         updateInterface()
     }
 
@@ -220,6 +316,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private func handleInterruption(_ message: String) {
         let interruptedStage = stage
         clearFrozen()
+        preserveCompletedOnRetake = false
         pairPoints.removeAll()
         probePoints.removeAll()
         switch interruptedStage {
@@ -250,7 +347,6 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         case "Retake": retake()
         case "Continue": continueOrUse()
         case "Probe": startProbe()
-        case "Cancel": cancelScan()
         default: break
         }
     }
@@ -273,15 +369,25 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
             presentStatus("The camera view is not ready yet. Try freezing again.")
             return
         }
-        let transform = frame.displayTransform(for: .portrait, viewportSize: viewportSize)
-        let size = CGSize(width: CVPixelBufferGetWidth(frame.capturedImage), height: CVPixelBufferGetHeight(frame.capturedImage))
-        guard let stillImage = makeImage(from: frame.capturedImage) else {
-            presentStatus("The frozen camera image could not be displayed. Try again or enter measurements manually.")
+        guard let interfaceOrientation = view.window?.windowScene?.interfaceOrientation,
+              let imageOrientation = Self.imageOrientation(for: interfaceOrientation),
+              let rawToOriented = Self.rawToOrientedImageTransform(for: imageOrientation),
+              let stillImage = makeImage(from: frame.capturedImage, orientation: imageOrientation) else {
+            presentStatus("The screen orientation or frozen camera image is not ready. Try again.")
             return
         }
+        let cameraToView = frame.displayTransform(for: interfaceOrientation, viewportSize: viewportSize)
+        guard let imageToView = Self.orientedImageToViewTransform(cameraToView: cameraToView,
+                                                                  imageOrientation: imageOrientation) else {
+            presentStatus("The camera view transform is invalid. Try freezing again.")
+            return
+        }
+        let cameraImageSize = CGSize(width: CVPixelBufferGetWidth(frame.capturedImage),
+                                     height: CVPixelBufferGetHeight(frame.capturedImage))
         frozen = FrozenBodyFrame(image: frame.capturedImage, depth: depthData.depthMap, confidence: confidence,
-                                 intrinsics: frame.camera.intrinsics, imageSize: size, viewportSize: viewportSize,
-                                 imageToView: transform)
+                                 intrinsics: frame.camera.intrinsics, cameraImageSize: cameraImageSize,
+                                 imageSize: stillImage.size, viewportSize: viewportSize, imageToView: imageToView,
+                                 orientedToCamera: rawToOriented.inverted(), interfaceOrientation: interfaceOrientation)
         session.pause()
         pairPoints.removeAll()
         probePoints.removeAll()
@@ -292,17 +398,46 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         presentStatus("Frame frozen. Tap Mark, then tap the two visible endpoints.")
     }
 
-    private func makeImage(from buffer: CVPixelBuffer) -> UIImage? {
+    private func makeImage(from buffer: CVPixelBuffer, orientation: UIImage.Orientation) -> UIImage? {
         let image = CIImage(cvPixelBuffer: buffer)
         guard let cg = imageContext.createCGImage(image, from: image.extent) else { return nil }
-        return UIImage(cgImage: cg, scale: 1, orientation: .up)
+        return UIImage(cgImage: cg, scale: 1, orientation: orientation)
+    }
+
+    static func imageOrientation(for interfaceOrientation: UIInterfaceOrientation) -> UIImage.Orientation? {
+        switch interfaceOrientation {
+        case .portrait: return .right
+        case .portraitUpsideDown: return .left
+        case .landscapeLeft: return .up
+        case .landscapeRight: return .down
+        default: return nil
+        }
+    }
+
+    static func rawToOrientedImageTransform(for orientation: UIImage.Orientation) -> CGAffineTransform? {
+        switch orientation {
+        case .up: return .identity
+        case .right: return CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 1, ty: 0)
+        case .down: return CGAffineTransform(a: -1, b: 0, c: 0, d: -1, tx: 1, ty: 1)
+        case .left: return CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: 1)
+        default: return nil
+        }
+    }
+
+    static func orientedImageToViewTransform(
+        cameraToView: CGAffineTransform,
+        imageOrientation: UIImage.Orientation
+    ) -> CGAffineTransform? {
+        guard let rawToOriented = rawToOrientedImageTransform(for: imageOrientation) else { return nil }
+        return rawToOriented.inverted().concatenating(cameraToView)
     }
 
     private func updateFrozenRendering() {
-        guard let frozen, let cg = renderImage?.cgImage else { return }
+        guard let frozen, let image = renderImage else { return }
         let viewportSize = view.bounds.size
         guard viewportSize.width > 0, viewportSize.height > 0 else { return }
-        guard viewportSize == frozen.viewportSize else {
+        guard viewportSize == frozen.viewportSize,
+              view.window?.windowScene?.interfaceOrientation == frozen.interfaceOrientation else {
             invalidateFrozenViewport()
             return
         }
@@ -320,18 +455,21 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         UIColor.black.setFill()
         context.fill(CGRect(origin: .zero, size: frozen.viewportSize))
         context.concatenate(transform)
-        // UIKit image drawing uses the same top-left image coordinate convention as normalized taps.
-        UIImage(cgImage: cg, scale: 1, orientation: .up).draw(in: CGRect(origin: .zero, size: frozen.imageSize))
+        image.draw(in: CGRect(origin: .zero, size: frozen.imageSize))
         let rendered = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         imageView.image = rendered
     }
+
     private func invalidateFrozenViewport() {
+        guard frozen != nil else { return }
+        preserveCompletedOnRetake = true
         clearFrozen()
         needsRetake = true
         updateInterface()
-        presentStatus("The view size changed while the frame was frozen. Press Retake to capture this view again.")
+        presentStatus("The view rotated or resized. Press Retake to clear pending endpoints, then freeze again. Completed spans were kept.")
     }
+
 
     private func beginMarking() {
         guard frozen != nil else { presentStatus("Freeze a frame before marking."); return }
@@ -347,16 +485,17 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     @objc private func imageTapped(_ gesture: UITapGestureRecognizer) {
         guard stage == .markingFront || stage == .markingSide || stage == .probeMarking,
               let frozen else { return }
-        guard view.bounds.size == frozen.viewportSize, imageView.bounds.size == frozen.viewportSize else {
+        guard view.bounds.size == frozen.viewportSize, imageView.bounds.size == frozen.viewportSize,
+              view.window?.windowScene?.interfaceOrientation == frozen.interfaceOrientation else {
             invalidateFrozenViewport()
             return
         }
         let point = gesture.location(in: imageView)
         do {
-            let imagePoint = try DepthMeasurement.imagePoint(viewPoint: point, viewportSize: frozen.viewportSize, imageToView: frozen.imageToView)
-            let depth = try DepthMeasurement.sample(imagePoint: imagePoint, depthMap: frozen.depth, confidenceMap: frozen.confidence)
-            let world = try DepthMeasurement.point(imagePoint: imagePoint, depthMeters: depth, intrinsics: frozen.intrinsics, imageSize: frozen.imageSize)
-            guard world.x.isFinite, world.y.isFinite, world.z.isFinite else { throw BodyScanError.invalidDepth }
+            let orientedPoint = try DepthMeasurement.imagePoint(viewPoint: point, viewportSize: frozen.viewportSize, imageToView: frozen.imageToView)
+            let cameraPoint = orientedPoint.applying(frozen.orientedToCamera)
+            let depth = try DepthMeasurement.sample(imagePoint: cameraPoint, depthMap: frozen.depth, confidenceMap: frozen.confidence)
+            let world = try DepthMeasurement.point(imagePoint: cameraPoint, depthMeters: depth, intrinsics: frozen.intrinsics, imageSize: frozen.cameraImageSize)
             if stage == .probeMarking {
                 probePoints.append(world)
                 showEndpoint(at: point)
@@ -485,7 +624,12 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         clearFrozen()
         pairPoints.removeAll()
         probePoints.removeAll()
-        if stage == .probeCoaching || stage == .probeMarking {
+        if preserveCompletedOnRetake {
+            preserveCompletedOnRetake = false
+            if stage == .markingFront { stage = .coachingFront }
+            else if stage == .markingSide { stage = .coachingSide }
+            else if stage == .probeMarking { stage = .probeCoaching }
+        } else if stage == .probeCoaching || stage == .probeMarking {
             probeDistance = nil; probeError = nil; stage = .probeCoaching
         } else if stage == .markingFront || stage == .coachingFront {
             ["chestWidth", "waistWidth", "shoulderWidth", "torsoLength"].forEach { completed.removeValue(forKey: $0) }
@@ -501,7 +645,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func continueOrUse() {
-        guard !didComplete, !didCancel else { return }
+        guard !didComplete else { return }
         switch stage {
         case .probeCoaching where probeDistance != nil:
             probeDistance = nil
@@ -541,13 +685,6 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         return try? GuidedBodyScanService().scan(BodyScanInput(chestWidth: cw, chestDepth: cd, waistWidth: ww, waistDepth: wd, shoulderWidth: sw, torsoLength: torso))
     }
 
-    private func cancelScan() {
-        guard !didCancel, !didComplete else { return }
-        didCancel = true
-        stopScanning()
-        let callback = onCancel
-        dismiss(animated: true) { callback?() }
-    }
 
     func stopScanning() {
         clearFrozen()
@@ -582,50 +719,142 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         guard isViewLoaded else { return }
         let isFrozen = frozen != nil
         imageView.isHidden = !isFrozen
-        tapeField.isHidden = !(stage == .probeCoaching || stage == .probeMarking)
-        let title: String
+        tapeField.isHidden = stage != .probeCoaching && stage != .probeMarking
+
+        let isFront = stage == .coachingFront || stage == .markingFront
+        let currentSpans = isFront ? frontSpans : sideSpans
+        let currentSpan = currentSpans.first { completed[$0.key] == nil }
+        let frontCount = frontSpans.filter { completed[$0.key] != nil }.count
+        let sideCount = sideSpans.filter { completed[$0.key] != nil }.count
+        let totalCount = frontCount + sideCount
+
         switch stage {
-        case .permission: title = "Allow camera access to scan, or enter measurements manually."
-        case .coachingFront: title = "Front view: stand facing the camera with your upper body visible. Freeze a frame, then mark endpoints."
-        case .markingFront: title = specs.first?.label ?? "Front view measurements"
-        case .coachingSide: title = "Side view: turn sideways while keeping your torso visible. Freeze a new frame."
-        case .markingSide: title = specs.first?.label ?? "Side view measurements"
-        case .review: title = "Review your scan draft. Nothing is saved until you use it."
-        case .probeCoaching: title = "Known tape-span probe: freeze a frame and mark two endpoints on a measured object."
-        case .probeMarking: title = "Probe: tap the first and second ends of the known span."
+        case .permission:
+            instructionTitleLabel.text = "Body scan"
+            instructionDetailLabel.text = "Enable camera access to begin, or use manual entry."
+        case .coachingFront, .markingFront:
+            instructionTitleLabel.text = currentSpan?.label.components(separatedBy: " — ").first ?? "Front view"
+            let number = frontCount + 1
+            let action = stage == .markingFront ? "Tap two visible endpoints on the frozen image." : "Face the camera with your upper body visible."
+            instructionDetailLabel.text = "Front view · Span \(number) of 4\n\(action)"
+        case .coachingSide, .markingSide:
+            instructionTitleLabel.text = currentSpan?.label.components(separatedBy: " — ").first ?? "Side view"
+            let number = sideCount + 1
+            let action = stage == .markingSide ? "Tap two visible endpoints on the frozen image." : "Turn sideways and keep your torso visible."
+            instructionDetailLabel.text = "Side view · Span \(number) of 2\n\(action)"
+        case .review:
+            instructionTitleLabel.text = "Review body scan"
+            instructionDetailLabel.text = "All six spans captured. Nothing is saved until you choose Use Scan."
+        case .probeCoaching:
+            instructionTitleLabel.text = "Optional depth probe"
+            instructionDetailLabel.text = probeDistance == nil
+                ? "Freeze a known tape span and mark both endpoints."
+                : "Probe complete · Continue to the body scan."
+        case .probeMarking:
+            instructionTitleLabel.text = "Mark reference span"
+            instructionDetailLabel.text = "Tap the two ends of the known span on the frozen image."
         }
-        statusLabel.text = issueMessage ?? interruptionMessage ?? title
-        if stage == .review, let profile = makeProfile() {
-            valueLabel.text = String(
-                format: "Estimated chest: %.1f cm\nEstimated waist at navel: %.1f cm\nShoulders: %.1f cm\nTorso: %.1f cm\nReview and edit before saving.",
-                profile.chestCircumference * 100, profile.waistCircumference * 100,
-                profile.shoulderWidth * 100, profile.torsoLength * 100
-            )
-        } else if stage == .probeCoaching, let distance = probeDistance {
-            let measured = String(format: "Measured: %.3f m (%.1f cm)", distance, distance * 100)
-            valueLabel.text = measured + (probeError.map { "\nAbsolute tape error: \(String(format: "%.1f", abs($0) * 100)) cm (signed \(String(format: "%+.1f", $0 * 100)) cm)" } ?? "")
+
+        switch stage {
+        case .permission:
+            statusLabel.text = issueMessage ?? "Camera and scene depth are required for a scan."
+        case .coachingFront:
+            statusLabel.text = interruptionMessage ?? (isFrozen ? "Frame frozen · Mark two endpoints." : "Live camera · Freeze a clear front frame.")
+        case .markingFront:
+            statusLabel.text = interruptionMessage ?? (pairPoints.isEmpty ? "Tap the first endpoint." : "Tap the second endpoint.")
+        case .coachingSide:
+            statusLabel.text = interruptionMessage ?? (isFrozen ? "Frame frozen · Mark two endpoints." : "Live camera · Freeze a clear side frame.")
+        case .markingSide:
+            statusLabel.text = interruptionMessage ?? (pairPoints.isEmpty ? "Tap the first endpoint." : "Tap the second endpoint.")
+        case .review:
+            statusLabel.text = "Scan draft ready · Review measurements before using scan."
+        case .probeCoaching:
+            statusLabel.text = isFrozen ? "Frame frozen · Mark the known span." : "Optional calibration · Does not change body measurements."
+        case .probeMarking:
+            statusLabel.text = probePoints.isEmpty ? "Tap the first end of the known span." : "Tap the second end of the known span."
+        }
+
+        if stage == .permission, let issueMessage { statusLabel.text = issueMessage }
+        if let interruptionMessage,
+           stage == .coachingFront || stage == .markingFront || stage == .coachingSide || stage == .markingSide {
+            statusLabel.text = interruptionMessage
+        }
+
+        let currentDimension: String
+        switch stage {
+        case .coachingFront, .markingFront:
+            currentDimension = currentSpan?.label.components(separatedBy: " — ").first ?? "Front view"
+        case .coachingSide, .markingSide:
+            currentDimension = currentSpan?.label.components(separatedBy: " — ").first ?? "Side view"
+        case .probeCoaching, .probeMarking:
+            currentDimension = "Depth probe"
+        case .review:
+            currentDimension = "Review"
+        case .permission:
+            currentDimension = "Body scan"
+        }
+        progressLabel.text = "\(currentDimension) · \(totalCount) of 6 spans"
+        progressLabel.accessibilityValue = "\(currentDimension), \(totalCount) of 6 spans complete"
+        progressView.progress = Float(totalCount) / 6
+        progressView.accessibilityValue = "\(totalCount) of 6 spans complete"
+
+        if stage == .probeCoaching, let probeDistance {
+            valueLabel.text = probeError.map {
+                String(format: "Probe: %.1f cm · Tape difference: %+.1f cm", probeDistance * 100, $0 * 100)
+            } ?? String(format: "Probe: %.1f cm", probeDistance * 100)
+        } else if let latest = sideSpans.reversed().first(where: { completed[$0.key] != nil })
+                    ?? frontSpans.reversed().first(where: { completed[$0.key] != nil }),
+                  let centimeters = completed[latest.key] {
+            let name = latest.label.components(separatedBy: " — ").first ?? latest.label
+            valueLabel.text = String(format: "Latest: %@ %.1f cm", name, centimeters * 100)
         } else {
-            valueLabel.text = "\(completed.count) of 6 spans complete\(isFrozen ? " · frame frozen" : " · live camera") · \(pairPoints.count) endpoint(s) marked"
+            valueLabel.text = "Latest: —"
         }
-        let enabledTitles: Set<String>
+        valueLabel.accessibilityValue = valueLabel.text
+
+        let canUndo: Bool
         switch stage {
-        case .coachingFront: enabledTitles = isFrozen ? ["Mark", "Retake", "Continue", "Probe", "Cancel", "Undo"] : ["Freeze", "Retake", "Continue", "Probe", "Cancel", "Undo"]
-        case .coachingSide: enabledTitles = isFrozen ? ["Mark", "Retake", "Continue", "Cancel", "Undo"] : ["Freeze", "Retake", "Continue", "Cancel", "Undo"]
-        case .markingFront, .markingSide: enabledTitles = ["Undo", "Retake", "Cancel"]
-        case .probeCoaching: enabledTitles = isFrozen ? ["Mark", "Retake", "Continue", "Cancel", "Undo"] : ["Freeze", "Retake", "Continue", "Cancel", "Undo"]
-        case .probeMarking: enabledTitles = ["Undo", "Retake", "Continue", "Cancel"]
-        case .review: enabledTitles = ["Undo", "Retake", "Continue", "Cancel"]
-        case .permission: enabledTitles = ["Cancel"]
+        case .probeCoaching: canUndo = probeDistance != nil
+        case .probeMarking: canUndo = !probePoints.isEmpty
+        case .coachingFront, .markingFront, .coachingSide, .markingSide, .review:
+            canUndo = !pairPoints.isEmpty || !completed.isEmpty
+        case .permission: canUndo = false
         }
-        buttons.forEach { button in
-            if button.currentTitle == "Continue" || button.currentTitle == "Use Scan" {
-                let title = stage == .review ? "Use Scan" : "Continue"
-                button.setTitle(title, for: .normal)
-                button.accessibilityLabel = title
+        var visible: Set<String> = []
+        switch stage {
+        case .coachingFront:
+            visible.insert(isFrozen ? "Mark" : "Freeze")
+            visible.formUnion(["Undo", "Retake"])
+            if completed.isEmpty { visible.insert("Probe") }
+        case .coachingSide:
+            visible.insert(isFrozen ? "Mark" : "Freeze")
+            visible.formUnion(["Undo", "Retake"])
+        case .markingFront, .markingSide:
+            visible.formUnion(["Undo", "Retake"])
+        case .probeCoaching:
+            if probeDistance == nil {
+                visible.insert(isFrozen ? "Mark" : "Freeze")
+            } else {
+                visible.insert("Continue")
             }
-            let title = button.currentTitle ?? ""
-            button.isHidden = !enabledTitles.contains(title == "Use Scan" ? "Continue" : title)
-            button.isEnabled = title != "Continue" && title != "Use Scan" || stage == .review || (stage == .probeCoaching && probeDistance != nil) || isFrozen
+            visible.formUnion(["Undo", "Retake"])
+        case .probeMarking:
+            visible.formUnion(["Undo", "Retake"])
+        case .review:
+            visible.formUnion(["Continue", "Undo", "Retake"])
+        case .permission:
+            break
+        }
+        buttons.forEach { key, button in
+            let title = key == "Continue" && stage == .review ? "Use Scan" : key
+            button.setTitle(title, for: .normal)
+            button.accessibilityLabel = key == "Mark" ? "Mark two endpoints" : key == "Freeze" ? "Freeze camera frame" : title
+            button.accessibilityHint = key == "Mark" ? "Tap the two endpoints on the frozen image." : nil
+            button.isHidden = !visible.contains(key)
+            button.isEnabled = key != "Undo" || canUndo
+            if key == "Freeze" { button.isEnabled = !needsRetake }
+            if key == "Mark" { button.isEnabled = isFrozen }
+            if key == "Continue" { button.isEnabled = stage == .review || (stage == .probeCoaching && probeDistance != nil) }
         }
     }
 
@@ -635,7 +864,9 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         if stage == .permission { issueMessage = message }
         updateInterface()
         let alert = UIAlertController(title: "Body Scan", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        alert.addAction(UIAlertAction(title: "Enter Manually", style: .default) { [weak self] _ in
+            self?.onCancel?()
+        })
         pendingIssueAlert = alert
         presentPendingIssueAlert()
     }

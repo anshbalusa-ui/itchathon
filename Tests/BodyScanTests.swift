@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import CoreVideo
 import simd
 @testable import FitCheck
@@ -76,6 +77,37 @@ final class BodyScanTests: XCTestCase {
                     projectionIntrinsics(fx: .nan, fy: 1000, cx: 500, cy: 500)] {
             XCTAssertThrowsError(try DepthMeasurement.point(imagePoint: CGPoint(x: 0.5, y: 0.5), depthMeters: 2,
                                                               intrinsics: bad, imageSize: imageSize))
+        }
+    }
+
+    func testInterfaceOrientationsKeepFrozenImageAndDepthCoordinatesAligned() throws {
+        let cases: [(UIInterfaceOrientation, UIImage.Orientation, CGPoint)] = [
+            (.portrait, .right, CGPoint(x: 0.39, y: 0.23)),
+            (.portraitUpsideDown, .left, CGPoint(x: 0.61, y: 0.77)),
+            (.landscapeLeft, .up, CGPoint(x: 0.23, y: 0.61)),
+            (.landscapeRight, .down, CGPoint(x: 0.77, y: 0.39))
+        ]
+        let cameraToView = CGAffineTransform(a: 0, b: 0.75, c: -4.0 / 3.0, d: 0, tx: 1.1666667, ty: 0.125)
+        let rawPoint = CGPoint(x: 0.23, y: 0.61)
+        for (interfaceOrientation, expectedImageOrientation, expectedOrientedPoint) in cases {
+            let imageOrientation = try XCTUnwrap(BodyScanViewController.imageOrientation(for: interfaceOrientation))
+            XCTAssertEqual(imageOrientation, expectedImageOrientation)
+            let rawToOriented = try XCTUnwrap(BodyScanViewController.rawToOrientedImageTransform(for: imageOrientation))
+            let orientedPoint = rawPoint.applying(rawToOriented)
+            XCTAssertEqual(orientedPoint.x, expectedOrientedPoint.x, accuracy: 1e-6)
+            XCTAssertEqual(orientedPoint.y, expectedOrientedPoint.y, accuracy: 1e-6)
+
+            let orientedToView = try XCTUnwrap(BodyScanViewController.orientedImageToViewTransform(
+                cameraToView: cameraToView,
+                imageOrientation: imageOrientation
+            ))
+            let viewPoint = rawPoint.applying(cameraToView)
+            let drawnPoint = orientedPoint.applying(orientedToView)
+            XCTAssertEqual(drawnPoint.x, viewPoint.x, accuracy: 1e-6)
+            XCTAssertEqual(drawnPoint.y, viewPoint.y, accuracy: 1e-6)
+            let recoveredRawPoint = viewPoint.applying(orientedToView.inverted()).applying(rawToOriented.inverted())
+            XCTAssertEqual(recoveredRawPoint.x, rawPoint.x, accuracy: 1e-6)
+            XCTAssertEqual(recoveredRawPoint.y, rawPoint.y, accuracy: 1e-6)
         }
     }
 

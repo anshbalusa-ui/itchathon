@@ -125,14 +125,14 @@ final class ARMeasurementViewController: UIViewController, ARSessionDelegate {
         }
 
         let configuration = ARWorldTrackingConfiguration()
-        configuration.planeDetection = [.horizontal]
+        configuration.planeDetection = [.horizontal, .vertical]
         let options: ARSession.RunOptions = resetTracking ? [.resetTracking, .removeExistingAnchors] : []
 
         isSessionRunning = true
         hasStartedSession = true
         isTrackingNormally = false
         sceneView.session.run(configuration, options: options)
-        onStatus?("Lay the shirt flat on a horizontal surface. Starting AR tracking…")
+        onStatus?("Lay the shirt flat or hang it to measure. Starting AR tracking…")
     }
 
     private func cameraAccessUnavailable() {
@@ -168,7 +168,7 @@ final class ARMeasurementViewController: UIViewController, ARSessionDelegate {
         }
         guard pendingDistance == nil else { return }
         guard let point = centerRaycastPoint() else {
-            onStatus?("No horizontal surface under the center reticle. Move the phone slightly and try again.")
+            onStatus?("Could not lock onto the garment surface. Move the phone slightly and try again.")
             return
         }
 
@@ -188,7 +188,7 @@ final class ARMeasurementViewController: UIViewController, ARSessionDelegate {
         } else {
             firstPoint = point
             markerA = addMarker(at: point, label: "A", color: .systemGreen)
-            onStatus?("Point A saved. Aim the center reticle at the opposite edge B, then tap the screen.")
+            onStatus?("Point A saved. Aim the center reticle at the opposite edge B, then tap.")
         }
     }
 
@@ -197,13 +197,13 @@ final class ARMeasurementViewController: UIViewController, ARSessionDelegate {
         let center = CGPoint(x: sceneView.bounds.midX, y: sceneView.bounds.midY)
 
         for target in [ARRaycastQuery.Target.existingPlaneGeometry, .estimatedPlane] {
-            guard let query = sceneView.raycastQuery(from: center, allowing: target, alignment: .horizontal) else {
+            guard let query = sceneView.raycastQuery(from: center, allowing: target, alignment: .any) else {
                 continue
             }
 
             if let hit = sceneView.session.raycast(query).first {
-                let t = hit.worldTransform.columns.3
-                return SIMD3<Float>(t.x, t.y, t.z)
+                let translation = hit.worldTransform.columns.3
+                return SIMD3<Float>(translation.x, translation.y, translation.z)
             }
         }
 
