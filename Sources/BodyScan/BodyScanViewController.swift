@@ -19,6 +19,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         let confidence: CVPixelBuffer
         let intrinsics: simd_float3x3
         let imageSize: CGSize
+        let viewportSize: CGSize
         let imageToView: CGAffineTransform
     }
 
@@ -51,6 +52,8 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private var issueMessage: String?
     private var interruptionMessage: String?
     private var pendingIssueAlert: UIAlertController?
+    private var didComplete = false
+    private var didRequestPermission = false
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
@@ -67,15 +70,16 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         view.backgroundColor = .black
         session.delegate = self
         configureViews()
-        checkPermissionAndStart()
         NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         presentPendingIssueAlert()
+        guard !didRequestPermission else { return }
+        didRequestPermission = true
+        checkPermissionAndStart()
     }
-
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateFrozenRendering()
@@ -264,23 +268,28 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
             presentStatus("A coherent scene-depth frame with confidence data is unavailable. Try again or enter measurements manually.")
             return
         }
-        guard view.bounds.width > 0, view.bounds.height > 0 else { return }
-        let transform = frame.displayTransform(for: .portrait, viewportSize: view.bounds.size)
+        let viewportSize = view.bounds.size
+        guard viewportSize.width > 0, viewportSize.height > 0 else {
+            presentStatus("The camera view is not ready yet. Try freezing again.")
+            return
+        }
+        let transform = frame.displayTransform(for: .portrait, viewportSize: viewportSize)
         let size = CGSize(width: CVPixelBufferGetWidth(frame.capturedImage), height: CVPixelBufferGetHeight(frame.capturedImage))
         guard let stillImage = makeImage(from: frame.capturedImage) else {
             presentStatus("The frozen camera image could not be displayed. Try again or enter measurements manually.")
             return
         }
         frozen = FrozenBodyFrame(image: frame.capturedImage, depth: depthData.depthMap, confidence: confidence,
-                                 intrinsics: frame.camera.intrinsics, imageSize: size, imageToView: transform)
+                                 intrinsics: frame.camera.intrinsics, imageSize: size, viewportSize: viewportSize,
+                                 imageToView: transform)
         session.pause()
         pairPoints.removeAll()
         probePoints.removeAll()
         renderImage = stillImage
         imageView.isHidden = false
         updateFrozenRendering()
-        presentStatus("Frame frozen. Tap Mark, then tap the two visible endpoints.")
         updateInterface()
+        presentStatus("Frame frozen. Tap Mark, then tap the two visible endpoints.")
     }
 
     private func makeImage(from buffer: CVPixelBuffer) -> UIImage? {
@@ -290,23 +299,38 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func updateFrozenRendering() {
-        guard let frozen, let cg = renderImage?.cgImage, view.bounds.width > 0, view.bounds.height > 0 else { return }
-        let iw = frozen.imageSize.width, ih = frozen.imageSize.height
-        let vw = view.bounds.width, vh = view.bounds.height
-        let t = frozen.imageToView
-        let transform = CGAffineTransform(a: t.a * vw / iw, b: t.b * vh / iw,
-                                          c: t.c * vw / ih, d: t.d * vh / ih,
-                                          tx: t.tx * vw, ty: t.ty * vh)
-        UIGraphicsBeginImageContextWithOptions(view.bounds.size, true, 1)
+        guard let frozen, let cg = renderImage?.cgImage else { return }
+        let viewportSize = view.bounds.size
+        guard viewportSize.width > 0, viewportSize.height > 0 else { return }
+        guard viewportSize == frozen.viewportSize else {
+            invalidateFrozenViewport()
+            return
+        }
+        guard imageView.image == nil else { return }
+        guard let transform = try? DepthMeasurement.viewportTransform(
+            imageSize: frozen.imageSize,
+            viewportSize: frozen.viewportSize,
+            imageToView: frozen.imageToView
+        ) else {
+            invalidateFrozenViewport()
+            return
+        }
+        UIGraphicsBeginImageContextWithOptions(frozen.viewportSize, true, 1)
         guard let context = UIGraphicsGetCurrentContext() else { UIGraphicsEndImageContext(); return }
         UIColor.black.setFill()
-        context.fill(view.bounds)
+        context.fill(CGRect(origin: .zero, size: frozen.viewportSize))
         context.concatenate(transform)
         // UIKit image drawing uses the same top-left image coordinate convention as normalized taps.
         UIImage(cgImage: cg, scale: 1, orientation: .up).draw(in: CGRect(origin: .zero, size: frozen.imageSize))
         let rendered = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         imageView.image = rendered
+    }
+    private func invalidateFrozenViewport() {
+        clearFrozen()
+        needsRetake = true
+        updateInterface()
+        presentStatus("The view size changed while the frame was frozen. Press Retake to capture this view again.")
     }
 
     private func beginMarking() {
@@ -323,9 +347,13 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     @objc private func imageTapped(_ gesture: UITapGestureRecognizer) {
         guard stage == .markingFront || stage == .markingSide || stage == .probeMarking,
               let frozen else { return }
-        let point = gesture.location(in: view)
+        guard view.bounds.size == frozen.viewportSize, imageView.bounds.size == frozen.viewportSize else {
+            invalidateFrozenViewport()
+            return
+        }
+        let point = gesture.location(in: imageView)
         do {
-            let imagePoint = try DepthMeasurement.imagePoint(viewPoint: point, viewportSize: view.bounds.size, imageToView: frozen.imageToView)
+            let imagePoint = try DepthMeasurement.imagePoint(viewPoint: point, viewportSize: frozen.viewportSize, imageToView: frozen.imageToView)
             let depth = try DepthMeasurement.sample(imagePoint: imagePoint, depthMap: frozen.depth, confidenceMap: frozen.confidence)
             let world = try DepthMeasurement.point(imagePoint: imagePoint, depthMeters: depth, intrinsics: frozen.intrinsics, imageSize: frozen.imageSize)
             guard world.x.isFinite, world.y.isFinite, world.z.isFinite else { throw BodyScanError.invalidDepth }
@@ -473,6 +501,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func continueOrUse() {
+        guard !didComplete, !didCancel else { return }
         switch stage {
         case .probeCoaching where probeDistance != nil:
             probeDistance = nil
@@ -489,6 +518,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
                 presentIssue("The scan measurements are incomplete or invalid. Retake the needed view or enter measurements manually.")
                 return
             }
+            didComplete = true
             stopScanning()
             onComplete?(profile)
         default:
@@ -512,7 +542,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func cancelScan() {
-        guard !didCancel else { return }
+        guard !didCancel, !didComplete else { return }
         didCancel = true
         stopScanning()
         let callback = onCancel
@@ -565,12 +595,12 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         case .probeMarking: title = "Probe: tap the first and second ends of the known span."
         }
         statusLabel.text = issueMessage ?? interruptionMessage ?? title
-        let values: [(String, String)] = [
-            ("Chest width", "chestWidth"), ("Chest depth", "chestDepth"), ("Waist width", "waistWidth"),
-            ("Waist depth", "waistDepth"), ("Shoulder width", "shoulderWidth"), ("Torso length", "torsoLength")
-        ]
-        if stage == .review {
-            valueLabel.text = values.compactMap { name, key in completed[key].map { "\(name): \(String(format: "%.3f", $0)) m" } }.joined(separator: "\n")
+        if stage == .review, let profile = makeProfile() {
+            valueLabel.text = String(
+                format: "Estimated chest: %.1f cm\nEstimated waist at navel: %.1f cm\nShoulders: %.1f cm\nTorso: %.1f cm\nReview and edit before saving.",
+                profile.chestCircumference * 100, profile.waistCircumference * 100,
+                profile.shoulderWidth * 100, profile.torsoLength * 100
+            )
         } else if stage == .probeCoaching, let distance = probeDistance {
             let measured = String(format: "Measured: %.3f m (%.1f cm)", distance, distance * 100)
             valueLabel.text = measured + (probeError.map { "\nAbsolute tape error: \(String(format: "%.1f", abs($0) * 100)) cm (signed \(String(format: "%+.1f", $0 * 100)) cm)" } ?? "")
