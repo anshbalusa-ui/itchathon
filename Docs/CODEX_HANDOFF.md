@@ -19,6 +19,9 @@ The repo already contains:
 - LiDAR-aware ARKit two-point ruler for flat garment measurements
 - body scanning service boundary
 - fit-result UI
+- garment size-chart models
+- per-size fit scoring and natural-language fit descriptions
+- size-comparison UI with a closest measurement match
 - basic tests
 
 Build on this structure. Do not restart it.
@@ -51,7 +54,11 @@ Chest → Shoulders → Waist → Length
   ↓
 Analyze Fit
   ↓
-Fit Score + explanation
+Single garment Fit Score
+  ↓
+If size chart exists: compare S / M / L / XL / 2XL / etc.
+  ↓
+Per-size scores + fit descriptions
 ```
 
 Use a modern Apple-native visual system: large type, neutral surfaces, strong hierarchy, and minimal clutter.
@@ -97,7 +104,46 @@ Recommended build order:
 
 Keep scanning behind the existing `BodyScanning` protocol.
 
-### 5. Fit engine
+### 5. Multi-size matching
+
+This is a core product feature, not a nice-to-have.
+
+When a retailer/seller provides actual measurements for each size, evaluate every available size against the saved body profile using `FitEngine.evaluateSizes`.
+
+The result should answer both:
+- **Which available size is the closest measurement match?**
+- **How would each available size fit?**
+
+Example presentation:
+
+```
+XL — 72 Fit
+Very snug through chest
+Fitted at shoulders
+Comfortable through waist
+
+2XL — 94 Fit
+Comfortable through chest
+Comfortable at shoulders
+Slightly relaxed through waist
+
+3XL — 79 Fit
+Relaxed through chest
+Relaxed at shoulders
+Relaxed through waist
+```
+
+Important: never infer a complete size chart by adding a fixed number of centimeters to one scanned size. Apparel grading differs across brands and products. Multi-size comparison must use actual measurements from a retailer size chart, seller-provided data, or individually measured sizes.
+
+The size label itself is only an identifier. FitCheck should base the score on measurements.
+
+Future input paths can include:
+- retailer product APIs
+- structured size-chart entry
+- OCR/extraction from a retailer size chart
+- seller-provided garment measurements
+
+### 6. Fit engine
 
 Current fit allowances are hackathon heuristics. Improve by:
 - moving garment-category allowance ranges into config
@@ -132,6 +178,8 @@ Treat Bento as architectural reference, not source to copy verbatim.
 6. Tap Check Fit.
 7. Show a large Fit Score.
 8. Explain which dimensions are comfortable, fitted, tight, or relaxed.
+9. Show an available size chart and compare every size.
+10. Highlight the closest measurement match while still showing how adjacent sizes would fit.
 
 ## Long-term product
 
@@ -144,6 +192,12 @@ Potential garment inputs:
 - marketplace integrations
 
 The saved body profile becomes reusable across products.
+
+The strongest product experience is:
+
+`saved body profile + product-specific size chart → personalized fit score for every available size`
+
+A user should be able to see that one brand's XL may fit differently from another brand's XL because the comparison is based on actual garment measurements, not the label.
 
 ## Non-goals
 
