@@ -163,24 +163,42 @@ enum FitEngine {
         let score: Int
         let band: FitBand
 
-        if ease < target.acceptable.lowerBound {
+        if target.ideal.contains(ease) {
+            // Scores peak at the center of the intended ease range rather than
+            // giving every acceptable "ideal" measurement an identical 100.
+            let center = (target.ideal.lowerBound + target.ideal.upperBound) / 2
+            let halfWidth = max((target.ideal.upperBound - target.ideal.lowerBound) / 2, 0.001)
+            let normalizedDistance = min(abs(ease - center) / halfWidth, 1)
+            score = Int((100 - (normalizedDistance * 10)).rounded())
+
+            let span = max(target.ideal.upperBound - target.ideal.lowerBound, 0.001)
+            let position = (ease - target.ideal.lowerBound) / span
+            if position < 0.33 {
+                band = .fitted
+            } else if position > 0.67 {
+                band = .relaxed
+            } else {
+                band = .comfortable
+            }
+        } else if ease >= target.acceptable.lowerBound,
+                  ease < target.ideal.lowerBound {
+            let gap = max(target.ideal.lowerBound - target.acceptable.lowerBound, 0.001)
+            let normalizedDistance = (target.ideal.lowerBound - ease) / gap
+            score = max(55, Int((90 - normalizedDistance * 30).rounded()))
+            band = .veryTight
+        } else if ease > target.ideal.upperBound,
+                  ease <= target.acceptable.upperBound {
+            let gap = max(target.acceptable.upperBound - target.ideal.upperBound, 0.001)
+            let normalizedDistance = (ease - target.ideal.upperBound) / gap
+            score = max(55, Int((90 - normalizedDistance * 30).rounded()))
+            band = .relaxed
+        } else if ease < target.acceptable.lowerBound {
             let miss = target.acceptable.lowerBound - ease
             score = max(0, 45 - Int(miss * 500))
-            band = ease < 0 ? .incompatible : .veryTight
-        } else if target.ideal.contains(ease) {
-            score = 100
-            band = .comfortable
-        } else if ease < target.ideal.lowerBound {
-            let distance = target.ideal.lowerBound - ease
-            score = max(55, 100 - Int(distance * 450))
-            band = .fitted
-        } else if ease <= target.acceptable.upperBound {
-            let distance = ease - target.ideal.upperBound
-            score = max(65, 100 - Int(distance * 300))
-            band = .relaxed
+            band = .incompatible
         } else {
             let excess = ease - target.acceptable.upperBound
-            score = max(35, 70 - Int(excess * 250))
+            score = max(35, 55 - Int(excess * 250))
             band = .relaxed
         }
 
@@ -198,11 +216,17 @@ enum FitEngine {
         score: Int,
         dimensions: [FitDimensionResult]
     ) -> FitBand {
+        guard !dimensions.isEmpty else { return .unknown }
         if dimensions.contains(where: { $0.band == .incompatible }) { return .incompatible }
+        if dimensions.contains(where: { $0.band == .veryTight }) { return .veryTight }
+
+        let relaxedCount = dimensions.filter { $0.band == .relaxed }.count
+        let fittedCount = dimensions.filter { $0.band == .fitted }.count
+
+        if relaxedCount >= 2 { return .relaxed }
+        if fittedCount >= 2 { return .fitted }
         if score >= 90 { return .comfortable }
-        if score >= 75 { return .fitted }
-        if score >= 60 { return .veryTight }
-        return .incompatible
+        return .fitted
     }
 
     private static func sizeSummary(_ report: FitReport) -> String {
