@@ -49,6 +49,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     private let imageContext = CIContext(options: [.cacheIntermediates: false])
     private var needsRetake = false
     private var didCancel = false
+    private var didComplete = false
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
@@ -486,6 +487,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func continueOrUse() {
+        guard !didComplete, !didCancel else { return }
         switch stage {
         case .probeCoaching where probeDistance != nil:
             probeDistance = nil
@@ -502,6 +504,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
                 presentIssue("The scan measurements are incomplete or invalid. Retake the needed view or enter measurements manually.")
                 return
             }
+            didComplete = true
             stopScanning()
             onComplete?(profile)
         default:
@@ -524,7 +527,7 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
     }
 
     private func cancelScan() {
-        guard !didCancel else { return }
+        guard !didCancel, !didComplete else { return }
         didCancel = true
         stopScanning()
         let callback = onCancel
@@ -577,12 +580,12 @@ final class BodyScanViewController: UIViewController, ARSessionDelegate {
         case .probeMarking: title = "Probe: tap the first and second ends of the known span."
         }
         statusLabel.text = title
-        let values: [(String, String)] = [
-            ("Chest width", "chestWidth"), ("Chest depth", "chestDepth"), ("Waist width", "waistWidth"),
-            ("Waist depth", "waistDepth"), ("Shoulder width", "shoulderWidth"), ("Torso length", "torsoLength")
-        ]
-        if stage == .review {
-            valueLabel.text = values.compactMap { name, key in completed[key].map { "\(name): \(String(format: "%.3f", $0)) m" } }.joined(separator: "\n")
+        if stage == .review, let profile = makeProfile() {
+            valueLabel.text = String(
+                format: "Estimated chest: %.1f cm\nEstimated waist at navel: %.1f cm\nShoulders: %.1f cm\nTorso: %.1f cm\nReview and edit before saving.",
+                profile.chestCircumference * 100, profile.waistCircumference * 100,
+                profile.shoulderWidth * 100, profile.torsoLength * 100
+            )
         } else if stage == .probeCoaching, let distance = probeDistance {
             let measured = String(format: "Measured: %.3f m (%.1f cm)", distance, distance * 100)
             valueLabel.text = measured + (probeError.map { "\nAbsolute tape error: \(String(format: "%.1f", abs($0) * 100)) cm (signed \(String(format: "%+.1f", $0 * 100)) cm)" } ?? "")
