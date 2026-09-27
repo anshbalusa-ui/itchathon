@@ -35,13 +35,25 @@ struct HomeView: View {
                 }
                 .disabled(!store.bodyProfile.isUsable)
 
+                if let comparison = store.sizeComparison {
+                    NavigationLink {
+                        SizeComparisonView(comparison: comparison)
+                    } label: {
+                        HomeCard(
+                            title: comparison.closestMatch.map { "Closest size match: \($0.sizeLabel)" } ?? "Compare sizes",
+                            subtitle: "See how every available size would fit",
+                            icon: "square.grid.2x2"
+                        )
+                    }
+                }
+
                 if let report = store.lastReport {
                     NavigationLink {
                         FitResultView(report: report)
                     } label: {
                         HomeCard(
                             title: "\(report.score) Fit Score",
-                            subtitle: report.band.rawValue,
+                            subtitle: "Single scanned garment · \(report.band.rawValue)",
                             icon: "checkmark.seal"
                         )
                     }
