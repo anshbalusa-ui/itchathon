@@ -31,8 +31,11 @@ final class ManualFlowUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["View Results"].waitForExistence(timeout: 5))
 
     app.staticTexts["View Results"].tap()
-    XCTAssertTrue(app.staticTexts["Passes measured body checks"].waitForExistence(timeout: 5))
-    XCTAssertTrue(app.staticTexts["Compared with Favorite"].exists)
+    let chestScore = app.descendants(matching: .any)["chest-score"]
+    XCTAssertTrue(chestScore.waitForExistence(timeout: 5))
+    XCTAssertTrue((chestScore.value as? String)?.contains("+27 relative to Body") == true)
+    app.buttons["Favorite"].tap()
+    XCTAssertTrue((chestScore.value as? String)?.contains("+50 relative to Favorite") == true)
 
     app.terminate()
     app.launch()

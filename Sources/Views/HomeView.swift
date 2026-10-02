@@ -67,14 +67,9 @@ struct HomeView: View {
       }
 
       Section("Comparison") {
-        if let report = store.lastReport, let preferred = store.preferredGarment {
+        if let report = store.lastReport {
           NavigationLink {
-            FitResultView(
-              report: report,
-              bodyProfile: store.bodyProfile,
-              preferred: preferred,
-              candidate: store.currentGarment
-            )
+            FitResultView(report: report)
           } label: {
             Label("View Results", systemImage: "chart.bar.xaxis")
           }
@@ -107,7 +102,7 @@ struct HomeView: View {
         }
         if let comparison = store.sizeComparison {
           NavigationLink {
-            SizeComparisonView(comparison: comparison, chart: store.currentSizeChart)
+            SizeComparisonView(comparison: comparison)
           } label: {
             Label("View size comparison", systemImage: "chart.bar.xaxis")
           }

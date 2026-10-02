@@ -93,6 +93,31 @@ final class FitEngineTests: XCTestCase {
         }
     }
 
+    func testBodyComparisonUsesBodyMeasurementsAndCalibratedChestRoom() throws {
+        let measuredBody = BodyProfile(
+            chestCircumference: 0.74,
+            waistCircumference: 0.8,
+            shoulderWidth: 0.41,
+            torsoLength: 0.43
+        )
+        let sweater = garment(chestFlat: 0.61, shoulderWidth: 0.49, length: 0.68)
+        let report = try FitEngine.evaluate(body: measuredBody, preferred: favorite, garment: sweater)
+
+        XCTAssertEqual(report.bodyDimensions.map(\.id), [.chest, .shoulders, .length])
+        XCTAssertEqual(report.bodyDimensions.map(\.signedScore), [50, 100, 100])
+        XCTAssertEqual(report.bodyDimensions[0].deltaMeters, 0.48, accuracy: 1e-12)
+        XCTAssertEqual(report.bodyDimensions[0].preferredMeters, 0.74, accuracy: 1e-12)
+        XCTAssertEqual(report.dimensions[0].deltaMeters, 0.02, accuracy: 1e-12)
+
+        let sameAsBody = try FitEngine.evaluate(
+            body: measuredBody,
+            preferred: favorite,
+            garment: garment(chestFlat: 0.37, shoulderWidth: 0.41, length: 0.43)
+        )
+        XCTAssertEqual(sameAsBody.bodyDimensions.map(\.signedScore), [0, 0, 0])
+        XCTAssertNotEqual(sameAsBody.dimensions.map(\.signedScore), [0, 0, 0])
+    }
+
     func testScoresSaturateButNormalizedRankRemainsUnbounded() throws {
         let atEndpoint = try FitEngine.evaluate(
             body: body, preferred: favorite,
@@ -164,6 +189,7 @@ final class FitEngineTests: XCTestCase {
         XCTAssertEqual(comparison.sizes.count, 1)
         XCTAssertEqual(comparison.sizes[0].report?.referencePhysical, .smallerThanBody)
         XCTAssertTrue(comparison.recommendedIDs.isEmpty)
+        XCTAssertTrue(comparison.recommendedBodyIDs.isEmpty)
     }
 
     func testClosePhysicalBoundaryRequiresReview() throws {
@@ -298,6 +324,20 @@ final class FitEngineTests: XCTestCase {
         XCTAssertEqual(comparison.sizes[0].report?.dimensions.map(\.signedScore), [-100, 100, 0])
         XCTAssertEqual(comparison.sizes[1].report?.dimensions.map(\.signedScore), [20, 20, 20])
         XCTAssertEqual(comparison.recommendedIDs, [balanced.id])
+    }
+
+    func testSizeRecommendationsTrackBodyOrFavoriteWithoutBypassingPhysicalChecks() throws {
+        let favoriteMatch = row("Favorite match", chestFlat: 0.60, shoulderWidth: 0.50, length: 0.72)
+        let bodyMatch = row("Body match", chestFlat: 0.52, shoulderWidth: 0.46, length: 0.45)
+        let tooSmall = row("Physically too small", chestFlat: 0.49, shoulderWidth: 0.46, length: 0.45)
+        let comparison = try FitEngine.evaluateSizes(
+            body: body, preferred: favorite,
+            chart: chart([favoriteMatch, bodyMatch, tooSmall])
+        )
+
+        XCTAssertEqual(comparison.recommendedIDs, [favoriteMatch.id])
+        XCTAssertEqual(comparison.recommendedBodyIDs, [bodyMatch.id])
+        XCTAssertEqual(comparison.sizes[2].report?.physical, .smallerThanBody)
     }
 
     func testNearMinimaxTiesIncludeDuplicateLabelsAndPreserveUUIDIdentity() throws {

@@ -36,6 +36,7 @@ struct FitReport: Equatable {
     let referencePhysical: PhysicalStatus
     let checks: [PhysicalCheck]
     let dimensions: [FitDimensionResult]
+    let bodyDimensions: [FitDimensionResult]
     let preferredName: String
     let waistAssessed: Bool
     let isMixed: Bool
@@ -71,13 +72,14 @@ struct SizeFitResult: Identifiable, Equatable {
 struct SizeComparisonReport: Equatable {
     let sizes: [SizeFitResult]
     let recommendedIDs: [UUID]
+    let recommendedBodyIDs: [UUID]
 }
 
 enum FitEngine {
     private struct ScoringConfiguration {
-        func scale(for dimension: FitDimension) -> Double {
+        func scale(for dimension: FitDimension, comparedToBody: Bool) -> Double {
             switch dimension {
-            case .chest: return 0.12
+            case .chest: return comparedToBody ? 0.96 : 0.12
             case .shoulders: return 0.06
             case .length: return 0.12
             }
@@ -139,6 +141,14 @@ enum FitEngine {
                 candidate: dimensionValue(dimension, in: garment)
             )
         }
+        let bodyDimensions = try FitDimension.allCases.map { dimension in
+            try dimensionResult(
+                dimension,
+                preferred: dimensionValue(dimension, in: body),
+                candidate: dimensionValue(dimension, in: garment),
+                comparedToBody: true
+            )
+        }
         let physical = combinedStatus(checks.map(\.status))
         let referencePhysical = combinedStatus(referenceChecks.map(\.status))
         let signs = dimensions.compactMap { result -> Int? in
@@ -152,6 +162,7 @@ enum FitEngine {
             referencePhysical: referencePhysical,
             checks: checks,
             dimensions: dimensions,
+            bodyDimensions: bodyDimensions,
             preferredName: preferred.name,
             waistAssessed: candidateWaist != nil,
             isMixed: signs.contains(-1) && signs.contains(1)
@@ -201,20 +212,35 @@ enum FitEngine {
             }
         }
 
-        let eligible = sizes.compactMap { row -> (UUID, Double)? in
-            guard let report = row.report,
-                  report.physical == .passesMeasuredChecks,
-                  report.referencePhysical == .passesMeasuredChecks else { return nil }
-            return (row.id, report.dimensions.map { abs($0.normalizedDelta) }.max() ?? .infinity)
-        }
-        guard let best = eligible.map({ $0.1 }).min() else {
-            return SizeComparisonReport(sizes: sizes, recommendedIDs: [])
-        }
-        let recommended = eligible.compactMap { distance in
-            distance.1 - best <= configuration.tieTolerance ? distance.0 : nil
-        }
-        return SizeComparisonReport(sizes: sizes, recommendedIDs: recommended)
+        return SizeComparisonReport(
+            sizes: sizes,
+            recommendedIDs: recommendedIDs(sizes, comparedToBody: false),
+            recommendedBodyIDs: recommendedIDs(sizes, comparedToBody: true)
+        )
     }
+    private static func recommendedIDs(_ sizes: [SizeFitResult], comparedToBody: Bool) -> [UUID] {
+        func distance(_ report: FitReport) -> Double {
+            let dimensions = comparedToBody ? report.bodyDimensions : report.dimensions
+            return dimensions.reduce(0) { max($0, abs($1.normalizedDelta)) }
+        }
+
+        var best = Double.infinity
+        for size in sizes {
+            guard let report = size.report,
+                  report.physical == .passesMeasuredChecks,
+                  report.referencePhysical == .passesMeasuredChecks else { continue }
+            best = min(best, distance(report))
+        }
+        guard best.isFinite else { return [] }
+        return sizes.compactMap { size in
+            guard let report = size.report,
+                  report.physical == .passesMeasuredChecks,
+                  report.referencePhysical == .passesMeasuredChecks,
+                  distance(report) - best <= configuration.tieTolerance else { return nil }
+            return size.id
+        }
+    }
+
 
     private static func validate(garment: GarmentProfile) throws {
         guard garment.isUsable else { throw FitInputError.incompleteGarment }
@@ -300,14 +326,23 @@ enum FitEngine {
         case .length: return garment.length
         }
     }
+    private static func dimensionValue(_ dimension: FitDimension, in body: BodyProfile) -> Double {
+        switch dimension {
+        case .chest: return body.chestCircumference
+        case .shoulders: return body.shoulderWidth
+        case .length: return body.torsoLength
+        }
+    }
+
 
     private static func dimensionResult(
         _ dimension: FitDimension,
         preferred: Double,
-        candidate: Double
+        candidate: Double,
+        comparedToBody: Bool = false
     ) throws -> FitDimensionResult {
         let delta = candidate - preferred
-        let normalized = delta / configuration.scale(for: dimension)
+        let normalized = delta / configuration.scale(for: dimension, comparedToBody: comparedToBody)
         guard delta.isFinite, normalized.isFinite else { throw FitInputError.incompleteGarment }
         let bounded = min(100.0, max(-100.0, normalized * 100))
         guard bounded.isFinite else { throw FitInputError.incompleteGarment }

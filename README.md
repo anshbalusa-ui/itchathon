@@ -1,15 +1,15 @@
 # FitCheck iOS
 
-**Your body + your favorite shirt + a candidate shirt → how the candidate compares.**
+**Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
 
-FitCheck is a native SwiftUI prototype. Body measurements set physical constraints; a saved favorite shirt sets preferred garment dimensions; a candidate is checked against both. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.
+FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to compare chest, shoulders, and length against that reference. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.
 
 ## Implemented flow
 
 - Enter and save body measurements, then enter and save a named favorite shirt and candidate shirt. Measurements are edited as local drafts and stored on-device.
-- Enter chest width, shoulder width, and length for each shirt. Compare candidate with favorite using separate signed chest, shoulder, and length scores: negative means smaller/shorter, zero means equal to favorite, positive means larger/longer. **There is no overall or averaged score.**
-- Keep physical checks separate from preference scores: chest and, when corresponding measurements exist, waist are checked against the body. For physical comparison, flat shirt chest width is doubled to approximate garment chest circumference; garment waist width is doubled only when measured at the navel-aligned waist. Shoulder and length scores compare garments, not body dimensions.
-- If the favorite measures smaller around the chest than the body, still show signed candidate-vs-favorite differences with a visible physical warning. Do not treat that reference as verified or recommend a size until measurements check out. This owner-approved behavior supersedes the older plan's hard error for a contradictory favorite.
+- Enter chest width, shoulder width, and length for each shirt. Results switch all three signed scores between Body and Favorite; negative means smaller/shorter, zero means equal to the selected reference, positive means larger/longer. There is no overall score. Body chest compares twice flat garment width against body circumference; its 0.96 m score scale maps 48 cm additional room to +50.
+- Physical chest and aligned waist checks still gate size recommendations. Favorite and Body size rankings use their respective dimensions, but neither recommends a garment when measured physical checks or the favorite reference fail.
+- Results show only the Body/Favorite selector and concise dimension scores; no physical-check disclaimer card or measurement-source/limits prose. This owner-approved presentation replaces the older contradictory-favorite alert.
 - Enter size-chart rows from **finished-garment measurements** and compare actual sizes. Body-size recommendation charts are not interchangeable with garment measurements.
 
 ## Scanner status and limits
@@ -28,15 +28,15 @@ xcodegen generate
 open FitCheck.xcodeproj
 ```
 
-Earlier integrated simulator suite passed **42/42**. With the chest-depth cutover, the targeted unit suite passed **43/43** and the previous signed build installed on the connected iPhone. New partial-scan flow still needs physical review; no current device accuracy claim follows from old scans. Full UI suite was not rerun after the scanner merge; a new unsupported-camera UI test was removed after simulator diagnostic timeouts. Reproduce unit checks with:
+The full iOS 27 simulator suite passed **46/46** on October 1, 2026 (45 unit tests and one UI test). Physical front/side scan accuracy still needs tape measurements and repeat captures. Select an installed simulator with `xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -showdestinations`, then replace the simulator name below if needed:
 
 ```bash
 xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug \
-  -destination 'platform=iOS Simulator,id=BC1974AB-ED12-4805-8C3A-C5CF97D5616C' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -derivedDataPath /tmp/fitcheck-simulator-derived \
   -parallel-testing-enabled NO \
   -maximum-concurrent-test-simulator-destinations 1 \
-  -only-testing:FitCheckTests CODE_SIGNING_ALLOWED=NO test -quiet
+  CODE_SIGNING_ALLOWED=NO test -quiet
 ```
 
 ## Repository map

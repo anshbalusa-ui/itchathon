@@ -2,24 +2,38 @@ import SwiftUI
 
 struct SizeComparisonView: View {
   var comparison: SizeComparisonReport
-  var chart: GarmentSizeChart?
+  @State private var reference: ScoreReference = .body
+
+  private enum ScoreReference: String, CaseIterable, Identifiable {
+    case body
+    case favorite
+
+    var id: String { rawValue }
+    var title: String { self == .body ? "Body" : "Favorite" }
+  }
+
+  private var recommendedIDs: [UUID] {
+    reference == .body ? comparison.recommendedBodyIDs : comparison.recommendedIDs
+  }
+
+  private var recommendedLabels: [String] {
+    comparison.sizes.filter { recommendedIDs.contains($0.id) }.map(\.sizeLabel)
+  }
 
   var body: some View {
     List {
-      Section("Closest verified sizes") {
-        if comparison.recommendedIDs.isEmpty {
-          Label("No verified match", systemImage: "exclamationmark.triangle")
-            .font(.headline)
-          Text("No entered size passes the measured body checks with a verified favorite reference. Review the measurements before choosing a size.")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        } else {
-          Text(recommendedLabels.joined(separator: ", "))
-            .font(.title2.bold())
-          Text("These sizes have the smallest worst dimension difference among those that pass measured checks. Ties stay visible.")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
+      Section {
+        Picker("Compare to", selection: $reference) {
+          ForEach(ScoreReference.allCases) { option in
+            Text(option.title).tag(option)
+          }
         }
+        .pickerStyle(.segmented)
+      }
+
+      Section("Closest sizes") {
+        Text(recommendedLabels.isEmpty ? "No recommended sizes" : recommendedLabels.joined(separator: ", "))
+          .font(.headline)
       }
 
       Section("Each size") {
@@ -29,8 +43,8 @@ struct SizeComparisonView: View {
               Text(size.sizeLabel.isEmpty ? "Unnamed size" : size.sizeLabel)
                 .font(.headline)
               Spacer()
-              if comparison.recommendedIDs.contains(size.id) {
-                Label("Closest", systemImage: "checkmark.seal")
+              if recommendedIDs.contains(size.id) {
+                Text("Closest")
                   .font(.caption.weight(.semibold))
                   .foregroundStyle(.tint)
               }
@@ -39,22 +53,20 @@ struct SizeComparisonView: View {
               Text(physicalDescription(report.physical))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-              ForEach(report.dimensions) { dimension in
+              let dimensions = reference == .body ? report.bodyDimensions : report.dimensions
+              ForEach(dimensions) { dimension in
                 HStack {
                   Text(dimensionTitle(dimension.id))
                   Spacer()
                   Text(signedScore(dimension.signedScore))
                     .fontWeight(.semibold)
                     .monospacedDigit()
-                  Text("(\(signedCentimeters(dimension.deltaMeters)))")
+                  Text(signedCentimeters(dimension.deltaMeters))
                     .foregroundStyle(.secondary)
                 }
                 .font(.subheadline)
-              }
-              if !report.waistAssessed {
-                Text("Waist not assessed")
-                  .font(.footnote)
-                  .foregroundStyle(.secondary)
+                .accessibilityElement(children: .combine)
+                .accessibilityValue("\(signedScore(dimension.signedScore)) relative to \(reference.title)")
               }
             } else {
               Text(size.issue ?? "Measurements incomplete")
@@ -63,30 +75,17 @@ struct SizeComparisonView: View {
             }
           }
           .padding(.vertical, 5)
-          .accessibilityElement(children: .combine)
         }
       }
-
-      Section("Source and limits") {
-        Text(chart?.sourceNote ?? "Chart source not recorded")
-        Text("Use finished garment measurements only. A body-size recommendation chart cannot provide actual shirt dimensions.")
-        Text("Chest differences approximate shirt circumference, 2 × entered flat width, compared with your favorite. Shoulder and length compare each size directly. Negative is smaller or shorter; positive is larger or longer. No single score combines them.")
-      }
-      .font(.footnote)
-      .foregroundStyle(.secondary)
     }
     .listStyle(.insetGrouped)
     .navigationTitle("Compare Sizes")
     .navigationBarTitleDisplayMode(.inline)
   }
 
-  private var recommendedLabels: [String] {
-    comparison.sizes.filter { comparison.recommendedIDs.contains($0.id) }.map(\.sizeLabel)
-  }
-
   private func dimensionTitle(_ value: FitDimension) -> String {
     switch value {
-    case .chest: return "Approx. shirt chest circumference difference"
+    case .chest: return "Chest"
     case .shoulders: return "Shoulders"
     case .length: return "Length"
     }
@@ -94,9 +93,9 @@ struct SizeComparisonView: View {
 
   private func physicalDescription(_ status: PhysicalStatus) -> String {
     switch status {
-    case .passesMeasuredChecks: return "Passes measured body checks"
-    case .needsVerification: return "Needs tape verification"
-    case .smallerThanBody: return "Smaller than measured body"
+    case .passesMeasuredChecks: return "Passes body checks"
+    case .needsVerification: return "Verify measurements"
+    case .smallerThanBody: return "Below body measurement"
     }
   }
 
