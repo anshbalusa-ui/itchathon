@@ -4,6 +4,10 @@
 
 FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to compare chest, shoulders, and length against that reference. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.
 
+## Avatar-first production work
+
+[Segment 0 handoff and verification](Docs/AVATAR_S0_HANDOFF.md) documents the isolated avatar-profile foundation, assessment of draft PRs #5–#7, privacy decisions, and remaining gates. Only Debug builds with `-fitcheck-avatar-internal` expose metadata onboarding. Scanning, avatar rendering, catalog browsing, and fit interpretation are not implemented in that experience. The legacy measurement flow below remains the default, including in Release builds.
+
 ## Implemented flow
 
 - Enter and save body measurements, then enter and save a named favorite shirt and candidate shirt. Measurements are edited as local drafts and stored on-device.

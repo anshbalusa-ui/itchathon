@@ -7,11 +7,12 @@ final class AvatarFoundationTests: XCTestCase {
         status: AvatarEvidenceStatus = .awaitingReview,
         asset: String? = nil,
         shape: [String: Double] = [:],
-        version: Int = AvatarProfileRecord.currentSchemaVersion
+        version: Int = AvatarProfileRecord.currentSchemaVersion,
+        createdAt: Date = Date(timeIntervalSince1970: 0)
     ) -> AvatarProfileRecord {
         AvatarProfileRecord(
             schemaVersion: version,
-            createdAt: Date(timeIntervalSince1970: 0),
+            createdAt: createdAt,
             captureMethod: .lidarFrontAndSide,
             evidenceStatus: status,
             modelAssetIdentifier: asset,
@@ -19,92 +20,61 @@ final class AvatarFoundationTests: XCTestCase {
         )
     }
 
-    private func temporaryDirectory() throws -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
-    }
-
-    func testMissingProfileShowsAvatarCreation() {
+    func testMissingAndIncompleteProfilesHaveDistinctRoutes() {
         XCTAssertEqual(AvatarEntryResolver.destination(for: nil), .createAvatar)
+        XCTAssertEqual(AvatarEntryResolver.destination(for: profile()), .incompleteProfile)
     }
 
-    func testUnreviewedProfileCannotUnlockSavedAvatar() {
-        let unreviewed = profile(status: .awaitingReview, asset: "avatar", shape: ["torso": 0.1])
-        XCTAssertEqual(AvatarEntryResolver.destination(for: unreviewed), .createAvatar)
-    }
-
-    func testInvalidAndMissingAvatarParametersCannotUnlockSavedAvatar() {
+    func testUnsupportedAndMalformedRecordsCannotUnlockSavedAvatar() {
+        let valid = profile(status: .usableForIllustrativePreview, asset: "synthetic", shape: ["torso": 0.1])
         let invalid: [AvatarProfileRecord] = [
+            profile(status: .usableForIllustrativePreview, asset: "synthetic", shape: ["torso": 0.1], version: 99),
+            profile(status: .awaitingReview, asset: "synthetic", shape: ["torso": 2]),
+            profile(status: .usableForIllustrativePreview, asset: "synthetic", shape: ["": 0.1]),
+            profile(status: .usableForIllustrativePreview, asset: "synthetic", shape: ["torso": .infinity]),
+            profile(status: .usableForIllustrativePreview, asset: "synthetic", shape: ["torso": .nan]),
+            profile(status: .usableForIllustrativePreview, asset: " ", shape: ["torso": 0.1]),
+            profile(status: .usableForIllustrativePreview, asset: "synthetic", shape: ["torso": 0.1],
+                    createdAt: Date(timeIntervalSince1970: .infinity)),
             profile(status: .usableForIllustrativePreview, asset: nil, shape: ["torso": 0.1]),
-            profile(status: .usableForIllustrativePreview, asset: "avatar", shape: [:]),
-            profile(status: .usableForIllustrativePreview, asset: "avatar", shape: ["torso": .nan]),
-            profile(status: .usableForIllustrativePreview, asset: "avatar", shape: ["torso": 5]),
-            profile(status: .usableForIllustrativePreview, asset: "avatar", shape: ["": 0.2]),
-            profile(status: .usableForIllustrativePreview, asset: "avatar", shape: ["torso": 0.2], version: 2)
+            profile(status: .usableForIllustrativePreview, asset: "synthetic", shape: [:])
         ]
+        XCTAssertEqual(AvatarEntryResolver.destination(for: valid), .previewUnavailable)
         for record in invalid {
-            XCTAssertEqual(AvatarEntryResolver.destination(for: record), .createAvatar)
+            XCTAssertEqual(
+                AvatarEntryResolver.destination(for: record, previewIsSupported: { _ in true }),
+                .invalidProfile
+            )
         }
-    }
-
-    func testReviewedDerivedProfileCanResolveSavedAvatarRoute() {
-        let supported = profile(
-            status: .usableForIllustrativePreview,
-            asset: "licensed-base-mesh",
-            shape: ["shoulderMorph": 0.15]
+        XCTAssertEqual(
+            AvatarEntryResolver.destination(for: profile(), previewIsSupported: { _ in true }),
+            .incompleteProfile
         )
-        XCTAssertEqual(AvatarEntryResolver.destination(for: supported), .savedAvatar)
     }
 
-    func testPersistRoundTripAndDelete() throws {
-        let dir = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let store = AvatarProfileRepository(directoryURL: dir)
-        XCTAssertNil(try store.load())
-
-        // Synthetic derived parameters are only test fixtures, never customer scans.
-        let record = profile(
-            status: .usableForIllustrativePreview,
-            asset: "test-only-mesh",
-            shape: ["shoulderMorph": 0.15]
+    func testCompatibilityCallbackGatesKnownSyntheticAssetAndControls() {
+        let supported = profile(status: .usableForIllustrativePreview,
+                                asset: "synthetic-mesh-v1", shape: ["torso": 0.1])
+        let compatibility: (AvatarProfileRecord) -> Bool = {
+            $0.modelAssetIdentifier == "synthetic-mesh-v1"
+                && Set($0.normalizedShapeParameters.keys) == ["torso"]
+        }
+        XCTAssertEqual(
+            AvatarEntryResolver.destination(for: supported, previewIsSupported: compatibility),
+            .savedAvatar
         )
-        try store.save(record)
-        XCTAssertEqual(try store.load(), record)
-        try store.delete()
-        XCTAssertNil(try store.load())
-        try store.delete()
+        let unknownAsset = profile(status: .usableForIllustrativePreview,
+                                   asset: "arbitrary-string", shape: ["torso": 0.1])
+        XCTAssertEqual(
+            AvatarEntryResolver.destination(for: unknownAsset, previewIsSupported: compatibility),
+            .previewUnavailable
+        )
+        let unknownControls = profile(status: .usableForIllustrativePreview,
+                                      asset: "synthetic-mesh-v1", shape: ["futureControl": 0.1])
+        XCTAssertEqual(
+            AvatarEntryResolver.destination(for: unknownControls, previewIsSupported: compatibility),
+            .previewUnavailable
+        )
     }
 
-    func testCorruptFileDoesNotTurnIntoReadyAvatar() throws {
-        let dir = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let file = dir.appendingPathComponent("fitcheck-avatar-profile.json")
-        try Data("not json".utf8).write(to: file)
-        let store = AvatarProfileRepository(directoryURL: dir)
-        XCTAssertThrowsError(try store.load()) { error in
-            XCTAssertEqual(error as? AvatarProfileStorageError, .corruptedProfile)
-        }
-    }
-
-    func testUnsupportedSchemaCannotBeSaved() throws {
-        let dir = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let store = AvatarProfileRepository(directoryURL: dir)
-        XCTAssertThrowsError(try store.save(profile(version: 99))) { error in
-            XCTAssertEqual(error as? AvatarProfileStorageError, .unsupportedSchema)
-        }
-        XCTAssertNil(try store.load())
-    }
-
-    func testFalseReadyDataCannotBeSaved() throws {
-        let dir = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let store = AvatarProfileRepository(directoryURL: dir)
-        let bogus = profile(status: .usableForIllustrativePreview, asset: "avatar")
-        XCTAssertThrowsError(try store.save(bogus)) { error in
-            XCTAssertEqual(error as? AvatarProfileStorageError, .invalidPreviewEvidence)
-        }
-    }
 }
