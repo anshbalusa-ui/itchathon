@@ -52,16 +52,20 @@ struct AvatarPersonDetector {
             }
         }
 
+        // In side views, one shoulder or hip can occlude the other.
         let trunk = ["leftShoulder", "rightShoulder", "leftHip", "rightHip"]
-        let hasTrunk = trunk.allSatisfy { landmarks[$0] != nil }
+        let visibleTrunk = trunk.compactMap { landmarks[$0] }
+        let shouldersVisible = landmarks["leftShoulder"] != nil
+            || landmarks["rightShoulder"] != nil
+        let hipsVisible = landmarks["leftHip"] != nil || landmarks["rightHip"] != nil
         let hasHeadAndFoot = landmarks["nose"] != nil
             && (landmarks["leftAnkle"] != nil || landmarks["rightAnkle"] != nil)
         let maskFramed = Self.personFitsInImage(mask)
         let center: CGPoint?
-        if hasTrunk {
+        if visibleTrunk.count >= 2 {
             center = CGPoint(
-                x: trunk.reduce(0) { $0 + landmarks[$1]!.x } / 4,
-                y: trunk.reduce(0) { $0 + landmarks[$1]!.y } / 4
+                x: visibleTrunk.reduce(0) { $0 + $1.x } / CGFloat(visibleTrunk.count),
+                y: visibleTrunk.reduce(0) { $0 + $1.y } / CGFloat(visibleTrunk.count)
             )
         } else {
             center = nil
@@ -71,7 +75,7 @@ struct AvatarPersonDetector {
             mask: mask,
             landmarks: landmarks,
             fullPersonVisible: maskFramed && hasHeadAndFoot,
-            poseReliable: hasTrunk && hasHeadAndFoot,
+            poseReliable: shouldersVisible && hipsVisible && hasHeadAndFoot,
             torsoCenter: center
         )
     }
