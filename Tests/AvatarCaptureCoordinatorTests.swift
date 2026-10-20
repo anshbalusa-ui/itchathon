@@ -63,6 +63,20 @@ final class AvatarCaptureCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.consecutiveReadyFrames, 0)
     }
 
+    func testCancellationStopsCaptureUntilReset() {
+        var coordinator = AvatarCaptureCoordinator(requiredFrames: 2)
+        XCTAssertNil(coordinator.accept(ready))
+        coordinator.cancel()
+        XCTAssertEqual(coordinator.phase, .cancelled)
+        XCTAssertEqual(coordinator.consecutiveReadyFrames, 0)
+        XCTAssertNil(coordinator.accept(ready))
+        XCTAssertNil(coordinator.accept(ready))
+        coordinator.reset()
+        XCTAssertEqual(coordinator.phase, .front)
+        XCTAssertNil(coordinator.accept(ready))
+        XCTAssertEqual(coordinator.accept(ready), .front)
+    }
+
     func testInvalidRequestedFrameCountDoesNotAllowOneFrameCapture() {
         var coordinator = AvatarCaptureCoordinator(requiredFrames: 0)
         XCTAssertNil(coordinator.accept(ready))
