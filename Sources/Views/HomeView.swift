@@ -23,6 +23,19 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
 
+      Section("Your avatar") {
+        NavigationLink {
+          CreateAvatarView()
+        } label: {
+          StepRow(
+            title: "Create your avatar",
+            detail: "Try the new guided scan (experimental)",
+            symbol: "person.crop.rectangle.stack",
+            complete: false
+          )
+        }
+      }
+
       Section("Your measurements") {
         NavigationLink {
           BodyProfileView()
