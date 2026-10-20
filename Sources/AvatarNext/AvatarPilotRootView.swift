@@ -28,11 +28,17 @@ struct AvatarPilotRootView: View {
                     .accessibilityAddTraits(.isHeader)
 
                 content
+                NavigationLink {
+                    CreateAvatarView()
+                } label: {
+                    Label("Try guided capture", systemImage: "camera.viewfinder")
+                }
+                .buttonStyle(.borderedProminent)
 
                 Divider()
                 Label("Private by design", systemImage: "lock.shield")
                     .font(.headline)
-                Text("This screen does not use the camera or save photos, recordings, or depth maps. Avatar metadata stays on this iPhone and can be deleted separately from your existing measurements.")
+                Text("Camera access begins only when you start guided capture. Its temporary observations stay in memory and are discarded when you leave. Saved avatar metadata stays on this iPhone and can be deleted separately from your existing measurements.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -70,7 +76,7 @@ struct AvatarPilotRootView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Create an avatar, without measuring yourself.")
                     .font(.title2.weight(.semibold))
-                Text("Guided camera scanning is being developed. Scanning isn't available in this build yet.")
+                Text("Guided capture is available for development testing. Its observations still require validation on a physical iPhone.")
                     .foregroundStyle(.secondary)
                 Text("Avatar viewing, clothing browsing, and fit estimates are not available yet.")
                     .foregroundStyle(.secondary)
@@ -80,7 +86,7 @@ struct AvatarPilotRootView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Your saved scan information is not verified.")
                     .font(.title2.weight(.semibold))
-                Text("It cannot be used as a personalized avatar. Scanning and scan review are not available in this build yet.")
+                Text("It cannot be used as a personalized avatar. Guided capture does not approve or replace this metadata; scan review is not available yet.")
                     .foregroundStyle(.secondary)
                 deleteButton
             }
