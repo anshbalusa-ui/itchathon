@@ -6,6 +6,7 @@ enum AvatarCapturePhase: Equatable {
     case front
     case side
     case complete
+    case cancelled
 }
 
 struct AvatarFrameReadiness: Equatable {
@@ -31,7 +32,7 @@ struct AvatarCaptureCoordinator {
 
     /// Returns the phase just captured, if one view became ready.
     mutating func accept(_ readiness: AvatarFrameReadiness) -> AvatarCapturePhase? {
-        guard phase != .complete else { return nil }
+        guard phase != .complete && phase != .cancelled else { return nil }
         guard readiness.canCapture else {
             consecutiveReadyFrames = 0
             return nil
@@ -43,6 +44,11 @@ struct AvatarCaptureCoordinator {
         let captured = phase
         phase = captured == .front ? .side : .complete
         return captured
+    }
+
+    mutating func cancel() {
+        phase = .cancelled
+        consecutiveReadyFrames = 0
     }
 
     mutating func reset() {
