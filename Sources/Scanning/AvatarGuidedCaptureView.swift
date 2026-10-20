@@ -214,7 +214,9 @@ final class AvatarGuidedCaptureController: UIViewController, ARSessionDelegate {
     private func sessionQueueCleanup() {
         // Called on sessionQueue; buffers remain alive only in the returned bundle.
         frontSnapshot = nil
-        sceneView.session.pause()
+        DispatchQueue.main.async { [weak self] in
+            self?.sceneView.session.pause()
+        }
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
@@ -227,6 +229,7 @@ final class AvatarGuidedCaptureController: UIViewController, ARSessionDelegate {
         sceneView.session.pause()
         sessionQueue.async { [weak self] in
             self?.ended = true
+            self?.coordinator.cancel()
             self?.frontSnapshot = nil
             self?.lastCenter = nil
         }
