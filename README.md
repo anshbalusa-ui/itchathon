@@ -8,6 +8,8 @@ FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to 
 
 [Segment 0](Docs/AVATAR_S0_HANDOFF.md) records the verified local avatar-profile foundation in PR #8. [Segment 1A](Docs/SCANNER_S1A_HANDOFF.md) adds development-only guided LiDAR/Vision capture and an [exact Segment 1B physical-device checklist](Docs/SCANNER_S1B_DEVICE_CHECKLIST.md). Use a Debug build with `-fitcheck-avatar-internal`, then **Try guided capture → Start guided scan**. Capture observations remain provisional and require device validation; avatar rendering, catalog browsing, and fit interpretation are unavailable. The legacy measurement flow below remains the default, including in Release builds.
 
+The [critical foundation audit](Docs/FOUNDATION_AUDIT.md) records reproduced deletion, camera-ownership, orientation-evidence, and continuity defects and their repairs. [Data/backend boundaries](Docs/DATA_ARCHITECTURE_AUDIT.md) document on-device responsibilities, future service ownership, and account/concurrent-store gaps. Passing automated tests is not physical scan validation or approval for the new customer release.
+
 ## Implemented flow
 
 - Enter and save body measurements, then enter and save a named favorite shirt and candidate shirt. Measurements are edited as local drafts and stored on-device.

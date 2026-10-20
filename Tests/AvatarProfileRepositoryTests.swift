@@ -197,6 +197,27 @@ final class AvatarProfileRepositoryTests: XCTestCase {
         XCTAssertEqual(recovered, eligibleProfile())
     }
 
+    func testDeleteDoesNotRemoveDirectoryAtPreviouslyUsedProfilePath() async throws {
+        let directory = try temporaryDirectory()
+        let repository = makeRepository(in: directory)
+        let path = fileURL(in: directory)
+        try await repository.save(profile(shape: ["synthetic": 0.1]))
+        try await repository.delete()
+
+        try FileManager.default.createDirectory(at: path, withIntermediateDirectories: false)
+        let marker = path.appendingPathComponent("keep")
+        let bytes = Data("unrelated directory content".utf8)
+        try bytes.write(to: marker)
+
+        do {
+            try await repository.delete()
+            XCTFail("Expected deletion to refuse an unexpected directory")
+        } catch {
+            XCTAssertEqual((error as NSError).code, CocoaError.fileWriteUnknown.rawValue)
+        }
+        XCTAssertEqual(try Data(contentsOf: marker), bytes)
+    }
+
     func testDirectoryAndBlockedParentFailuresAreNotMissingOrCorruption() async throws {
         let directory = try temporaryDirectory()
         let pathThatIsDirectory = fileURL(in: directory)

@@ -187,6 +187,60 @@ final class AvatarCaptureCoordinatorTests: XCTestCase {
     }
 
 
+    func testContextChangeDuringWrongOrUnknownViewCannotBeHiddenByReturning() {
+        let observations: [(ScanViewEstimate, ScanRejection?)] = [(.front, nil), (.unverified, .unverifiedView)]
+        for (view, rejection) in observations {
+            var coordinator = startedCoordinator(requiredFrames: 1, requiredStableDuration: 0)
+            XCTAssertEqual(submit(&coordinator, at: 1, view: .front), .front)
+            XCTAssertNil(submit(
+                &coordinator, at: 1.3, view: view, rejection: rejection,
+                anchor: anchor(cameraPosition: ScanVector(x: 0.3, y: 0, z: 0))
+            ))
+            if case .retryRequired = coordinator.phase {} else {
+                XCTFail("View uncertainty must not hide observed camera/context movement")
+            }
+            XCTAssertNil(submit(&coordinator, at: 1.6, view: .side))
+        }
+    }
+
+    func testTrackingLossAfterFrontCannotProducePairAfterRecovery() {
+        var coordinator = startedCoordinator(requiredFrames: 1, requiredStableDuration: 0)
+        XCTAssertEqual(submit(&coordinator, at: 1, view: .front), .front)
+        let ticket = try! XCTUnwrap(coordinator.beginFrame(timestamp: 1.3, receivedAt: 1.3))
+        XCTAssertNil(coordinator.accept(
+            ticket: ticket,
+            assessment: ScanFrameAssessment(timestamp: 1.3, rejection: .trackingLimited, view: .unverified, anchor: nil),
+            now: 1.31
+        ))
+        if case .retryRequired = coordinator.phase {} else {
+            XCTFail("Tracking loss makes the saved front context uncertain")
+        }
+        XCTAssertNil(submit(&coordinator, at: 1.6, view: .side))
+    }
+
+    func testMultiplePeopleAfterFrontCannotProducePair() {
+        var coordinator = startedCoordinator(requiredFrames: 1, requiredStableDuration: 0)
+        XCTAssertEqual(submit(&coordinator, at: 1, view: .front), .front)
+        XCTAssertNil(submit(&coordinator, at: 1.3, view: .side, rejection: .multiplePeople))
+        if case .retryRequired = coordinator.phase {} else {
+            XCTFail("Additional people break continuity with the saved front")
+        }
+        XCTAssertNil(submit(&coordinator, at: 1.6, view: .side))
+        _ = coordinator.start(supported: true, permission: .authorized)
+        XCTAssertEqual(submit(&coordinator, at: 2, view: .front), .front)
+        XCTAssertEqual(submit(&coordinator, at: 2.3, view: .side), .side)
+    }
+
+    func testUnobservedGapAfterFrontCannotProducePair() {
+        var coordinator = startedCoordinator(requiredFrames: 1, requiredStableDuration: 0)
+        XCTAssertEqual(submit(&coordinator, at: 1, view: .front), .front)
+        XCTAssertNil(submit(&coordinator, at: 2, view: .side))
+        if case .retryRequired = coordinator.phase {} else {
+            XCTFail("A gap without observations cannot establish subject continuity")
+        }
+        XCTAssertNil(submit(&coordinator, at: 2.3, view: .side))
+    }
+
     func testSideMustRemainInFrontFramingAndCameraContext() {
         let turnedCamera = ScanVector(x: 0.259, y: 0, z: -0.966)
         let mismatchedAnchors = [
@@ -201,9 +255,14 @@ final class AvatarCaptureCoordinatorTests: XCTestCase {
             var coordinator = startedCoordinator(requiredFrames: 1, requiredStableDuration: 0)
             XCTAssertEqual(submit(&coordinator, at: 1, view: .front), .front)
             XCTAssertNil(submit(&coordinator, at: 1.3, view: .side, anchor: sideAnchor))
-            XCTAssertEqual(coordinator.phase, .scanning(.side))
+            if case .retryRequired = coordinator.phase {} else {
+                XCTFail("Changing capture context must discard the old front view")
+            }
             XCTAssertEqual(coordinator.latestRejection, .holdStill)
-            XCTAssertEqual(submit(&coordinator, at: 1.6, view: .side), .side)
+            XCTAssertNil(submit(&coordinator, at: 1.6, view: .side))
+            _ = coordinator.start(supported: true, permission: .authorized)
+            XCTAssertEqual(submit(&coordinator, at: 2, view: .front), .front)
+            XCTAssertEqual(submit(&coordinator, at: 2.3, view: .side), .side)
             XCTAssertEqual(coordinator.phase, .candidatePairReady)
         }
     }

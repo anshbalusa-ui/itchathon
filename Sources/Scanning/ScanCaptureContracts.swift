@@ -80,6 +80,7 @@ enum ScanCameraPermission: Equatable, Sendable { case notDetermined, authorized,
 enum ScanUnavailableReason: Equatable, Sendable { case unsupportedDevice, cameraDenied, cameraRestricted }
 enum ScanInterruption: Equatable, Sendable {
     case backgrounded, sessionInterrupted, trackingFailed, orientationChanged, personLost, timedOut
+    case captureContextChanged
 }
 enum ScanCapturePhase: Equatable, Sendable {
     case idle, requestingPermission

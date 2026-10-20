@@ -21,9 +21,17 @@ enum PersonDepthAligner {
     }
 
     /// Accepts only calibrated, rotation-adjusted bilateral depth-axis angles.
-    static func estimateView(landmarks: [ScanJoint: ScanPoint], shoulderAngle: AxisAngle?, hipAngle: AxisAngle?) -> ScanViewEstimate {
+    static func estimateView(landmarks: [ScanJoint: ScanPoint], imageRotation: ScanImageRotation, shoulderAngle: AxisAngle?, hipAngle: AxisAngle?) -> ScanViewEstimate {
         let bothFaceEyes = landmarks[.leftEye] != nil && landmarks[.rightEye] != nil
-        let frontPose = landmarks[.nose] != nil && bothFaceEyes
+        let eyesAboveShoulders: Bool
+        if let leftEye = landmarks[.leftEye], let rightEye = landmarks[.rightEye],
+           let shoulderY = meanY(landmarks[.leftShoulder], landmarks[.rightShoulder], rotation: imageRotation) {
+            eyesAboveShoulders = uprightPoint(leftEye, rotation: imageRotation).y < shoulderY
+                && uprightPoint(rightEye, rotation: imageRotation).y < shoulderY
+        } else {
+            eyesAboveShoulders = false
+        }
+        let frontPose = landmarks[.nose] != nil && bothFaceEyes && eyesAboveShoulders
             && landmarks[.leftShoulder] != nil && landmarks[.rightShoulder] != nil
             && landmarks[.leftHip] != nil && landmarks[.rightHip] != nil
         if frontPose {
@@ -138,9 +146,10 @@ enum PersonDepthAligner {
               pa.pixelX != pb.pixelX || pa.pixelY != pb.pixelY else { return nil }
         let lateral: Double
         switch metadata.imageRotation { case .up: lateral = pb.x - pa.x; case .right: lateral = -(pb.y - pa.y); case .down: lateral = -(pb.x - pa.x); case .left: lateral = pb.y - pa.y }
-        let angle = atan2(abs(pb.z - pa.z), abs(lateral)) * 180 / .pi
-        guard angle.isFinite else { return nil }
-        return AxisAngle(degrees: angle)
+        let depthDelta = pb.z - pa.z
+        guard lateral != 0 || depthDelta != 0 else { return nil }
+        let angle = atan2(abs(depthDelta), abs(lateral)) * 180 / .pi
+        return angle.isFinite ? AxisAngle(degrees: angle) : nil
     }
     private struct CalibratedPixel { let x, y, z: Double; let pixelX, pixelY: Int }
     private static func calibratedPoint(_ point: ScanPoint, depth: ScanDepthPlane, confidence: ScanBytePlane, mask: ScanBytePlane, metadata: ScanFrameMetadata) -> CalibratedPixel? {

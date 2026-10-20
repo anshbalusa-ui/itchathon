@@ -92,24 +92,72 @@ final class PersonDepthAlignmentTests: XCTestCase {
         ]
         let frontShoulder = PersonDepthAligner.AxisAngle(degrees: 8)
         let frontHip = PersonDepthAligner.AxisAngle(degrees: 12)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, shoulderAngle: frontShoulder, hipAngle: frontHip), .front)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 65), hipAngle: frontHip), .unverified)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, imageRotation: .up, shoulderAngle: frontShoulder, hipAngle: frontHip), .front)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, imageRotation: .up, shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 65), hipAngle: frontHip), .unverified)
         landmarks.removeValue(forKey: .leftEye); landmarks.removeValue(forKey: .rightEye)
         landmarks[.leftShoulder] = ScanPoint(x: 0.49, y: 0.35)
         landmarks[.rightShoulder] = ScanPoint(x: 0.51, y: 0.35)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 70), hipAngle: nil), .side)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, shoulderAngle: nil, hipAngle: nil), .unverified)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 70), hipAngle: PersonDepthAligner.AxisAngle(degrees: 25)), .unverified)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, imageRotation: .up, shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 70), hipAngle: nil), .side)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, imageRotation: .up, shoulderAngle: nil, hipAngle: nil), .unverified)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, imageRotation: .up, shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 70), hipAngle: PersonDepthAligner.AxisAngle(degrees: 25)), .unverified)
         landmarks[.leftEye] = ScanPoint(x: 0.45, y: 0.18); landmarks[.rightEye] = ScanPoint(x: 0.55, y: 0.18)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 70), hipAngle: nil), .unverified)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: landmarks, imageRotation: .up, shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 70), hipAngle: nil), .unverified)
     }
+    func testEyesBelowShouldersDoNotEstablishFrontView() {
+        let landmarks: [ScanJoint: ScanPoint] = [
+            .nose: ScanPoint(x: 0.5, y: 0.2),
+            .leftEye: ScanPoint(x: 0.46, y: 0.45), .rightEye: ScanPoint(x: 0.54, y: 0.45),
+            .leftShoulder: ScanPoint(x: 0.4, y: 0.35), .rightShoulder: ScanPoint(x: 0.6, y: 0.35),
+            .leftHip: ScanPoint(x: 0.43, y: 0.58), .rightHip: ScanPoint(x: 0.57, y: 0.58)
+        ]
+        XCTAssertEqual(PersonDepthAligner.estimateView(
+            landmarks: landmarks,
+            imageRotation: .up,
+            shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 8),
+            hipAngle: PersonDepthAligner.AxisAngle(degrees: 12)
+        ), .unverified)
+    }
+    func testRotatedEyesBelowShouldersDoNotEstablishFrontView() {
+        let landmarks: [ScanJoint: ScanPoint] = [
+            .nose: ScanPoint(x: 0.2, y: 0.5),
+            .leftEye: ScanPoint(x: 0.45, y: 0.54), .rightEye: ScanPoint(x: 0.45, y: 0.46),
+            .leftShoulder: ScanPoint(x: 0.35, y: 0.4), .rightShoulder: ScanPoint(x: 0.35, y: 0.6),
+            .leftHip: ScanPoint(x: 0.58, y: 0.43), .rightHip: ScanPoint(x: 0.58, y: 0.57)
+        ]
+        XCTAssertEqual(PersonDepthAligner.estimateView(
+            landmarks: landmarks,
+            imageRotation: .right,
+            shoulderAngle: PersonDepthAligner.AxisAngle(degrees: 8),
+            hipAngle: PersonDepthAligner.AxisAngle(degrees: 12)
+        ), .unverified)
+    }
+
+
+    func testVerticalOnlyBilateralShoulderPointsDoNotEstablishFrontView() throws {
+        var fixture = makeFixture()
+        fixture.landmarks[.leftEye] = ScanPoint(x: 0.46, y: 0.18)
+        fixture.landmarks[.rightEye] = ScanPoint(x: 0.54, y: 0.18)
+        fixture.landmarks[.leftShoulder] = ScanPoint(x: 0.5, y: 0.35)
+        fixture.landmarks[.rightShoulder] = ScanPoint(x: 0.5, y: 0.55)
+
+        let result = try evaluate(fixture)
+        XCTAssertNil(result.rejection)
+        XCTAssertNil(result.shoulderAngle)
+        XCTAssertEqual(PersonDepthAligner.estimateView(
+            landmarks: fixture.landmarks,
+            imageRotation: .up,
+            shoulderAngle: result.shoulderAngle,
+            hipAngle: result.hipAngle
+        ), .unverified)
+    }
+
     func testCalibratedAxisEvidenceSeparatesFrontSideAndContradiction() throws {
         var front = makeFixture()
         front.landmarks[.leftEye] = ScanPoint(x: 0.46, y: 0.18)
         front.landmarks[.rightEye] = ScanPoint(x: 0.54, y: 0.18)
         let frontResult = try evaluate(front)
         XCTAssertNil(frontResult.rejection)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: front.landmarks, shoulderAngle: frontResult.shoulderAngle, hipAngle: frontResult.hipAngle), .front)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: front.landmarks, imageRotation: .up, shoulderAngle: frontResult.shoulderAngle, hipAngle: frontResult.hipAngle), .front)
 
         var side = makeFixture()
         side.landmarks.removeValue(forKey: .leftEye); side.landmarks.removeValue(forKey: .rightEye)
@@ -120,12 +168,12 @@ final class PersonDepthAlignmentTests: XCTestCase {
         side.depth[22 * side.depthStride + 32] = 2.4
         let sideResult = try evaluate(side)
         XCTAssertNil(sideResult.rejection)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: side.landmarks, shoulderAngle: sideResult.shoulderAngle, hipAngle: sideResult.hipAngle), .side)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: side.landmarks, imageRotation: .up, shoulderAngle: sideResult.shoulderAngle, hipAngle: sideResult.hipAngle), .side)
 
         var contradictory = side
         contradictory.landmarks[.rightHip] = ScanPoint(x: 0.58, y: 0.57)
         let conflict = try evaluate(contradictory)
-        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: contradictory.landmarks, shoulderAngle: conflict.shoulderAngle, hipAngle: conflict.hipAngle), .unverified)
+        XCTAssertEqual(PersonDepthAligner.estimateView(landmarks: contradictory.landmarks, imageRotation: .up, shoulderAngle: conflict.shoulderAngle, hipAngle: conflict.hipAngle), .unverified)
     }
 
     func testPaddedRowsAndDifferingMaskResolutionAreHonored() throws {

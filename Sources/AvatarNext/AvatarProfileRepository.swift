@@ -96,12 +96,14 @@ actor AvatarProfileRepository: AvatarProfilePersisting {
 
     private func removeFileIfPresent(at url: URL) throws {
         do {
-            let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+            var currentURL = url
+            currentURL.removeCachedResourceValue(forKey: .isRegularFileKey)
+            let values = try currentURL.resourceValues(forKeys: [.isRegularFileKey])
             guard values.isRegularFile == true else {
                 // Never recursively remove an unexpected directory at the file path.
                 throw CocoaError(.fileWriteUnknown)
             }
-            try fileManager.removeItem(at: url)
+            try fileManager.removeItem(at: currentURL)
         } catch {
             if !Self.isMissingFile(error) {
                 throw error

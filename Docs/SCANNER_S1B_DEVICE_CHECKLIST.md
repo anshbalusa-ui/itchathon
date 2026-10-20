@@ -1,10 +1,10 @@
 # Segment 1B — physical LiDAR validation checklist
 
-**Not executed during Segment 1A.** A simulator, generic-device build, synthetic raster, plausible skeleton, or two captured views does not establish real scan validity. Do not proceed into geometry/avatar generation as part of these checks.
+**Not executed during Segment 1A or the foundation repair audit.** A simulator, generic-device build, synthetic raster, plausible skeleton, or two captured views does not establish real scan validity. Do not proceed into geometry/avatar generation as part of these checks. Start with the priorities and known limitations in [the foundation audit](FOUNDATION_AUDIT.md).
 
 ## Setup and recording rules
 
-- [ ] Use the reviewed Segment 1A commit on an actual LiDAR iPhone Pro. Record commit, device model, iOS build, Xcode/SDK, build configuration, and test date. Also use a physical unsupported iPhone if available; record missing hardware explicitly.
+- [ ] Use the reviewed foundation-repair commit on an actual LiDAR iPhone Pro. Record commit, device model, iOS build, Xcode/SDK, build configuration, and test date. Also use a physical unsupported iPhone if available; record missing hardware explicitly.
 - [ ] Select a signing team locally in Xcode without committing account identifiers, provisioning profiles, or credentials. Build/install a Debug app; add `-fitcheck-avatar-internal` to Run arguments. Use **Try guided capture → Start guided scan**.
 - [ ] Obtain informed consent from a clothed volunteer. Use a helper or stable mount with the rear camera facing the subject. No tape, measurement entry, manual markers, or body-size targets. Stop if uncomfortable. Do not collect identity or personal dimensions in the test record.
 - [ ] Disable screenshots/screen recording, frame export, network payload capture containing images, sensitive console logging, and automatic attachment of body imagery to bug reports. Use only transient in-memory inspection. Keep consent and any sensitive research notes outside Git and GitHub.

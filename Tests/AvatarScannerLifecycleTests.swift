@@ -5,6 +5,34 @@ import XCTest
 
 @MainActor
 final class AvatarScannerLifecycleTests: XCTestCase {
+    func testDismantlingReplacedPreviewCannotStopCurrentCamera() {
+        let model = AvatarScannerModel(processor: SuspendedAnalysis())
+        let oldController = AvatarGuidedCaptureController()
+        let oldCoordinator = AvatarGuidedCaptureView.Coordinator(model: model)
+        model.attach(oldController)
+        let currentCamera = SyntheticCamera(permission: .authorized)
+        model.attach(currentCamera)
+        model.start()
+        AvatarGuidedCaptureView.dismantleUIViewController(oldController, coordinator: oldCoordinator)
+        XCTAssertEqual(model.phase, .scanning(.front))
+        XCTAssertTrue(currentCamera.running)
+        model.detach(currentCamera)
+    }
+
+    func testReplacedCameraEventCannotInterruptCurrentAttempt() {
+        let model = AvatarScannerModel(processor: SuspendedAnalysis())
+        let oldCamera = SyntheticCamera(permission: .authorized)
+        model.attach(oldCamera)
+        let delayedInterruption = oldCamera.onInterruption
+        let currentCamera = SyntheticCamera(permission: .authorized)
+        model.attach(currentCamera)
+        model.start()
+        delayedInterruption?(.sessionInterrupted)
+        XCTAssertEqual(model.phase, .scanning(.front))
+        XCTAssertTrue(currentCamera.running)
+        model.detach(currentCamera)
+    }
+
     func testRepeatedPreviewAppearanceDoesNotAutomaticallyResumeInterruptedAttempt() {
         let camera = SyntheticCamera(permission: .authorized)
         let model = AvatarScannerModel(processor: SuspendedAnalysis())
@@ -18,7 +46,7 @@ final class AvatarScannerLifecycleTests: XCTestCase {
         controller.viewDidAppear(false)
         XCTAssertEqual(model.phase, .retryRequired(.backgrounded))
         XCTAssertFalse(camera.running)
-        model.detach()
+        model.detach(camera)
     }
 
     func testCancelledPermissionReplyCannotStartCameraOrAffectRetry() {
@@ -39,7 +67,7 @@ final class AvatarScannerLifecycleTests: XCTestCase {
         reply(false)
         XCTAssertEqual(model.phase, .scanning(.front))
         XCTAssertTrue(camera.running)
-        model.detach()
+        model.detach(camera)
         XCTAssertFalse(camera.running)
     }
 
@@ -56,7 +84,7 @@ final class AvatarScannerLifecycleTests: XCTestCase {
         model.start()
         XCTAssertEqual(model.phase, .scanning(.front))
         XCTAssertTrue(camera.running)
-        model.detach()
+        model.detach(camera)
     }
 
     func testStaleAnalysisAfterRetryCannotPublishGuidanceOrAcceptNewFrameEarly() throws {
@@ -86,7 +114,7 @@ final class AvatarScannerLifecycleTests: XCTestCase {
         ))
         XCTAssertEqual(model.guidance, .invalidAlignment)
         XCTAssertEqual(model.phase, .scanning(.front))
-        model.detach()
+        model.detach(camera)
     }
 
     func testUnsupportedAndDeniedDevicesNeverBecomeActive() {
@@ -102,7 +130,7 @@ final class AvatarScannerLifecycleTests: XCTestCase {
         model.start()
         XCTAssertEqual(model.phase, .unavailable(.cameraDenied))
         XCTAssertFalse(camera.running)
-        model.detach()
+        model.detach(camera)
     }
 
     private func input(timestamp: Double) throws -> AppleScanFrameInput {

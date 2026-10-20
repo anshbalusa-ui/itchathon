@@ -92,6 +92,7 @@ final class AvatarFrameAnalyzer {
             return failed(result.rejection ?? .unreliablePose)
         }
         let view = PersonDepthAligner.estimateView(landmarks: landmarks,
+                                                   imageRotation: input.imageRotation,
                                                    shoulderAngle: result.shoulderAngle, hipAngle: result.hipAngle)
         guard view != .unverified else { return failed(.unverifiedView) }
         let anchor = ScanStabilityAnchor(center: center, height: height, depth: representativeDepth, cameraPosition: input.cameraPosition, cameraForward: input.cameraForward)
