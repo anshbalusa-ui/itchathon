@@ -15,15 +15,21 @@ struct AvatarGuidedCaptureView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> AvatarGuidedCaptureController {
         let controller = AvatarGuidedCaptureController()
         model.attach(controller)
-        controller.onReady = { [weak model] in model?.start() }
-        controller.onDisappear = { [weak model] in model?.cancel() }
+        controller.onReady = { [weak model, weak controller] in
+            guard let model, let controller, model.isAttached(to: controller) else { return }
+            model.start()
+        }
+        controller.onDisappear = { [weak model, weak controller] in
+            guard let model, let controller, model.isAttached(to: controller) else { return }
+            model.cancel()
+        }
         return controller
     }
 
     func updateUIViewController(_ controller: AvatarGuidedCaptureController, context: Context) {}
 
     static func dismantleUIViewController(_ controller: AvatarGuidedCaptureController, coordinator: Coordinator) {
-        coordinator.model.detach()
+        coordinator.model.detach(controller)
         controller.shutdown()
     }
 }

@@ -1,5 +1,7 @@
 # Segment 1A — guided capture foundation
 
+This is the historical Segment 1A record. The subsequent [foundation audit](FOUNDATION_AUDIT.md) reproduced and repaired persistence deletion, camera ownership, view-evidence, and continuity defects. Its current verification and blockers supersede any assumption that the original passing tests established scanner correctness or physical validity.
+
 ## Scope and repository findings
 
 - Inspected current `main` (`562173f`), PR #5 (`771540b`), PR #6 (`6936d92`), PR #7 (`84312c5`), and PR #8 (`aa3e980`), plus the actual local working tree. All four PRs were open drafts; main was still the legacy measurement application. No pre-existing uncommitted tracked/untracked Codex changes were present.

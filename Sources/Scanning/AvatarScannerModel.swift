@@ -71,13 +71,28 @@ final class AvatarScannerModel: ObservableObject {
     }
 
     func attach(_ camera: any ScanCameraDriving) {
-        if self.camera != nil { detach() }
+        if self.camera != nil { releaseCamera() }
         self.camera = camera
-        camera.onFrame = { [weak self] input in self?.receive(input) }
-        camera.onInterruption = { [weak self] reason in self?.interrupt(reason) }
+        camera.onFrame = { [weak self, weak camera] input in
+            guard let self, let camera, self.isAttached(to: camera) else { return }
+            self.receive(input)
+        }
+        camera.onInterruption = { [weak self, weak camera] reason in
+            guard let self, let camera, self.isAttached(to: camera) else { return }
+            self.interrupt(reason)
+        }
     }
 
-    func detach() {
+    func isAttached(to camera: any ScanCameraDriving) -> Bool {
+        self.camera === camera
+    }
+
+    func detach(_ camera: any ScanCameraDriving) {
+        guard isAttached(to: camera) else { return }
+        releaseCamera()
+    }
+
+    private func releaseCamera() {
         cancel()
         camera?.onFrame = nil
         camera?.onInterruption = nil
@@ -141,7 +156,15 @@ final class AvatarScannerModel: ObservableObject {
     }
 
     private func receive(_ input: AppleScanFrameInput) {
-        guard !analysisBusy, let ticket = coordinator.beginFrame(timestamp: input.timestamp, receivedAt: now()) else { return }
+        guard !analysisBusy else { return }
+        guard let ticket = coordinator.beginFrame(timestamp: input.timestamp, receivedAt: now()) else {
+            if case .retryRequired = coordinator.phase {
+                camera?.pause()
+                discardEvidence()
+            }
+            syncState()
+            return
+        }
         analysisBusy = true
         processor.process(input, generation: ticket.generation) { [weak self] result in
             guard let self else { return }

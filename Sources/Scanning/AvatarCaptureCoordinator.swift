@@ -103,6 +103,11 @@ struct AvatarCaptureCoordinator {
         if let lastStartedTimestamp {
             let gap = timestamp - lastStartedTimestamp
             if gap > maximumFrameGap {
+                if view == .side {
+                    interrupt(.captureContextChanged)
+                    latestRejection = .holdStill
+                    return nil
+                }
                 resetStability(rejection: .holdStill)
             } else if gap < minimumFrameSpacing {
                 return nil
@@ -147,10 +152,22 @@ struct AvatarCaptureCoordinator {
             return nil
         }
 
+        // Continuity is independent of whether this view can be classified.
+        // Otherwise moving during an unknown/wrong view could hide a break.
+        if expectedView == .side,
+           let frontAnchor, let observedAnchor = assessment.anchor,
+           Self.isValid(observedAnchor),
+           !Self.isSameFramingContext(frontAnchor, observedAnchor) {
+            interrupt(.captureContextChanged)
+            latestRejection = .holdStill
+            return nil
+        }
+
         if let rejection = assessment.rejection {
-            if rejection == .missingPerson, expectedView == .side {
-                interrupt(.personLost)
-                latestRejection = .missingPerson
+            if expectedView == .side,
+               rejection == .missingPerson || rejection == .multiplePeople || rejection == .trackingLimited {
+                interrupt(rejection == .missingPerson ? .personLost : .captureContextChanged)
+                latestRejection = rejection
             } else {
                 resetStability(rejection: rejection)
             }
@@ -171,12 +188,6 @@ struct AvatarCaptureCoordinator {
         }
         guard Self.isValid(anchor) else {
             resetStability(rejection: .invalidAlignment)
-            return nil
-        }
-        if expectedView == .side,
-           let frontAnchor,
-           !Self.isSameFramingContext(frontAnchor, anchor) {
-            resetStability(rejection: .holdStill)
             return nil
         }
         if let previousStableAnchor,
