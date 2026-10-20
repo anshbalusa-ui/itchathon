@@ -52,3 +52,16 @@ Tests/                      Unit tests
 UITests/                    Manual-flow UI tests
 Docs/                       Frontend handoff
 ```
+
+## FitCheck 2.0 — proposed avatar-first MVP
+
+The next project direction is **create avatar once → save local profile → browse clothing → see an illustrative try-on and cautious garment-fit descriptions**. The new customer experience must not require measuring, entering measurements, or interpreting numbers. This is a **plan**, not a description of implemented features on the default branch.
+
+- [**Production kickoff coding prompt — start here**](Docs/PRODUCTION_KICKOFF_PROMPT.md)
+- [Commercial development segments and quality gates](Docs/PRODUCTION_SEGMENTS.md)
+- [Product requirements and acceptance criteria](Docs/AVATAR_MVP_REQUIREMENTS.md)
+- [Technical architecture and open-source asset strategy](Docs/AVATAR_MVP_ARCHITECTURE.md)
+- [Prioritized user stories and two-week timeline](Docs/AVATAR_MVP_STORIES.md)
+- [Master prompt and individual coding-agent story prompts](Docs/AVATAR_MVP_AGENT_PROMPTS.md)
+
+The initial isolated avatar foundation is in [draft PR #7](https://github.com/anshbalusa-ui/itchathon/pull/7) (subject to build verification). Experimental LiDAR/Vision auto-capture is in [draft PR #5](https://github.com/anshbalusa-ui/itchathon/pull/5), **not merged or physically verified yet**. Review its build and real-device scan behavior before integrating it into the new avatar flow. Approximate visualization is not a validated garment-fit prediction.
