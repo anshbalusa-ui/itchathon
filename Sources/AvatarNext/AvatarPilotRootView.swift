@@ -14,10 +14,10 @@ enum AvatarExperienceFeatures {
 /// A truthful development-only entry point. This view cannot fabricate a
 /// completed scan or an avatar. Real capture remains behind Segment 1.
 struct AvatarPilotRootView: View {
-    @State private var state: State = .loading
+    @State private var state: PilotScreenState = .loading
     private let repository = AvatarProfileRepository()
 
-    private enum State {
+    private enum PilotScreenState {
         case loading
         case needsAvatar
         case savedMetadata
