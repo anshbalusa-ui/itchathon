@@ -109,6 +109,193 @@ final class RendererUITests: XCTestCase {
     }
 
     @MainActor
+    func testCatalogPreviewUsesSelectedSKUAndRealColorAcrossNavigationAndBackground() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        openCatalogFromHub(app)
+        selectSample(app, productID: "everyday-tee", size: "medium")
+        openSelectedPreview(app)
+        let scene = app.descendants(matching: .any)["renderer.scene"]
+        let navy = try waitForRenderedScene(app, scene: scene)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Everyday Tee · Navy · M")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "renderer.scene").count, 1)
+        capture(app, "R1 — selected Everyday Tee Navy M rendered on generic mannequin")
+
+        let start = scene.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: scene.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.6)))
+        try expectImageChange(app, scene: scene, from: navy)
+        reveal(app.buttons["renderer.reset-view"], app: app)
+        app.buttons["renderer.reset-view"].tap()
+        try expectImageMatch(app, scene: scene, reference: navy)
+        reveal(app.switches["renderer.garment"], app: app)
+        app.switches["renderer.garment"].tap()
+        let hidden = try expectImageChange(app, scene: scene, from: navy)
+        XCTAssertLessThan(hidden.navyPixels, navy.navyPixels / 3)
+        capture(app, "R1 — garment hidden while generic mannequin remains")
+        app.switches["renderer.garment"].tap()
+        try expectImageMatch(app, scene: scene, reference: navy)
+        reveal(app.buttons["renderer.right"], app: app)
+        app.buttons["renderer.right"].tap()
+        let rotated = try expectImageChange(app, scene: scene, from: navy)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(scene.waitForExistence(timeout: 10))
+        try expectImageMatch(app, scene: scene, reference: rotated)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertEqual(app.buttons["catalog.size.medium"].value as? String, "Selected")
+        XCTAssertEqual(app.buttons["catalog.color.navy"].value as? String, "Selected")
+
+        for _ in 0..<3 {
+            openSelectedPreview(app)
+            try expectImageMatch(app, scene: scene, reference: navy)
+            reveal(app.buttons["renderer.right"], app: app)
+            app.buttons["renderer.right"].tap()
+            try expectImageChange(app, scene: scene, from: navy)
+            app.navigationBars.buttons.firstMatch.tap()
+            XCTAssertTrue(app.navigationBars["Everyday Tee"].waitForExistence(timeout: 5))
+        }
+        app.navigationBars.buttons.firstMatch.tap()
+        selectSample(app, productID: "weekend-tee", size: "small")
+        openSelectedPreview(app)
+        let sage = try waitForRenderedScene(app, scene: scene, sage: true)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Weekend Tee · Sage · S")
+        XCTAssertGreaterThan(sage.greenPixels, navy.greenPixels + 20)
+        XCTAssertLessThan(sage.navyPixels, navy.navyPixels / 3)
+        XCTAssertFalse(app.buttons["renderer.material.navy"].exists, "A product illustration cannot silently change to another product color")
+        reveal(app.switches["renderer.garment"], app: app)
+        app.switches["renderer.garment"].tap()
+        try expectImageChange(app, scene: scene, from: sage)
+        reveal(app.buttons["renderer.reset-appearance"], app: app)
+        app.buttons["renderer.reset-appearance"].tap()
+        try expectImageMatch(app, scene: scene, reference: sage)
+        capture(app, "R1 — Weekend Tee selected Sage restored by Reset Appearance")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertEqual(app.buttons["catalog.size.small"].value as? String, "Selected")
+        XCTAssertTrue(app.staticTexts["Price for this size not provided."].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+
+        let archive = app.buttons["catalog.product.sample-studio.archived-tee"]
+        reveal(archive, app: app)
+        archive.tap()
+        reveal(app.buttons["catalog.preview.open"], app: app)
+        XCTAssertFalse(app.buttons["catalog.preview.open"].isEnabled)
+        XCTAssertFalse(app.buttons["catalog.size.medium"].isEnabled)
+        XCTAssertTrue(app.buttons["catalog.size.medium"].label.contains("Discontinued"))
+        XCTAssertFalse(scene.exists)
+        capture(app, "R1 — discontinued Archive Tee has no approved preview")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        reveal(app.buttons["internal.open-avatar"], app: app)
+        app.buttons["internal.open-avatar"].tap()
+        app.buttons["Try guided capture"].tap()
+        app.buttons["start-guided-scan"].tap()
+        XCTAssertTrue(app.staticTexts["Camera unavailable"].waitForExistence(timeout: 5))
+        app.buttons["Cancel scan"].tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        reveal(app.buttons["internal.open-renderer"], app: app)
+        app.buttons["internal.open-renderer"].tap()
+        _ = try waitForRenderedScene(app, scene: scene)
+        XCTAssertTrue(app.navigationBars["3D Renderer Lab"].exists)
+        XCTAssertEqual(app.alerts.count, 0)
+    }
+
+    @MainActor
+    func testCatalogPreviewLargestTextAndUnsupportedCreamRemainUsableAndHonest() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        openCatalogFromHub(app, largeText: true)
+        selectSample(app, productID: "everyday-tee", size: "medium")
+        openSelectedPreview(app)
+        let scene = app.descendants(matching: .any)["renderer.scene"]
+        let navy = try waitForRenderedScene(app, scene: scene)
+        reveal(app.buttons["renderer.right"], app: app)
+        app.buttons["renderer.right"].tap()
+        try expectImageChange(app, scene: scene, from: navy)
+        reveal(app.buttons["renderer.reset-view"], app: app)
+        app.buttons["renderer.reset-view"].tap()
+        try expectImageMatch(app, scene: scene, reference: navy)
+        reveal(app.switches["renderer.garment"], app: app)
+        app.switches["renderer.garment"].tap()
+        try expectImageChange(app, scene: scene, from: navy)
+        app.switches["renderer.garment"].tap()
+        try expectImageMatch(app, scene: scene, reference: navy)
+        capture(app, "R1 — largest accessibility text with real preview and reachable controls")
+        app.navigationBars.buttons.firstMatch.tap()
+        let cream = app.buttons["catalog.color.cream"]
+        reveal(cream, app: app)
+        cream.tap()
+        let medium = app.buttons["catalog.size.medium"]
+        reveal(medium, app: app)
+        medium.tap()
+        expectSelected(medium)
+        reveal(app.buttons["catalog.preview.open"], app: app)
+        XCTAssertFalse(app.buttons["catalog.preview.open"].isEnabled)
+        XCTAssertTrue(app.staticTexts["catalog.preview.unavailable"].exists)
+        XCTAssertFalse(scene.exists)
+        capture(app, "R1 — Cream M remains selected without a Stone fallback")
+        app.navigationBars.buttons.firstMatch.tap()
+        selectSample(app, productID: "weekend-tee", size: "medium")
+        openSelectedPreview(app)
+        let sage = try waitForRenderedScene(app, scene: scene, sage: true)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Weekend Tee · Sage · M")
+        reveal(app.buttons["renderer.reset-appearance"], app: app)
+        app.buttons["renderer.reset-appearance"].tap()
+        try expectImageMatch(app, scene: scene, reference: sage)
+        capture(app, "R1 — independent Sage product context at largest text")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        let archive = app.buttons["catalog.product.sample-studio.archived-tee"]
+        reveal(archive, app: app)
+        archive.tap()
+        reveal(app.buttons["catalog.preview.open"], app: app)
+        XCTAssertFalse(app.buttons["catalog.preview.open"].isEnabled)
+        XCTAssertFalse(app.buttons["catalog.size.medium"].isEnabled)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Internal Development"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.alerts.count, 0)
+    }
+
+    @MainActor
+    private func openCatalogFromHub(_ app: XCUIApplication, largeText: Bool = false) {
+        app.launchArguments = ["-fitcheck-integrated-internal", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
+        app.launch()
+        reveal(app.buttons["internal.open-catalog"], app: app)
+        app.buttons["internal.open-catalog"].tap()
+        XCTAssertTrue(app.navigationBars["Catalog"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func selectSample(_ app: XCUIApplication, productID: String, size: String) {
+        let product = app.buttons["catalog.product.sample-studio.\(productID)"]
+        reveal(product, app: app)
+        product.tap()
+        let option = app.buttons["catalog.size.\(size)"]
+        reveal(option, app: app)
+        XCTAssertTrue(option.isEnabled)
+        option.tap()
+        expectSelected(option)
+    }
+
+    @MainActor
+    private func expectSelected(_ element: XCUIElement) {
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Selected"), object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 5), .completed)
+    }
+
+    @MainActor
+    private func openSelectedPreview(_ app: XCUIApplication) {
+        let entry = app.buttons["catalog.preview.open"]
+        reveal(entry, app: app)
+        XCTAssertTrue(entry.isEnabled)
+        entry.tap()
+        XCTAssertTrue(app.navigationBars["Illustrative 3D Preview"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["renderer.scene"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
     private func openLab(_ app: XCUIApplication, largeText: Bool = false) {
         app.launchArguments = ["-fitcheck-integrated-internal", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
@@ -124,9 +311,25 @@ final class RendererUITests: XCTestCase {
     private func reveal(_ element: XCUIElement, app: XCUIApplication) {
         let controls = app.scrollViews["renderer.controls"]
         let scroll = controls.exists ? controls : app.scrollViews.firstMatch
-        for _ in 0..<14 {
+        for _ in 0..<(controls.exists ? 40 : 14) {
             if element.exists && element.isHittable { break }
-            if element.exists && element.frame.midY < scroll.frame.minY {
+            if controls.exists {
+                let scene = app.descendants(matching: .any)["renderer.scene"]
+                let top = max(scroll.frame.minY, scene.frame.maxY + 12)
+                let bottom = min(scroll.frame.maxY, app.frame.maxY - 20)
+                let height = bottom - top
+                guard height > 50 else {
+                    return XCTFail("Renderer controls need a visible scrolling region")
+                }
+                let center = CGPoint(x: scroll.frame.midX, y: top + height / 2)
+                let direction: CGFloat = element.exists && element.frame.midY < center.y ? 1 : -1
+                let start = app.coordinate(withNormalizedOffset: .zero)
+                    .withOffset(CGVector(dx: center.x - app.frame.minX, dy: center.y - app.frame.minY))
+                // Stop before lifting so inertia cannot skip a large-text button.
+                start.press(forDuration: 0.05,
+                            thenDragTo: start.withOffset(CGVector(dx: 0, dy: direction * min(120, height / 3))),
+                            withVelocity: .slow, thenHoldForDuration: 0.2)
+            } else if element.exists && element.frame.midY < scroll.frame.minY {
                 scroll.swipeDown()
             } else {
                 scroll.swipeUp()
@@ -197,12 +400,12 @@ final class RendererUITests: XCTestCase {
     }
 
     @MainActor
-    private func waitForRenderedScene(_ app: XCUIApplication, scene: XCUIElement) throws -> ScenePixels {
+    private func waitForRenderedScene(_ app: XCUIApplication, scene: XCUIElement, sage: Bool = false) throws -> ScenePixels {
         let rendered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             guard let image = try? self.pixels(app, scene: scene) else { return false }
-            return image.navyPixels > 40
+            return sage ? image.greenPixels > 40 : image.navyPixels > 40
         }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [rendered], timeout: 15), .completed, "Real navy mesh pixels must be visible, not just an accessibility container")
+        XCTAssertEqual(XCTWaiter.wait(for: [rendered], timeout: 15), .completed, "Real selected-color mesh pixels must be visible, not just an accessibility container")
         return try pixels(app, scene: scene)
     }
 
@@ -244,6 +447,8 @@ final class RendererUITests: XCTestCase {
             XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["internal.open-renderer"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["renderer.scene"].exists)
+            XCTAssertFalse(app.buttons["catalog.preview.open"].exists)
+            XCTAssertFalse(app.staticTexts["renderer.product-context"].exists)
         }
     }
     #endif

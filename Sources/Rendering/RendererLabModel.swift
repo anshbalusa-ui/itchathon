@@ -15,14 +15,22 @@ final class RendererLabModel: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var session: RendererSceneSession?
     @Published private(set) var orbit = RendererOrbit.initial
-    @Published private(set) var appearance = RendererAppearance()
+    @Published private(set) var appearance: RendererAppearance
     @Published private(set) var garmentFailure: RendererFailure?
 
     private var isPresented = false
     private var isActive = true
     private let makeScene: @MainActor () throws -> RendererSceneSession
+    let presentation: RendererPresentation
+    private let initialMaterial: RendererMaterial
 
-    init(makeScene: (@MainActor () throws -> RendererSceneSession)? = nil) {
+    init(
+        presentation: RendererPresentation = .lab,
+        makeScene: (@MainActor () throws -> RendererSceneSession)? = nil
+    ) {
+        self.presentation = presentation
+        self.initialMaterial = presentation.initialMaterial
+        self.appearance = RendererAppearance(garmentVisible: true, material: presentation.initialMaterial)
         self.makeScene = makeScene ?? { try RendererSceneSession() }
     }
 
@@ -72,12 +80,13 @@ final class RendererLabModel: ObservableObject {
     }
 
     func selectMaterial(_ material: RendererMaterial) {
+        guard presentation.allowsMaterialChanges || material == initialMaterial else { return }
         appearance.material = material
         apply()
     }
 
     func resetAppearance() {
-        appearance.reset()
+        appearance.reset(to: initialMaterial)
         apply()
     }
 
