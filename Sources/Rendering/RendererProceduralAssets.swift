@@ -1,12 +1,12 @@
 #if DEBUG
 import simd
 
-struct RendererVertex {
+struct RendererVertex: Sendable {
     var position: SIMD3<Float>
     var normal: SIMD3<Float>
 }
 
-struct RendererMesh {
+struct RendererMesh: Sendable {
     let vertices: [RendererVertex]
     let indices: [UInt16]
     var minimum: SIMD3<Float>

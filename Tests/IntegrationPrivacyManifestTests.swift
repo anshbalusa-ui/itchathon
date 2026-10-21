@@ -19,5 +19,6 @@ final class IntegrationPrivacyManifestTests: XCTestCase {
         }
         XCTAssertEqual(reasons["NSPrivacyAccessedAPICategorySystemBootTime"], Set(["35F9.1"]))
         XCTAssertEqual(reasons["NSPrivacyAccessedAPICategoryUserDefaults"], Set(["CA92.1"]))
+        XCTAssertEqual(reasons["NSPrivacyAccessedAPICategoryFileTimestamp"], Set(["C617.1"]))
     }
 }

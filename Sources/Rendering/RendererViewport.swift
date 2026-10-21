@@ -5,7 +5,7 @@ import UIKit
 
 struct RendererViewport: UIViewRepresentable {
     let session: RendererSceneSession
-    let model: RendererLabModel
+    @ObservedObject var model: RendererLabModel
 
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
@@ -25,7 +25,15 @@ struct RendererViewport: UIViewRepresentable {
 
     func updateUIView(_ view: MTKView, context: Context) {
         context.coordinator.model = model
-        view.accessibilityValue = "\(model.appearance.garmentVisible ? "Illustrative garment shown" : "Garment hidden"), \(model.appearance.material.title)"
+        if session.garment == nil {
+            view.accessibilityValue = "No garment displayed"
+        } else if !model.appearance.garmentVisible {
+            view.accessibilityValue = "Garment hidden, \(model.appearance.material.title)"
+        } else {
+            let garment = session.garmentAssetIdentifier == RendererBundledAssetDescriptor.reviewedVest.asset.assetID
+                ? "Bundled geometric vest shown" : "Illustrative garment shown"
+            view.accessibilityValue = "\(garment), \(model.appearance.material.title)"
+        }
     }
 
     static func dismantleUIView(_ view: MTKView, coordinator: Coordinator) {

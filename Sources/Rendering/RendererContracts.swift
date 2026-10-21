@@ -118,20 +118,23 @@ struct RendererPresentation: Equatable, Hashable {
     let context: String?
     let initialMaterial: RendererMaterial
     let allowsMaterialChanges: Bool
+    let allowsAssetSelection: Bool
 
     init(
         navigationTitle: String,
         context: String? = nil,
         initialMaterial: RendererMaterial = .navy,
-        allowsMaterialChanges: Bool = true
+        allowsMaterialChanges: Bool = true,
+        allowsAssetSelection: Bool = false
     ) {
         self.navigationTitle = navigationTitle
         self.context = context
         self.initialMaterial = initialMaterial
         self.allowsMaterialChanges = allowsMaterialChanges
+        self.allowsAssetSelection = allowsAssetSelection
     }
 
-    static let lab = RendererPresentation(navigationTitle: "3D Renderer Lab")
+    static let lab = RendererPresentation(navigationTitle: "3D Renderer Lab", allowsAssetSelection: true)
 }
 
 struct RendererAppearance: Equatable {
@@ -143,15 +146,15 @@ struct RendererAppearance: Equatable {
     }
 }
 
-enum RendererAssetRole: String, Equatable { case mannequin, garment }
-enum RendererAssetType: String, Equatable { case proceduralFixture, usdz, unknown }
-enum RendererAssetSource: String, Equatable { case bundledFixture, remote, userImport, unknown }
-enum RendererAssetProvenance: String, Equatable { case firstPartyFixture, retailer, userProvided, unknown }
-enum RendererAssetLicense: String, Equatable { case internalDevelopmentOnly, commercial, unknown }
-enum RendererMaterialModel: String, Equatable { case solidColorLambert, unlit, unsupported }
+enum RendererAssetRole: String, Equatable, Sendable { case mannequin, garment }
+enum RendererAssetType: String, Equatable, Sendable { case proceduralFixture, bundledMeshPackage, usdz, unknown }
+enum RendererAssetSource: String, Equatable, Sendable { case bundledFixture, remote, userImport, unknown }
+enum RendererAssetProvenance: String, Equatable, Sendable { case firstPartyFixture, retailer, userProvided, unknown }
+enum RendererAssetLicense: String, Equatable, Sendable { case internalDevelopmentOnly, commercial, unknown }
+enum RendererMaterialModel: String, Equatable, Sendable { case solidColorLambert, unlit, unsupported }
 
 /// Metadata is descriptive only: it cannot authorize personalized geometry or grant rights.
-struct RendererAssetDescriptor: Equatable {
+struct RendererAssetDescriptor: Equatable, Sendable {
     let type: RendererAssetType
     let role: RendererAssetRole
     let schemaVersion: Int

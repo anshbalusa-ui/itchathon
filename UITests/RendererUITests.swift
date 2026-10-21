@@ -296,6 +296,151 @@ final class RendererUITests: XCTestCase {
     }
 
     @MainActor
+    func testBundledGarmentRendersDistinctGeometryAndRecoversWithoutFallback() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        openLab(app)
+        let scene = app.descendants(matching: .any)["renderer.scene"]
+        let procedural = try waitForRenderedScene(app, scene: scene)
+        chooseBundledGarment(app)
+        let vest = try waitForBundledGeometry(app, scene: scene, procedural: procedural)
+        XCTAssertTrue((scene.value as? String)?.contains("Bundled geometric vest shown") == true)
+        capture(app, "R2 — real bundled faceted vest differs from the procedural shirt")
+
+        let start = scene.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: scene.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.6)))
+        try expectImageChange(app, scene: scene, from: vest)
+        capture(app, "R2 — file-backed garment rotated with visible depth")
+        reveal(app.buttons["renderer.reset-view"], app: app)
+        app.buttons["renderer.reset-view"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        reveal(app.switches["renderer.garment"], app: app)
+        app.switches["renderer.garment"].tap()
+        let mannequinOnly = try expectImageChange(app, scene: scene, from: vest)
+        XCTAssertLessThan(mannequinOnly.navyPixels, vest.navyPixels / 3)
+        app.switches["renderer.garment"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        reveal(app.buttons["renderer.material.sage"], app: app)
+        app.buttons["renderer.material.sage"].tap()
+        let sage = try expectImageChange(app, scene: scene, from: vest)
+        XCTAssertGreaterThan(sage.greenPixels, vest.greenPixels + 20)
+        reveal(app.buttons["renderer.right"], app: app)
+        app.buttons["renderer.right"].tap()
+        let rotatedSage = try expectImageChange(app, scene: scene, from: sage)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(scene.waitForExistence(timeout: 10))
+        try expectImageMatch(app, scene: scene, reference: rotatedSage)
+        reveal(app.buttons["renderer.reset-view"], app: app)
+        app.buttons["renderer.reset-view"].tap()
+        reveal(app.buttons["renderer.reset-appearance"], app: app)
+        app.buttons["renderer.reset-appearance"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+
+        reveal(app.buttons["renderer.asset.invalid"], app: app)
+        app.buttons["renderer.asset.invalid"].tap()
+        XCTAssertTrue(app.staticTexts["renderer.asset.error"].waitForExistence(timeout: 10))
+        try expectImageMatch(app, scene: scene, reference: mannequinOnly)
+        XCTAssertEqual(scene.value as? String, "No garment displayed")
+        capture(app, "R2 — incompatible descriptor rejected with no phantom garment")
+        reveal(app.buttons["renderer.asset.retry"], app: app)
+        app.buttons["renderer.asset.retry"].tap()
+        XCTAssertTrue(app.staticTexts["renderer.asset.error"].waitForExistence(timeout: 10))
+        try expectImageMatch(app, scene: scene, reference: mannequinOnly)
+        reveal(app.buttons["renderer.asset.procedural"], app: app)
+        app.buttons["renderer.asset.procedural"].tap()
+        try expectImageMatch(app, scene: scene, reference: procedural)
+        for _ in 0..<2 {
+            chooseBundledGarment(app)
+            try expectImageMatch(app, scene: scene, reference: vest)
+            reveal(app.buttons["renderer.asset.procedural"], app: app)
+            app.buttons["renderer.asset.procedural"].tap()
+            try expectImageMatch(app, scene: scene, reference: procedural)
+        }
+        app.navigationBars.buttons.firstMatch.tap()
+        reveal(app.buttons["internal.open-renderer"], app: app)
+        app.buttons["internal.open-renderer"].tap()
+        try expectImageMatch(app, scene: scene, reference: procedural)
+        app.navigationBars.buttons.firstMatch.tap()
+        reveal(app.buttons["internal.open-catalog"], app: app)
+        app.buttons["internal.open-catalog"].tap()
+        selectSample(app, productID: "everyday-tee", size: "small")
+        openSelectedPreview(app)
+        _ = try waitForRenderedScene(app, scene: scene)
+        try expectImageMatch(app, scene: scene, reference: procedural)
+        XCTAssertFalse(app.buttons["renderer.asset.bundled"].exists, "Lab assets do not acquire SKU authorization")
+        XCTAssertFalse(app.buttons["renderer.asset.invalid"].exists)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Everyday Tee · Navy · S")
+        XCTAssertEqual(app.alerts.count, 0)
+    }
+
+    @MainActor
+    func testBundledAssetLargestTextKeepsLoadingControlsErrorsAndRecoveryReachable() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        openLab(app, largeText: true)
+        let scene = app.descendants(matching: .any)["renderer.scene"]
+        let procedural = try waitForRenderedScene(app, scene: scene)
+        chooseBundledGarment(app)
+        let vest = try waitForBundledGeometry(app, scene: scene, procedural: procedural)
+        reveal(app.buttons["renderer.right"], app: app)
+        app.buttons["renderer.right"].tap()
+        try expectImageChange(app, scene: scene, from: vest)
+        reveal(app.buttons["renderer.reset-view"], app: app)
+        app.buttons["renderer.reset-view"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        reveal(app.switches["renderer.garment"], app: app)
+        app.switches["renderer.garment"].tap()
+        let mannequinOnly = try expectImageChange(app, scene: scene, from: vest)
+        XCTAssertLessThan(mannequinOnly.navyPixels, vest.navyPixels / 3)
+        app.switches["renderer.garment"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        reveal(app.buttons["renderer.material.sage"], app: app)
+        app.buttons["renderer.material.sage"].tap()
+        let sage = try expectImageChange(app, scene: scene, from: vest)
+        XCTAssertGreaterThan(sage.greenPixels, vest.greenPixels + 20)
+        capture(app, "R2 — real Sage bundled vest at largest accessibility text")
+        reveal(app.buttons["renderer.reset-appearance"], app: app)
+        app.buttons["renderer.reset-appearance"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        reveal(app.buttons["renderer.asset.invalid"], app: app)
+        app.buttons["renderer.asset.invalid"].tap()
+        XCTAssertTrue(app.staticTexts["renderer.asset.error"].waitForExistence(timeout: 10))
+        try expectImageMatch(app, scene: scene, reference: mannequinOnly)
+        reveal(app.buttons["renderer.asset.retry"], app: app)
+        capture(app, "R2 — accessible asset rejection and retry without a replacement shirt")
+        app.buttons["renderer.asset.retry"].tap()
+        XCTAssertTrue(app.staticTexts["renderer.asset.error"].waitForExistence(timeout: 10))
+        try expectImageMatch(app, scene: scene, reference: mannequinOnly)
+        reveal(app.buttons["renderer.asset.procedural"], app: app)
+        app.buttons["renderer.asset.procedural"].tap()
+        try expectImageMatch(app, scene: scene, reference: procedural)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Internal Development"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.alerts.count, 0)
+    }
+
+    @MainActor
+    private func waitForBundledGeometry(_ app: XCUIApplication, scene: XCUIElement, procedural: ScenePixels) throws -> ScenePixels {
+        let rendered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            guard let image = try? self.pixels(app, scene: scene) else { return false }
+            return image.navyPixels > 40 && image.changedPixels(from: procedural) > 40
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [rendered], timeout: 15), .completed,
+                       "A distinct colored file-backed mesh must render, not an empty/loading scene or procedural fallback")
+        return try pixels(app, scene: scene)
+    }
+
+    @MainActor
+    private func chooseBundledGarment(_ app: XCUIApplication) {
+        let entry = app.buttons["renderer.asset.bundled"]
+        reveal(entry, app: app)
+        entry.tap()
+        XCTAssertTrue(app.staticTexts["renderer.asset.loaded"].waitForExistence(timeout: 15))
+        expectSelected(entry)
+    }
+
+    @MainActor
     private func openLab(_ app: XCUIApplication, largeText: Bool = false) {
         app.launchArguments = ["-fitcheck-integrated-internal", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
@@ -449,6 +594,8 @@ final class RendererUITests: XCTestCase {
             XCTAssertFalse(app.descendants(matching: .any)["renderer.scene"].exists)
             XCTAssertFalse(app.buttons["catalog.preview.open"].exists)
             XCTAssertFalse(app.staticTexts["renderer.product-context"].exists)
+            XCTAssertFalse(app.buttons["renderer.asset.bundled"].exists)
+            XCTAssertFalse(app.buttons["renderer.asset.invalid"].exists)
         }
     }
     #endif

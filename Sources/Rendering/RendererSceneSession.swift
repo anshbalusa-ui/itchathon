@@ -64,6 +64,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     let mannequin: RendererRenderObject
     private(set) var garment: RendererRenderObject?
     private(set) var garmentFailure: RendererFailure?
+    private(set) var garmentAssetIdentifier: String?
     private(set) var isDisposed = false
     private(set) var modelTransform = matrix_identity_float4x4
     private(set) var camera: RendererCamera
@@ -78,7 +79,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     private let configuration: RendererSceneConfiguration
     private var orbit = RendererOrbit.initial
     private var appearance = RendererAppearance()
-
+    private var isProceduralGarmentCached = false
     init(configuration: RendererSceneConfiguration = .standard,
          mannequinAsset: RendererAssetDescriptor = .mannequinFixture,
          garmentAsset: RendererAssetDescriptor? = .garmentFixture) throws {
@@ -108,6 +109,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
                 try garmentAsset.validate(for: .garment)
                 cachedGarment = try RendererRenderObject(mesh: RendererProceduralAssets.garment(),
                                                          color: RendererProceduralAssets.color(for: .navy), device: device)
+                isProceduralGarmentCached = true
                 garment = cachedGarment
             } catch {
                 garmentFailure = (error as? RendererFailure) ?? .sceneCreationFailed
@@ -156,27 +158,67 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     func replaceGarment(asset: RendererAssetDescriptor?) throws {
         guard !isDisposed else { throw RendererFailure.sceneCreationFailed }
         guard let asset else {
-            garment = nil
+            clearGarment()
             garmentFailure = .missingAsset
             view.setNeedsDisplay()
             return
         }
         do {
             try asset.validate(for: .garment)
-            if cachedGarment == nil {
+            if !isProceduralGarmentCached {
+                let old = cachedGarment
                 cachedGarment = try RendererRenderObject(mesh: RendererProceduralAssets.garment(),
                                                          color: RendererProceduralAssets.color(for: appearance.material), device: device)
+                isProceduralGarmentCached = true
+                if let old, old !== garment { old.releaseBuffers() }
             }
+            if let current = garment, current !== cachedGarment { current.releaseBuffers() }
             garment = cachedGarment
+            garmentAssetIdentifier = nil
             garment?.update(color: RendererProceduralAssets.color(for: appearance.material), isEnabled: appearance.garmentVisible)
             garmentFailure = nil
             view.setNeedsDisplay()
         } catch {
-            garment = nil
+            clearGarment()
             garmentFailure = (error as? RendererFailure) ?? .sceneCreationFailed
             view.setNeedsDisplay()
             throw garmentFailure!
         }
+    }
+
+    func installGarment(_ asset: RendererLoadedGarment) throws {
+        guard !isDisposed else { throw RendererFailure.sceneCreationFailed }
+        try asset.descriptor.validate()
+        guard asset.descriptor.asset.type == .bundledMeshPackage,
+              asset.descriptor.asset.role == .garment,
+              !asset.descriptor.asset.personalized else {
+            throw RendererFailure.unsupportedAsset
+        }
+        let imported = try RendererRenderObject(mesh: asset.mesh,
+                                                color: RendererProceduralAssets.color(for: appearance.material),
+                                                device: device)
+        if let current = garment, current !== cachedGarment { current.releaseBuffers() }
+        cachedGarment?.releaseBuffers()
+        cachedGarment = nil
+        isProceduralGarmentCached = false
+        garment = imported
+        garmentAssetIdentifier = asset.descriptor.asset.assetID
+        garmentFailure = nil
+        imported.update(color: RendererProceduralAssets.color(for: appearance.material),
+                        isEnabled: appearance.garmentVisible)
+        view.setNeedsDisplay()
+    }
+
+    func clearGarment() {
+        guard !isDisposed else { return }
+        if let current = garment, current !== cachedGarment { current.releaseBuffers() }
+        cachedGarment?.releaseBuffers()
+        garment = nil
+        cachedGarment = nil
+        isProceduralGarmentCached = false
+        garmentAssetIdentifier = nil
+        garmentFailure = nil
+        view.setNeedsDisplay()
     }
 
     func dispose() {
@@ -190,9 +232,12 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         pipelineState = nil
         depthState = nil
         mannequin.releaseBuffers()
+        if let garment, garment !== cachedGarment { garment.releaseBuffers() }
         cachedGarment?.releaseBuffers()
         garment = nil
         cachedGarment = nil
+        garmentAssetIdentifier = nil
+        isProceduralGarmentCached = false
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
