@@ -34,6 +34,9 @@ struct RendererLabView: View {
                             .foregroundStyle(.secondary)
                         if model.state == .ready {
                             controls
+                            if presentation.allowsAssetSelection {
+                                assetControls
+                            }
                         }
                         Text(presentation.context == nil
                              ? "Drag the scene to rotate. Rotation buttons provide an alternative. This lab uses no camera, scan or saved profile."
@@ -112,7 +115,7 @@ struct RendererLabView: View {
                 Button("Restore sample garment") { model.restoreGarment() }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("renderer.restore-garment")
-            } else {
+            } else if hasDisplayableGarmentAsset {
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Show illustrative garment")
@@ -148,6 +151,74 @@ struct RendererLabView: View {
                     .accessibilityIdentifier("renderer.reset-appearance")
             }
         }
+    }
+
+    private var hasDisplayableGarmentAsset: Bool {
+        switch model.assetState {
+        case .procedural, .loaded: true
+        case .loading, .failed: false
+        }
+    }
+
+    private var assetControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Text("Garment asset demonstration")
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            Text("First-party fictional fixtures only. The bundled vest is not associated with a catalog product.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            assetChoice("Procedural shirt", id: "renderer.asset.procedural", selected: model.assetState == .procedural) {
+                model.selectProceduralGarment()
+            }
+            assetChoice("Bundled geometric vest", id: "renderer.asset.bundled", selected: model.assetState == .loaded) {
+                model.selectBundledGarment()
+            }
+
+            switch model.assetState {
+            case .procedural:
+                Text("Displaying the original procedural shirt.")
+                    .font(.footnote)
+                    .accessibilityIdentifier("renderer.asset.procedural-status")
+            case .loading:
+                ProgressView("Loading bundled garment…")
+                    .accessibilityIdentifier("renderer.asset.loading")
+            case .loaded:
+                Text("Displaying the reviewed file-backed geometric vest.")
+                    .font(.footnote)
+                    .accessibilityIdentifier("renderer.asset.loaded")
+            case .failed(let failure):
+                Text("Garment asset unavailable")
+                    .font(.headline)
+                    .accessibilityIdentifier("renderer.asset.error")
+                Text(failure.localizedDescription)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("No garment is displayed. Retry, choose the reviewed vest, or explicitly return to the procedural shirt.")
+                    .font(.footnote)
+                Button("Retry garment asset") { model.retryGarmentLoad() }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("renderer.asset.retry")
+            }
+
+            Button("Check incompatible asset") { model.checkIncompatibleGarment() }
+                .buttonStyle(.bordered)
+                .accessibilityHint("Exercises asset rejection. No replacement garment is displayed on failure.")
+                .accessibilityIdentifier("renderer.asset.invalid")
+        }
+    }
+
+    private func assetChoice(_ title: String, id: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: selected ? "checkmark.circle.fill" : "circle")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier(id)
+        .accessibilityValue(selected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var garmentVisibilityToggle: some View {
