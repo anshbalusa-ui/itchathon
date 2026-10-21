@@ -1,10 +1,18 @@
 # FitCheck iOS
 
+## Internal catalog foundation
+
+The independent catalog is available only in **Debug**, with the exact launch argument `-fitcheck-avatar-internal` (Xcode scheme → Run → Arguments). It opens a synthetic offline collection with product details and color/size selection; no body setup, saved-avatar claim, try-on, fit estimate, purchase, or live retailer data.
+
+See [catalog architecture, verification and limits](Docs/CATALOG_FOUNDATION.md) and the [minimum authorized retailer contract](Docs/RETAILER_CATALOG_CONTRACT.md).
+
+This branch is based on `main`, independently of the unmerged #8 → #9 → #10 scanner stack. Physical scanner Segment 1B remains blocked; this work does not validate a scanner. The legacy prototype below is preserved for regression compatibility, not presented as the approved avatar-first retail journey. Its device statements are historical, not new hardware results.
+
 **Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
 
 FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to compare chest, shoulders, and length against that reference. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.
 
-## Implemented flow
+## Preserved legacy prototype flow
 
 - Enter and save body measurements, then enter and save a named favorite shirt and candidate shirt. Measurements are edited as local drafts and stored on-device.
 - Enter chest width, shoulder width, and length for each shirt. Results switch all three signed scores between Body and Favorite; negative means smaller/shorter, zero means equal to the selected reference, positive means larger/longer. There is no overall score. Body chest compares twice flat garment width against body circumference; its 0.96 m score scale maps 48 cm additional room to +50.
