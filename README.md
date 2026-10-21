@@ -17,6 +17,8 @@ See the [I0 integration handoff](Docs/INTEGRATION_HANDOFF.md), [catalog foundati
 
 Segment R0 adds a genuine MetalKit 3D mannequin viewer with a separate illustrative garment. Open **3D Renderer Lab** from the Debug hub; drag or use rotation buttons, Reset View, show/hide the garment, select Navy/Stone/Sage, and Reset Appearance. It uses no camera, saved profile, personal measurements or retailer assets. These are generic procedural fixtures, not a personalized avatar, sized product, drape simulation or fit prediction. There is no standalone renderer launch flag. See [R0 architecture, compatibility and verification](Docs/RENDERER_R0_HANDOFF.md).
 
+Segment R1 connects the offline catalog to that same Metal viewer. Select an available **Everyday Tee Navy S/M** or **Weekend Tee Sage S/M**, then **View illustrative 3D preview**. The viewer keeps the selected sample color; return to product details to change the selection. Cream has no approved material mapping and remains unsupported, as do unrelated, unavailable, unknown-availability, and discontinued variants. Sizes are catalog labels only: every supported SKU uses the same geometric shirt and generic mannequin, without a saved avatar or scan. The independent Renderer Lab and launch routes are unchanged. See [R1 association, lifecycle and fresh verification](Docs/RENDERER_R1_CATALOG_PREVIEW_HANDOFF.md).
+
 **Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
 
 FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to compare chest, shoulders, and length against that reference. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.

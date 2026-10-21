@@ -26,6 +26,9 @@ final class IntegrationBoundaryTests: XCTestCase {
         XCTAssertEqual(detail.selectedColorID, "cream")
         await detail.selectSize("medium")
         XCTAssertEqual(detail.selectedVariant?.id, "everyday-cream-medium")
+        detail.selectColor("navy")
+        await detail.selectSize("small")
+        try exerciseIllustrativePreview(detail)
 
         XCTAssertEqual(try Data(contentsOf: profileURL), originalBytes)
         let loadedProfile = try await profiles.load()
@@ -65,7 +68,7 @@ final class IntegrationBoundaryTests: XCTestCase {
         XCTAssertEqual(detail.selectedVariant?.id, "everyday-navy-small")
     }
 
-    func testCatalogInteractionsNeverUpgradeMissingPendingOrUnsupportedProfileReadiness() async throws {
+    func testCatalogAndIllustrativePreviewNeverUpgradeMissingPendingOrUnsupportedProfileReadiness() async throws {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let profiles = AvatarProfileRepository(directoryURL: directory)
@@ -79,6 +82,9 @@ final class IntegrationBoundaryTests: XCTestCase {
         detail.selectColor("cream")
         await detail.selectSize("medium")
         XCTAssertEqual(detail.selectedVariant?.id, "everyday-cream-medium")
+        detail.selectColor("navy")
+        await detail.selectSize("small")
+        try exerciseIllustrativePreview(detail)
         await pilot.refresh()
         XCTAssertEqual(pilot.state, .entry(.createAvatar))
         let profileAfterCatalog = try await profiles.load()
@@ -90,6 +96,7 @@ final class IntegrationBoundaryTests: XCTestCase {
         XCTAssertEqual(pilot.state, .entry(.incompleteProfile))
         detail.selectColor("navy")
         await detail.selectSize("small")
+        try exerciseIllustrativePreview(detail)
         await pilot.refresh()
         XCTAssertEqual(pilot.state, .entry(.incompleteProfile))
         let profileAfterPendingInteractions = try await profiles.load()
@@ -102,6 +109,9 @@ final class IntegrationBoundaryTests: XCTestCase {
         XCTAssertEqual(pilot.state, .recovery(.unsupportedSchema))
         detail.selectColor("cream")
         await detail.selectSize("medium")
+        detail.selectColor("navy")
+        await detail.selectSize("small")
+        try exerciseIllustrativePreview(detail)
         await pilot.refresh()
         XCTAssertEqual(pilot.state, .recovery(.unsupportedSchema))
         XCTAssertEqual(try Data(contentsOf: url), futureSchema)
@@ -117,6 +127,7 @@ final class IntegrationBoundaryTests: XCTestCase {
         XCTAssertEqual(pilot.state, .recovery(.corruptedProfile))
         detail.selectColor("navy")
         await detail.selectSize("small")
+        try exerciseIllustrativePreview(detail)
         await pilot.refresh()
         XCTAssertEqual(pilot.state, .recovery(.corruptedProfile))
         XCTAssertEqual(try Data(contentsOf: url), corruptBytes)
@@ -126,6 +137,23 @@ final class IntegrationBoundaryTests: XCTestCase {
         } catch let error as AvatarProfileStorageError {
             XCTAssertEqual(error, .corruptedProfile)
         }
+    }
+
+    private func exerciseIllustrativePreview(_ detail: CatalogDetailViewModel) throws {
+        detail.openPreview()
+        let preview = try XCTUnwrap(detail.presentedPreview)
+        let renderer = RendererLabModel(presentation: preview.rendererPresentation)
+        renderer.open(isActive: true)
+        defer {
+            renderer.close()
+            detail.dismissPreview()
+        }
+        let scene = try XCTUnwrap(renderer.session)
+        XCTAssertEqual(scene.garment?.color, SIMD4<Float>(0.12, 0.22, 0.42, 1))
+        renderer.rotate(horizontal: 0.5, vertical: 0.1)
+        renderer.setGarmentVisible(false)
+        renderer.resetAppearance()
+        XCTAssertTrue(try XCTUnwrap(scene.garment).isEnabled)
     }
 
     private func temporaryDirectory() throws -> URL {

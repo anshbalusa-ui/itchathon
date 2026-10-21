@@ -112,11 +112,35 @@ enum RendererMaterial: String, CaseIterable, Identifiable {
     }
 }
 
+/// Scalar presentation settings shared by the renderer lab and catalog illustrations.
+struct RendererPresentation: Equatable, Hashable {
+    let navigationTitle: String
+    let context: String?
+    let initialMaterial: RendererMaterial
+    let allowsMaterialChanges: Bool
+
+    init(
+        navigationTitle: String,
+        context: String? = nil,
+        initialMaterial: RendererMaterial = .navy,
+        allowsMaterialChanges: Bool = true
+    ) {
+        self.navigationTitle = navigationTitle
+        self.context = context
+        self.initialMaterial = initialMaterial
+        self.allowsMaterialChanges = allowsMaterialChanges
+    }
+
+    static let lab = RendererPresentation(navigationTitle: "3D Renderer Lab")
+}
+
 struct RendererAppearance: Equatable {
     var garmentVisible = true
     var material: RendererMaterial = .navy
 
-    mutating func reset() { self = RendererAppearance() }
+    mutating func reset(to material: RendererMaterial = .navy) {
+        self = RendererAppearance(garmentVisible: true, material: material)
+    }
 }
 
 enum RendererAssetRole: String, Equatable { case mannequin, garment }

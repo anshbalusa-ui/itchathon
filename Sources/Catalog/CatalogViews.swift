@@ -130,6 +130,13 @@ struct CatalogDetailView: View {
         .navigationTitle(model.product?.title ?? "Product details")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.loadIfNeeded() }
+        .navigationDestination(item: Binding(
+            get: { model.presentedPreview },
+            set: { if $0 == nil { model.dismissPreview() } }
+        )) { preview in
+            RendererLabView(presentation: preview.rendererPresentation)
+                .id(preview.id)
+        }
     }
 
     @ViewBuilder
@@ -213,6 +220,7 @@ struct CatalogDetailView: View {
             }
 
             selectedVariantDetails
+            illustrativePreview
             measurements
             avatarAvailabilityNotice
         }
@@ -439,6 +447,39 @@ struct CatalogDetailView: View {
         .accessibilityIdentifier(identifier)
     }
 
+    private var illustrativePreview: some View {
+        let eligibility = model.previewEligibility
+        let isEligible: Bool
+        if case .eligible = eligibility {
+            isEligible = true
+        } else {
+            isEligible = false
+        }
+        return VStack(alignment: .leading, spacing: 10) {
+            Button {
+                model.openPreview()
+            } label: {
+                Label("View illustrative 3D preview", systemImage: "cube")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!isEligible)
+            .accessibilityIdentifier("catalog.preview.open")
+
+            if case .unavailable(let reason) = eligibility {
+                Text(reason.message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("catalog.preview.unavailable")
+            }
+            Text("Generic mannequin and illustrative geometric shirt only. Not based on a body scan; no physical garment size, drape, or fit is represented.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var measurements: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Garment measurements")
@@ -478,9 +519,9 @@ struct CatalogDetailView: View {
 
     private var avatarAvailabilityNotice: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Avatar features unavailable", systemImage: "person.crop.square")
+            Label("Personalized avatar features unavailable", systemImage: "person.crop.square")
                 .font(.headline)
-            Text("This catalog doesn’t load or create an avatar. Avatar viewing, try-on, and fit features aren’t available here.")
+            Text("The generic illustration doesn’t load or create your avatar. Personalized avatar viewing, try-on, and fit features aren’t available here.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

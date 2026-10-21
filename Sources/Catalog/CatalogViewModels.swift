@@ -79,6 +79,7 @@ final class CatalogDetailViewModel: ObservableObject {
     @Published private(set) var selectedSizeID: String?
     @Published private(set) var pendingSizeID: String?
     @Published private(set) var variantState: VariantState = .idle
+    @Published private(set) var presentedPreview: CatalogIllustrativePreview?
 
     let repository: any CatalogRepository
     let productID: CatalogProductID
@@ -87,6 +88,7 @@ final class CatalogDetailViewModel: ObservableObject {
     private var variantRequestGeneration = 0
     private var didStart = false
     private var lastAttemptedSizeID: String?
+    private let previewAssociation = CatalogPreviewAssociation()
 
     init(repository: any CatalogRepository, productID: CatalogProductID) {
         self.repository = repository
@@ -103,6 +105,28 @@ final class CatalogDetailViewModel: ObservableObject {
               selectedSizeID == variant.sizeID,
               selectedColorID == variant.colorID else { return nil }
         return variant
+    }
+
+    var previewEligibility: CatalogPreviewEligibility {
+        guard let product else { return .unavailable(.selectVariant) }
+        return previewAssociation.resolve(
+            product: product,
+            selectedVariant: selectedVariant,
+            selectedColorID: selectedColorID,
+            selectedSizeID: selectedSizeID
+        )
+    }
+
+    func openPreview() {
+        guard case .eligible(let preview) = previewEligibility else {
+            dismissPreview()
+            return
+        }
+        presentedPreview = preview
+    }
+
+    func dismissPreview() {
+        presentedPreview = nil
     }
 
     func loadIfNeeded() async {
@@ -164,6 +188,7 @@ final class CatalogDetailViewModel: ObservableObject {
 
     func selectSize(_ sizeID: String) async {
         guard let product, let colorID = selectedColorID else { return }
+        dismissPreview()
 
         variantRequestGeneration += 1
         let generation = variantRequestGeneration
@@ -255,6 +280,7 @@ final class CatalogDetailViewModel: ObservableObject {
     }
 
     private func invalidateVariantSelection() {
+        dismissPreview()
         variantRequestGeneration += 1
         selectedSizeID = nil
         pendingSizeID = nil
