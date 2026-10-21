@@ -110,6 +110,8 @@ struct CatalogRootView: View {
 @MainActor
 struct CatalogDetailView: View {
     @StateObject private var model: CatalogDetailViewModel
+    @ScaledMetric(relativeTo: .caption) private var colorOptionWidth = 82.0
+    @ScaledMetric(relativeTo: .body) private var sizeOptionWidth = 78.0
 
     init(repository: any CatalogRepository, productID: CatalogProductID) {
         _model = StateObject(wrappedValue: CatalogDetailViewModel(repository: repository, productID: productID))
@@ -279,7 +281,7 @@ struct CatalogDetailView: View {
                                         .frame(width: 42, height: 42)
                                     if color.hex == nil {
                                         Image(systemName: "questionmark")
-                                            .font(.caption.weight(.bold))
+                                            .font(.system(size: 14, weight: .bold))
                                             .foregroundStyle(.secondary)
                                     }
                                     Circle()
@@ -287,7 +289,7 @@ struct CatalogDetailView: View {
                                         .frame(width: 48, height: 48)
                                     if isSelected {
                                         Image(systemName: "checkmark")
-                                            .font(.caption2.weight(.bold))
+                                            .font(.system(size: 11, weight: .bold))
                                             .foregroundStyle(.primary)
                                             .padding(4)
                                             .background(.regularMaterial, in: Circle())
@@ -300,7 +302,7 @@ struct CatalogDetailView: View {
                                     .lineLimit(2)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            .frame(width: 82)
+                            .frame(width: colorOptionWidth)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -313,6 +315,7 @@ struct CatalogDetailView: View {
                 .padding(.vertical, 3)
             }
             .scrollIndicators(.hidden)
+            .accessibilityIdentifier("catalog.colors")
         }
     }
 
@@ -320,7 +323,7 @@ struct CatalogDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Size")
                 .font(.headline)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), alignment: .leading)], alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: sizeOptionWidth), alignment: .leading)], alignment: .leading, spacing: 10) {
                 ForEach(product.sizes, id: \.id) { size in
                     let availability = model.availability(for: size.id)
                     let isEnabled = model.canSelectSize(size.id)

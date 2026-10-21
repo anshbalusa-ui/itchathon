@@ -92,19 +92,17 @@ private struct AvatarScannerScreen: View {
                         dismiss()
                     }
                     .buttonStyle(.bordered)
+                    .labelStyle(.iconOnly)
+                    .accessibilityLabel("Cancel scan")
+                    .accessibilityIdentifier("cancel-guided-scan")
                 }
                 .padding()
                 .background(.regularMaterial)
                 Spacer(minLength: 0)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        instructions
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(24)
+                ViewThatFits(in: .vertical) {
+                    instructionCard.fixedSize(horizontal: false, vertical: true)
+                    instructionCard
                 }
-                .fixedSize(horizontal: false, vertical: true)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
                 .padding()
             }
         }
@@ -113,6 +111,17 @@ private struct AvatarScannerScreen: View {
             if phase == .background { model.suspend() }
         }
         .onDisappear { model.cancel() }
+    }
+
+    private var instructionCard: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                instructions
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
+        }
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
     }
 
     @ViewBuilder private var instructions: some View {

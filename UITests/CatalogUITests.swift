@@ -9,7 +9,7 @@ final class CatalogUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["catalog.product.sample-studio.everyday-tee"].exists)
         app.terminate()
-        app.launchArguments = ["-fitcheck-avatar-internal"]
+        app.launchArguments = ["-fitcheck-catalog-internal"]
         app.launch()
         #if DEBUG
         XCTAssertTrue(app.buttons["catalog.product.sample-studio.everyday-tee"].waitForExistence(timeout: 5))
@@ -87,7 +87,7 @@ final class CatalogUITests: XCTestCase {
 
     private func launchCatalog() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-fitcheck-avatar-internal", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchArguments = ["-fitcheck-catalog-internal", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         return app
     }

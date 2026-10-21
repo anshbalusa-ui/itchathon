@@ -3,12 +3,12 @@ import XCTest
 
 final class CatalogIsolationTests: XCTestCase {
     func testInternalCatalogRequiresExactDebugOptInAndIsUnavailableInRelease() {
-        XCTAssertFalse(AvatarExperienceFeatures.internalPilotEnabled(arguments: []))
-        XCTAssertFalse(AvatarExperienceFeatures.internalPilotEnabled(arguments: ["fitcheck-avatar-internal"]))
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: []), .legacy)
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["fitcheck-catalog-internal"]), .legacy)
         #if DEBUG
-        XCTAssertTrue(AvatarExperienceFeatures.internalPilotEnabled(arguments: ["-fitcheck-avatar-internal"]))
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["-fitcheck-catalog-internal"]), .catalog)
         #else
-        XCTAssertFalse(AvatarExperienceFeatures.internalPilotEnabled(arguments: ["-fitcheck-avatar-internal"]))
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["-fitcheck-catalog-internal"]), .legacy)
         #endif
     }
 }

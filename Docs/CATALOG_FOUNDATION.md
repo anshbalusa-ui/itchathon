@@ -1,5 +1,7 @@
 # Independent catalog foundation
 
+> Historical PR #11 record. Segment I0 integrates this catalog with the repaired scanner foundation; current catalog entry is `-fitcheck-catalog-internal`, while the original avatar flag remains avatar-only. The integrated manifest retains both elapsed-time and app-local preferences declarations. See [current integration routing, ownership and results](INTEGRATION_HANDOFF.md); the original base/gate and verification statements below describe the independent segment, not I0.
+
 ## Decisions before implementation
 
 - Base: `main` at `562173f`, not the unfinished #8 → #9 → #10 stack. That stack remains unmerged and its Segment 1B physical LiDAR requirements remain blocked. The catalog does not need capture, avatar storage, geometry, or fit code.

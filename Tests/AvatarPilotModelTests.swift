@@ -4,12 +4,12 @@ import XCTest
 
 final class AvatarFeatureIsolationTests: XCTestCase {
     func testPilotRequiresExplicitDebugLaunchOptIn() {
-        XCTAssertFalse(AvatarExperienceFeatures.internalPilotEnabled(arguments: []))
-        XCTAssertFalse(AvatarExperienceFeatures.internalPilotEnabled(arguments: ["fitcheck-avatar-internal"]))
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: []), .legacy)
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["fitcheck-avatar-internal"]), .legacy)
         #if DEBUG
-        XCTAssertTrue(AvatarExperienceFeatures.internalPilotEnabled(arguments: ["-fitcheck-avatar-internal"]))
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["-fitcheck-avatar-internal"]), .avatar)
         #else
-        XCTAssertFalse(AvatarExperienceFeatures.internalPilotEnabled(arguments: ["-fitcheck-avatar-internal"]))
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["-fitcheck-avatar-internal"]), .legacy)
         #endif
     }
 }
