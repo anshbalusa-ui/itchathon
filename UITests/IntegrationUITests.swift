@@ -20,6 +20,8 @@ final class IntegrationUITests: XCTestCase {
             XCTAssertFalse(app.descendants(matching: .any)["internal-development-hub"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["avatar-pilot-root"].exists)
             XCTAssertFalse(app.buttons["catalog.product.sample-studio.everyday-tee"].exists)
+            XCTAssertFalse(app.buttons["internal.open-renderer"].exists)
+            XCTAssertFalse(app.descendants(matching: .any)["renderer.scene"].exists)
         }
     }
     #endif

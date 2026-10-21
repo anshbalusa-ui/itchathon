@@ -2,6 +2,17 @@ import XCTest
 @testable import FitCheck
 
 final class InternalDevelopmentRouteTests: XCTestCase {
+    func testRendererHasNoStandaloneOrPersistedLaunchRoute() {
+        for argument in ["-fitcheck-renderer-internal", "-fitcheck-renderer", "renderer.lab"] {
+            XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: [argument]), .legacy)
+        }
+        #if DEBUG
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["-fitcheck-integrated-internal"]), .integrated)
+        #else
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["-fitcheck-integrated-internal"]), .legacy)
+        #endif
+    }
+
     func testIntegratedEntryRequiresExactOptIn() {
         for argument in ["fitcheck-integrated-internal", "-fitcheck-integrated-internal=true", "-FITCHECK-INTEGRATED-INTERNAL"] {
             XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: [argument]), .legacy)
