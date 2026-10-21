@@ -9,11 +9,13 @@ Segment I0 combines the repaired #8 → #9 → #10 foundation/scanner with #11's
 | None | Preserved legacy home |
 | `-fitcheck-avatar-internal` | Avatar metadata onboarding → guided scanner |
 | `-fitcheck-catalog-internal` | Independent offline catalog |
-| `-fitcheck-integrated-internal` | Small internal hub linking both modules |
+| `-fitcheck-integrated-internal` | Internal hub: avatar/scanner, catalog, and **3D Renderer Lab** |
 
 Conflicting internal flags fail closed to legacy home; Release ignores every internal route. No body setup, completed-avatar claim, try-on, fit estimate, purchase or live retailer data is introduced.
 
 See the [I0 integration handoff](Docs/INTEGRATION_HANDOFF.md), [catalog foundation](Docs/CATALOG_FOUNDATION.md) and [minimum authorized retailer contract](Docs/RETAILER_CATALOG_CONTRACT.md). Segment 1B physical scanner validation remains **NOT RUN**. Legacy device statements below are historical, not new hardware results.
+
+Segment R0 adds a genuine MetalKit 3D mannequin viewer with a separate illustrative garment. Open **3D Renderer Lab** from the Debug hub; drag or use rotation buttons, Reset View, show/hide the garment, select Navy/Stone/Sage, and Reset Appearance. It uses no camera, saved profile, personal measurements or retailer assets. These are generic procedural fixtures, not a personalized avatar, sized product, drape simulation or fit prediction. There is no standalone renderer launch flag. See [R0 architecture, compatibility and verification](Docs/RENDERER_R0_HANDOFF.md).
 
 **Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
 
@@ -21,7 +23,7 @@ FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to 
 
 ## Avatar-first production work
 
-[Segment 0](Docs/AVATAR_S0_HANDOFF.md) records the protected local avatar-profile foundation in PR #8. [Segment 1A](Docs/SCANNER_S1A_HANDOFF.md) adds development-only guided LiDAR/Vision capture and an [exact Segment 1B physical-device checklist](Docs/SCANNER_S1B_DEVICE_CHECKLIST.md). Use `-fitcheck-avatar-internal`, then **Try guided capture → Start guided scan**. Capture remains provisional and requires device validation; avatar rendering and fit interpretation are unavailable. The separate catalog does not use scan observations or approve avatar readiness. The legacy measurement flow remains the default, including in Release.
+[Segment 0](Docs/AVATAR_S0_HANDOFF.md) records the protected local avatar-profile foundation in PR #8. [Segment 1A](Docs/SCANNER_S1A_HANDOFF.md) adds development-only guided LiDAR/Vision capture and an [exact Segment 1B physical-device checklist](Docs/SCANNER_S1B_DEVICE_CHECKLIST.md). Use `-fitcheck-avatar-internal`, then **Try guided capture → Start guided scan**. Capture remains provisional and requires device validation; personalized avatar rendering and fit interpretation are unavailable. The separate catalog does not use scan observations or approve avatar readiness. The legacy measurement flow remains the default, including in Release.
 
 The [critical foundation audit](Docs/FOUNDATION_AUDIT.md) records reproduced deletion, camera-ownership, orientation-evidence, and continuity defects and their repairs. [Data/backend boundaries](Docs/DATA_ARCHITECTURE_AUDIT.md) document on-device responsibilities, future service ownership, and account/concurrent-store gaps. Passing automated tests is not physical scan validation or approval for the new customer release.
 

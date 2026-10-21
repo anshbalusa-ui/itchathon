@@ -32,6 +32,15 @@ struct InternalDevelopmentHub: View {
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("internal.open-catalog")
 
+                NavigationLink {
+                    RendererLabView()
+                } label: {
+                    Label("3D Renderer Lab", systemImage: "cube.transparent")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("internal.open-renderer")
+
                 Text("Catalog browsing needs no avatar or body information. Products, prices and availability are fictional fixtures, not retailer offers.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
