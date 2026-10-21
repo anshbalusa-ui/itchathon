@@ -1,16 +1,31 @@
 # FitCheck iOS
 
+## Internal integrated development app
+
+Segment I0 combines the repaired #8 → #9 → #10 foundation/scanner with #11's synthetic offline catalog. Use a **Debug** build and exactly one launch argument (Xcode scheme → Run → Arguments):
+
+| Argument | Entry |
+| --- | --- |
+| None | Preserved legacy home |
+| `-fitcheck-avatar-internal` | Avatar metadata onboarding → guided scanner |
+| `-fitcheck-catalog-internal` | Independent offline catalog |
+| `-fitcheck-integrated-internal` | Small internal hub linking both modules |
+
+Conflicting internal flags fail closed to legacy home; Release ignores every internal route. No body setup, completed-avatar claim, try-on, fit estimate, purchase or live retailer data is introduced.
+
+See the [I0 integration handoff](Docs/INTEGRATION_HANDOFF.md), [catalog foundation](Docs/CATALOG_FOUNDATION.md) and [minimum authorized retailer contract](Docs/RETAILER_CATALOG_CONTRACT.md). Segment 1B physical scanner validation remains **NOT RUN**. Legacy device statements below are historical, not new hardware results.
+
 **Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
 
 FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to compare chest, shoulders, and length against that reference. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.
 
 ## Avatar-first production work
 
-[Segment 0](Docs/AVATAR_S0_HANDOFF.md) records the verified local avatar-profile foundation in PR #8. [Segment 1A](Docs/SCANNER_S1A_HANDOFF.md) adds development-only guided LiDAR/Vision capture and an [exact Segment 1B physical-device checklist](Docs/SCANNER_S1B_DEVICE_CHECKLIST.md). Use a Debug build with `-fitcheck-avatar-internal`, then **Try guided capture → Start guided scan**. Capture observations remain provisional and require device validation; avatar rendering, catalog browsing, and fit interpretation are unavailable. The legacy measurement flow below remains the default, including in Release builds.
+[Segment 0](Docs/AVATAR_S0_HANDOFF.md) records the protected local avatar-profile foundation in PR #8. [Segment 1A](Docs/SCANNER_S1A_HANDOFF.md) adds development-only guided LiDAR/Vision capture and an [exact Segment 1B physical-device checklist](Docs/SCANNER_S1B_DEVICE_CHECKLIST.md). Use `-fitcheck-avatar-internal`, then **Try guided capture → Start guided scan**. Capture remains provisional and requires device validation; avatar rendering and fit interpretation are unavailable. The separate catalog does not use scan observations or approve avatar readiness. The legacy measurement flow remains the default, including in Release.
 
 The [critical foundation audit](Docs/FOUNDATION_AUDIT.md) records reproduced deletion, camera-ownership, orientation-evidence, and continuity defects and their repairs. [Data/backend boundaries](Docs/DATA_ARCHITECTURE_AUDIT.md) document on-device responsibilities, future service ownership, and account/concurrent-store gaps. Passing automated tests is not physical scan validation or approval for the new customer release.
 
-## Implemented flow
+## Preserved legacy prototype flow
 
 - Enter and save body measurements, then enter and save a named favorite shirt and candidate shirt. Measurements are edited as local drafts and stored on-device.
 - Enter chest width, shoulder width, and length for each shirt. Results switch all three signed scores between Body and Favorite; negative means smaller/shorter, zero means equal to the selected reference, positive means larger/longer. There is no overall score. Body chest compares twice flat garment width against body circumference; its 0.96 m score scale maps 48 cm additional room to +50.

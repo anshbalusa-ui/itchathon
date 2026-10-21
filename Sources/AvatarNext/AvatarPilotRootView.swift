@@ -78,7 +78,7 @@ struct AvatarPilotRootView: View {
                     .font(.title2.weight(.semibold))
                 Text("Guided capture is available for development testing. Its observations still require validation on a physical iPhone.")
                     .foregroundStyle(.secondary)
-                Text("Avatar viewing, clothing browsing, and fit estimates are not available yet.")
+                Text("Avatar viewing and fit estimates are not available. The separate internal catalog does not use this profile.")
                     .foregroundStyle(.secondary)
             }
             .accessibilityIdentifier("avatar-onboarding")
@@ -95,7 +95,7 @@ struct AvatarPilotRootView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Avatar metadata is saved, but a preview is not available.")
                     .font(.title2.weight(.semibold))
-                Text("This build has no avatar renderer or clothing catalog. Saved metadata does not establish body accuracy or garment fit.")
+                Text("This build has no compatible avatar renderer. Catalog selection does not establish body accuracy or garment fit.")
                     .foregroundStyle(.secondary)
                 deleteButton
             }
