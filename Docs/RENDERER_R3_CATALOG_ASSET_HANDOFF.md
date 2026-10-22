@@ -6,6 +6,7 @@
 - Starting branch/PR: `feature/bundled-3d-asset-pipeline-r2`, draft PR #15.
 - Exact verified base: `c947f18e1e380325ac8879ad30c625a43e1f8bfd`; local and fetched remote matched. The worktree was clean; PR #15 remained open/draft and no newer PR superseded it.
 - New branch: `feature/catalog-bundled-garment-r3`. Draft-PR target is the R2 branch, not main. No merge, rebase, cherry-pick or unrelated cleanup was performed.
+- Draft delivery: [PR #16 — exact catalog SKU to verified file-backed garment preview](https://github.com/anshbalusa-ui/itchathon/pull/16), targeting `feature/bundled-3d-asset-pipeline-r2`. It is not merged.
 - The prior R2 totals (225 Debug / 12 Release tests) are historical baseline evidence, not fresh R3 results.
 
 R3 authorizes one exact first-party fixture as a **fictional internal catalog illustration**. It does not turn the fixture into an authentic retailer garment, license an external asset, represent a customer's body, resize geometry from S/M, or estimate fit.
