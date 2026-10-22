@@ -473,7 +473,7 @@ struct CatalogDetailView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("catalog.preview.unavailable")
             }
-            Text("Generic mannequin and illustrative geometric shirt only. Not based on a body scan; no physical garment size, drape, or fit is represented.")
+            Text("Generic mannequin and illustrative geometric garment only. Not based on a body scan; no physical garment size, drape, or fit is represented.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -558,7 +558,7 @@ private struct CatalogProductCard: View {
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(product.category == .tshirt ? "T-shirt" : "Category not provided")
+                Text(categoryDisplayName(product.category))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(availabilitySummary)
@@ -662,6 +662,14 @@ private struct MeasurementDisplayRow: Identifiable {
     let name: String
     let value: String
     var id: String { name }
+}
+
+private func categoryDisplayName(_ category: CatalogCategory) -> String {
+    switch category {
+    case .tshirt: return "T-shirt"
+    case .vest: return "Vest"
+    case .unknown: return "Category not provided"
+    }
 }
 
 private func sizeAvailabilityLabel(_ availability: CatalogAvailability?) -> String {

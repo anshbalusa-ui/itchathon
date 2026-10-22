@@ -14,7 +14,8 @@ final class CatalogRepositoryTests: XCTestCase {
         XCTAssertEqual(Set(products.map(\.id)), Set([
             everyday,
             CatalogProductID(retailerID: "sample-studio", productID: "weekend-tee"),
-            CatalogProductID(retailerID: "sample-studio", productID: "archived-tee")
+            CatalogProductID(retailerID: "sample-studio", productID: "archived-tee"),
+            CatalogProductID(retailerID: "sample-studio", productID: "geometric-vest")
         ]))
         for product in products {
             let lookup = try await repository.product(id: product.id)

@@ -57,6 +57,20 @@ enum SyntheticCatalog {
           "variants": [ { "id": "archive-graphite-medium", "colorID": "graphite", "sizeID": "medium", "availability": "discontinued" } ],
           "images": [],
           "provenance": { "source": "synthetic", "revision": "sample-v1", "reference": "local-synthetic-fixture" }
+        },
+        {
+          "id": { "retailerID": "sample-studio", "productID": "geometric-vest" },
+          "title": "Geometric Vest Concept",
+          "description": "A fictional demo concept for browsing only; it is not for sale, is not a physical garment, and makes no claim about size or fit.",
+          "category": "vest",
+          "colors": [ { "id": "navy", "name": "Navy", "hex": "#24364B" } ],
+          "sizes": [ { "id": "small", "label": "S" }, { "id": "medium", "label": "M" } ],
+          "variants": [
+            { "id": "geometric-vest-navy-small", "colorID": "navy", "sizeID": "small", "availability": "available" },
+            { "id": "geometric-vest-navy-medium", "colorID": "navy", "sizeID": "medium", "availability": "available" }
+          ],
+          "images": [],
+          "provenance": { "source": "synthetic", "revision": "sample-v1", "reference": "local-synthetic-fixture" }
         }
       ]
     }

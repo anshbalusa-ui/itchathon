@@ -27,13 +27,13 @@ final class RendererBundledAssetTests: XCTestCase {
         }
     }
 
-    func testFileBackedDescriptorCannotEnterProceduralAssetOrCatalogAuthorization() throws {
+    func testBundledDescriptorCannotMasqueradeAsProceduralCatalogFixture() throws {
         let bundled = RendererBundledAssetDescriptor.reviewedVest
         XCTAssertThrowsError(try bundled.asset.validate(for: .garment)) { error in
             XCTAssertEqual(error as? RendererFailure, .unsupportedAsset)
         }
         let products = try CatalogDocument.decode(SyntheticCatalog.data).products
-        for product in products where product.id.productID != "archived-tee" {
+        for product in products where product.category == .tshirt && product.id.productID != "archived-tee" {
             let variant = try XCTUnwrap(product.variants.first { $0.availability == .available })
             let association = CatalogPreviewAssociation(fixture: bundled.asset)
             XCTAssertEqual(association.resolve(

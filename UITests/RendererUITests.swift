@@ -270,6 +270,13 @@ final class RendererUITests: XCTestCase {
     @MainActor
     private func selectSample(_ app: XCUIApplication, productID: String, size: String) {
         let product = app.buttons["catalog.product.sample-studio.\(productID)"]
+        // A returned list can be below an uninstantiated lazy product cell.
+        // Search upward to the persistent collection landmark, then downward.
+        let notice = app.descendants(matching: .any)["catalog.sample-disclosure"]
+        for _ in 0..<8 {
+            if product.exists || (notice.exists && notice.isHittable) { break }
+            app.scrollViews.firstMatch.swipeDown()
+        }
         reveal(product, app: app)
         product.tap()
         let option = app.buttons["catalog.size.\(size)"]
@@ -415,6 +422,149 @@ final class RendererUITests: XCTestCase {
         reveal(app.buttons["renderer.asset.procedural"], app: app)
         app.buttons["renderer.asset.procedural"].tap()
         try expectImageMatch(app, scene: scene, reference: procedural)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Internal Development"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.alerts.count, 0)
+    }
+
+    @MainActor
+    func testCatalogBundledVestUsesVerifiedFileAcrossSizesAndProceduralProductSwitches() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        // A real procedural viewport is a negative control for file-backed geometry.
+        openLab(app)
+        let scene = app.descendants(matching: .any)["renderer.scene"]
+        let procedural = try waitForRenderedScene(app, scene: scene)
+        app.navigationBars.buttons.firstMatch.tap()
+        reveal(app.buttons["internal.open-catalog"], app: app)
+        app.buttons["internal.open-catalog"].tap()
+        selectSample(app, productID: "geometric-vest", size: "small")
+        openSelectedPreview(app)
+        XCTAssertTrue(app.staticTexts["renderer.asset.loaded"].waitForExistence(timeout: 15))
+        let vest = try waitForBundledGeometry(app, scene: scene, procedural: procedural)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Geometric Vest Concept · Navy · S")
+        XCTAssertTrue((scene.value as? String)?.contains("Bundled geometric vest shown, Navy") == true)
+        XCTAssertFalse(app.buttons["renderer.asset.bundled"].exists)
+        XCTAssertFalse(app.buttons["renderer.asset.procedural"].exists)
+        XCTAssertFalse(app.buttons["renderer.asset.invalid"].exists)
+        XCTAssertFalse(app.buttons["renderer.material.sage"].exists)
+        capture(app, "R3 — exact Navy S catalog SKU rendered as the verified file-backed vest")
+
+        let dragStart = scene.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        dragStart.press(forDuration: 0.05, thenDragTo: scene.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.65)))
+        try expectImageChange(app, scene: scene, from: vest)
+        capture(app, "R3 — catalog vest rotation reveals three-dimensional depth")
+        reveal(app.buttons["renderer.reset-view"], app: app)
+        app.buttons["renderer.reset-view"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        reveal(app.switches["renderer.garment"], app: app)
+        app.switches["renderer.garment"].tap()
+        let hidden = try expectImageChange(app, scene: scene, from: vest)
+        XCTAssertLessThan(hidden.navyPixels, vest.navyPixels / 3)
+        reveal(app.buttons["renderer.reset-appearance"], app: app)
+        app.buttons["renderer.reset-appearance"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        XCTAssertTrue((scene.value as? String)?.contains("Bundled geometric vest shown, Navy") == true)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(app.staticTexts["renderer.asset.loaded"].waitForExistence(timeout: 15))
+        try expectImageMatch(app, scene: scene, reference: vest)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertEqual(app.buttons["catalog.size.small"].value as? String, "Selected")
+        reveal(app.staticTexts["Size"], app: app)
+        let medium = app.buttons["catalog.size.medium"]
+        reveal(medium, app: app)
+        medium.tap()
+        expectSelected(medium)
+        openSelectedPreview(app)
+        XCTAssertTrue(app.staticTexts["renderer.asset.loaded"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Geometric Vest Concept · Navy · M")
+        try expectImageMatch(app, scene: scene, reference: vest)
+        capture(app, "R3 — Navy M has its own SKU context and identical authored geometry")
+        for _ in 0..<2 {
+            app.navigationBars.buttons.firstMatch.tap()
+            XCTAssertEqual(medium.value as? String, "Selected")
+            openSelectedPreview(app)
+            XCTAssertTrue(app.staticTexts["renderer.asset.loaded"].waitForExistence(timeout: 15))
+            try expectImageMatch(app, scene: scene, reference: vest)
+        }
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        selectSample(app, productID: "everyday-tee", size: "small")
+        openSelectedPreview(app)
+        _ = try waitForRenderedScene(app, scene: scene)
+        try expectImageMatch(app, scene: scene, reference: procedural)
+        XCTAssertFalse(app.staticTexts["renderer.asset.loaded"].exists)
+        XCTAssertTrue((scene.value as? String)?.contains("Illustrative garment shown, Navy") == true)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Everyday Tee · Navy · S")
+        capture(app, "R3 — switching products restores the original procedural T-shirt")
+        app.navigationBars.buttons.firstMatch.tap()
+        let cream = app.buttons["catalog.color.cream"]
+        reveal(cream, app: app)
+        cream.tap()
+        reveal(medium, app: app)
+        medium.tap()
+        expectSelected(medium)
+        reveal(app.buttons["catalog.preview.open"], app: app)
+        XCTAssertFalse(app.buttons["catalog.preview.open"].isEnabled)
+        XCTAssertTrue(app.staticTexts["catalog.preview.unavailable"].exists)
+        XCTAssertFalse(scene.exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        selectSample(app, productID: "geometric-vest", size: "small")
+        openSelectedPreview(app)
+        XCTAssertTrue(app.staticTexts["renderer.asset.loaded"].waitForExistence(timeout: 15))
+        try expectImageMatch(app, scene: scene, reference: vest)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Geometric Vest Concept · Navy · S")
+        XCTAssertEqual(app.alerts.count, 0)
+    }
+
+    @MainActor
+    func testCatalogBundledVestLargestTextKeepsLockedPreviewAndBackControlsUsable() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        openCatalogFromHub(app, largeText: true)
+        selectSample(app, productID: "geometric-vest", size: "small")
+        openSelectedPreview(app)
+        let scene = app.descendants(matching: .any)["renderer.scene"]
+        XCTAssertTrue(app.staticTexts["renderer.asset.loaded"].waitForExistence(timeout: 15))
+        let vest = try waitForRenderedScene(app, scene: scene)
+        XCTAssertTrue((scene.value as? String)?.contains("Bundled geometric vest shown, Navy") == true)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Geometric Vest Concept · Navy · S")
+        XCTAssertFalse(app.buttons["renderer.asset.bundled"].exists)
+        XCTAssertFalse(app.buttons["renderer.material.sage"].exists)
+        reveal(app.buttons["renderer.right"], app: app)
+        app.buttons["renderer.right"].tap()
+        try expectImageChange(app, scene: scene, from: vest)
+        reveal(app.buttons["renderer.reset-view"], app: app)
+        app.buttons["renderer.reset-view"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        reveal(app.switches["renderer.garment"], app: app)
+        app.switches["renderer.garment"].tap()
+        try expectImageChange(app, scene: scene, from: vest)
+        reveal(app.buttons["renderer.reset-appearance"], app: app)
+        app.buttons["renderer.reset-appearance"].tap()
+        try expectImageMatch(app, scene: scene, reference: vest)
+        capture(app, "R3 — real file-backed product preview at accessibility XXXL")
+        app.navigationBars.buttons.firstMatch.tap()
+        // The size grid is lazy; its persistent section header locates it after a pop.
+        reveal(app.staticTexts["Size"], app: app)
+        let medium = app.buttons["catalog.size.medium"]
+        reveal(medium, app: app)
+        medium.tap()
+        expectSelected(medium)
+        openSelectedPreview(app)
+        XCTAssertTrue(app.staticTexts["renderer.asset.loaded"].waitForExistence(timeout: 15))
+        try expectImageMatch(app, scene: scene, reference: vest)
+        XCTAssertEqual(app.staticTexts["renderer.product-context"].label, "Geometric Vest Concept · Navy · M")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        selectSample(app, productID: "everyday-tee", size: "medium")
+        openSelectedPreview(app)
+        let procedural = try waitForRenderedScene(app, scene: scene)
+        XCTAssertGreaterThan(procedural.changedPixels(from: vest), 40)
+        XCTAssertTrue((scene.value as? String)?.contains("Illustrative garment shown, Navy") == true)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Internal Development"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.alerts.count, 0)

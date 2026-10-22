@@ -33,6 +33,7 @@ struct RendererLabView: View {
                         Text("Not your body or a retailer garment. No sizing, physical drape or fit is represented.")
                             .foregroundStyle(.secondary)
                         if model.state == .ready {
+                            if isBundledProduct { assetStatus }
                             controls
                             if presentation.allowsAssetSelection {
                                 assetControls
@@ -159,6 +160,11 @@ struct RendererLabView: View {
         case .loading, .failed: false
         }
     }
+    private var isBundledProduct: Bool {
+        if case .bundled = presentation.geometrySource { return !presentation.allowsAssetSelection }
+        return false
+    }
+
 
     private var assetControls: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -166,46 +172,50 @@ struct RendererLabView: View {
             Text("Garment asset demonstration")
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
-            Text("First-party fictional fixtures only. The bundled vest is not associated with a catalog product.")
+            Text("First-party fictional fixtures only. Manual asset choices do not authorize geometry for any catalog SKU.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-
             assetChoice("Procedural shirt", id: "renderer.asset.procedural", selected: model.assetState == .procedural) {
                 model.selectProceduralGarment()
             }
             assetChoice("Bundled geometric vest", id: "renderer.asset.bundled", selected: model.assetState == .loaded) {
                 model.selectBundledGarment()
             }
-
-            switch model.assetState {
-            case .procedural:
-                Text("Displaying the original procedural shirt.")
-                    .font(.footnote)
-                    .accessibilityIdentifier("renderer.asset.procedural-status")
-            case .loading:
-                ProgressView("Loading bundled garment…")
-                    .accessibilityIdentifier("renderer.asset.loading")
-            case .loaded:
-                Text("Displaying the reviewed file-backed geometric vest.")
-                    .font(.footnote)
-                    .accessibilityIdentifier("renderer.asset.loaded")
-            case .failed(let failure):
-                Text("Garment asset unavailable")
-                    .font(.headline)
-                    .accessibilityIdentifier("renderer.asset.error")
-                Text(failure.localizedDescription)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("No garment is displayed. Retry, choose the reviewed vest, or explicitly return to the procedural shirt.")
-                    .font(.footnote)
-                Button("Retry garment asset") { model.retryGarmentLoad() }
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("renderer.asset.retry")
-            }
-
+            assetStatus
             Button("Check incompatible asset") { model.checkIncompatibleGarment() }
                 .buttonStyle(.bordered)
                 .accessibilityHint("Exercises asset rejection. No replacement garment is displayed on failure.")
                 .accessibilityIdentifier("renderer.asset.invalid")
+        }
+    }
+
+    @ViewBuilder
+    private var assetStatus: some View {
+        switch model.assetState {
+        case .procedural:
+            Text("Displaying the original procedural shirt.")
+                .font(.footnote)
+                .accessibilityIdentifier("renderer.asset.procedural-status")
+        case .loading:
+            ProgressView("Loading bundled garment…")
+                .accessibilityIdentifier("renderer.asset.loading")
+        case .loaded:
+            Text("Displaying the reviewed file-backed geometric vest.")
+                .font(.footnote)
+                .accessibilityIdentifier("renderer.asset.loaded")
+        case .failed(let failure):
+            Text("Garment asset unavailable")
+                .font(.headline)
+                .accessibilityIdentifier("renderer.asset.error")
+            Text(failure.localizedDescription)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(isBundledProduct
+                 ? "No garment is displayed. Retry or return to the catalog."
+                 : "No garment is displayed. Retry, choose the reviewed vest, or explicitly return to the procedural shirt.")
+                .font(.footnote)
+            Button("Retry garment asset") { model.retryGarmentLoad() }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("renderer.asset.retry")
         }
     }
 

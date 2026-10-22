@@ -10,6 +10,7 @@ struct CatalogIllustrativePreview: Hashable, Identifiable {
     let colorName: String
     let sizeLabel: String
     fileprivate let material: RendererMaterial
+    fileprivate let geometrySource: RendererGeometrySource
 
     var id: Self { self }
 
@@ -18,7 +19,8 @@ struct CatalogIllustrativePreview: Hashable, Identifiable {
             navigationTitle: "Illustrative 3D Preview",
             context: "\(productTitle) · \(colorName) · \(sizeLabel)",
             initialMaterial: material,
-            allowsMaterialChanges: false
+            allowsMaterialChanges: false,
+            geometrySource: geometrySource
         )
     }
 }
@@ -57,35 +59,48 @@ struct CatalogPreviewAssociation {
         let colorID: String
         let sizeID: String
         let material: RendererMaterial
+        let category: CatalogCategory
+        let geometrySource: RendererGeometrySource
     }
 
     private static let approved: [ApprovedVariant] = [
-        .init(productID: .init(retailerID: "sample-studio", productID: "everyday-tee"), variantID: "everyday-navy-small", colorID: "navy", sizeID: "small", material: .navy),
-        .init(productID: .init(retailerID: "sample-studio", productID: "everyday-tee"), variantID: "everyday-navy-medium", colorID: "navy", sizeID: "medium", material: .navy),
-        .init(productID: .init(retailerID: "sample-studio", productID: "weekend-tee"), variantID: "weekend-sage-small", colorID: "sage", sizeID: "small", material: .sage),
-        .init(productID: .init(retailerID: "sample-studio", productID: "weekend-tee"), variantID: "weekend-sage-medium", colorID: "sage", sizeID: "medium", material: .sage)
+        .init(productID: .init(retailerID: "sample-studio", productID: "everyday-tee"), variantID: "everyday-navy-small", colorID: "navy", sizeID: "small", material: .navy, category: .tshirt, geometrySource: .procedural),
+        .init(productID: .init(retailerID: "sample-studio", productID: "everyday-tee"), variantID: "everyday-navy-medium", colorID: "navy", sizeID: "medium", material: .navy, category: .tshirt, geometrySource: .procedural),
+        .init(productID: .init(retailerID: "sample-studio", productID: "weekend-tee"), variantID: "weekend-sage-small", colorID: "sage", sizeID: "small", material: .sage, category: .tshirt, geometrySource: .procedural),
+        .init(productID: .init(retailerID: "sample-studio", productID: "weekend-tee"), variantID: "weekend-sage-medium", colorID: "sage", sizeID: "medium", material: .sage, category: .tshirt, geometrySource: .procedural),
+        .init(productID: .init(retailerID: "sample-studio", productID: "geometric-vest"), variantID: "geometric-vest-navy-small", colorID: "navy", sizeID: "small", material: .navy, category: .vest, geometrySource: .bundled(.reviewedVest)),
+        .init(productID: .init(retailerID: "sample-studio", productID: "geometric-vest"), variantID: "geometric-vest-navy-medium", colorID: "navy", sizeID: "medium", material: .navy, category: .vest, geometrySource: .bundled(.reviewedVest))
     ]
 
     private let fixture: RendererAssetDescriptor?
+    private let bundledFixture: RendererBundledAssetDescriptor?
 
-    init(fixture: RendererAssetDescriptor? = .garmentFixture) {
+    init(fixture: RendererAssetDescriptor? = .garmentFixture,
+         bundledFixture: RendererBundledAssetDescriptor? = .reviewedVest) {
         self.fixture = fixture
+        self.bundledFixture = bundledFixture
     }
 
     func resolve(product: CatalogProduct, selectedVariant: CatalogVariant?, selectedColorID: String?, selectedSizeID: String?) -> CatalogPreviewEligibility {
-        guard let fixture else { return .unavailable(.incompatibleFixture) }
-        do { try fixture.validate(for: .garment) }
-        catch { return .unavailable(.incompatibleFixture) }
-
         guard (try? product.validate()) != nil else { return .unavailable(.invalidSelection) }
         guard product.provenance.source == .synthetic,
               product.provenance.revision == "sample-v1",
               product.provenance.reference == "local-synthetic-fixture" else {
             return .unavailable(.unverifiedSource)
         }
-        guard product.category == .tshirt,
-              Self.approved.contains(where: { $0.productID == product.id }) else {
+        guard let approvedProduct = Self.approved.first(where: { $0.productID == product.id }) else {
             return .unavailable(.unsupportedProduct)
+        }
+        guard product.category == approvedProduct.category else { return .unavailable(.unsupportedProduct) }
+        switch approvedProduct.geometrySource {
+        case .procedural:
+            guard let fixture else { return .unavailable(.incompatibleFixture) }
+            do { try fixture.validate(for: .garment) }
+            catch { return .unavailable(.incompatibleFixture) }
+        case .bundled(let descriptor):
+            guard let bundledFixture, bundledFixture == descriptor else { return .unavailable(.incompatibleFixture) }
+            do { try bundledFixture.validate() }
+            catch { return .unavailable(.incompatibleFixture) }
         }
         guard let colorID = selectedColorID else { return .unavailable(.selectVariant) }
         guard let color = product.colors.first(where: { $0.id == colorID }),
@@ -116,7 +131,7 @@ struct CatalogPreviewAssociation {
         let presentation = CatalogIllustrativePreview(
             productID: product.id, variantID: current.id, colorID: colorID, sizeID: sizeID,
             productTitle: product.title, colorName: color.name,
-            sizeLabel: size.label, material: approved.material
+            sizeLabel: size.label, material: approved.material, geometrySource: approved.geometrySource
         )
         return .eligible(presentation)
     }
