@@ -4,7 +4,7 @@ import Darwin
 import Foundation
 import simd
 
-struct RendererBundledAssetDescriptor: Equatable, Sendable {
+struct RendererBundledAssetDescriptor: Hashable, Sendable {
     let asset: RendererAssetDescriptor
     let resourceName: String
     let resourceExtension: String

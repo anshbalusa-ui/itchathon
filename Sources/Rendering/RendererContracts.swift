@@ -112,6 +112,12 @@ enum RendererMaterial: String, CaseIterable, Identifiable {
     }
 }
 
+/// An approved illustration source, not an importer or a retailer authorization.
+enum RendererGeometrySource: Hashable {
+    case procedural
+    case bundled(RendererBundledAssetDescriptor)
+}
+
 /// Scalar presentation settings shared by the renderer lab and catalog illustrations.
 struct RendererPresentation: Equatable, Hashable {
     let navigationTitle: String
@@ -119,19 +125,22 @@ struct RendererPresentation: Equatable, Hashable {
     let initialMaterial: RendererMaterial
     let allowsMaterialChanges: Bool
     let allowsAssetSelection: Bool
+    let geometrySource: RendererGeometrySource
 
     init(
         navigationTitle: String,
         context: String? = nil,
         initialMaterial: RendererMaterial = .navy,
         allowsMaterialChanges: Bool = true,
-        allowsAssetSelection: Bool = false
+        allowsAssetSelection: Bool = false,
+        geometrySource: RendererGeometrySource = .procedural
     ) {
         self.navigationTitle = navigationTitle
         self.context = context
         self.initialMaterial = initialMaterial
         self.allowsMaterialChanges = allowsMaterialChanges
         self.allowsAssetSelection = allowsAssetSelection
+        self.geometrySource = geometrySource
     }
 
     static let lab = RendererPresentation(navigationTitle: "3D Renderer Lab", allowsAssetSelection: true)
@@ -154,7 +163,7 @@ enum RendererAssetLicense: String, Equatable, Sendable { case internalDevelopmen
 enum RendererMaterialModel: String, Equatable, Sendable { case solidColorLambert, unlit, unsupported }
 
 /// Metadata is descriptive only: it cannot authorize personalized geometry or grant rights.
-struct RendererAssetDescriptor: Equatable, Sendable {
+struct RendererAssetDescriptor: Hashable, Sendable {
     let type: RendererAssetType
     let role: RendererAssetRole
     let schemaVersion: Int

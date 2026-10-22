@@ -13,7 +13,7 @@ struct CatalogProductID: Hashable, Codable, Sendable {
 
 enum CatalogSource: String, Codable, Sendable { case synthetic, retailerProvided, unknown }
 
-enum CatalogCategory: String, Codable, Sendable { case tshirt, unknown }
+enum CatalogCategory: String, Codable, Sendable { case tshirt, vest, unknown }
 enum CatalogAvailability: String, Codable, Sendable { case available, outOfStock, unknown, discontinued }
 enum CatalogMediaKind: String, Codable, Sendable { case bundledAsset, remoteURL }
 enum CatalogMediaSource: String, Codable, Sendable { case synthetic, retailerAuthorized, licensed, unknown }

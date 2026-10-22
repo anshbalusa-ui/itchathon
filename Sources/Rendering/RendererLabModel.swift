@@ -49,12 +49,19 @@ final class RendererLabModel: ObservableObject {
         self.initialMaterial = presentation.initialMaterial
         self.appearance = RendererAppearance(garmentVisible: true, material: presentation.initialMaterial)
         self.makeScene = makeScene
+        if case .bundled(let descriptor) = presentation.geometrySource {
+            requestedBundledAsset = true
+            requestedBundledDescriptor = descriptor
+            assetState = .loading
+        }
     }
 
-    func open(isActive: Bool) {
+    @discardableResult
+    func open(isActive: Bool) -> Task<Void, Never>? {
         isPresented = true
         self.isActive = isActive
         resumeIfVisible()
+        return assetLoadTask
     }
 
     func setActive(_ active: Bool) {
@@ -72,10 +79,14 @@ final class RendererLabModel: ObservableObject {
     func close() {
         isPresented = false
         cancelAssetRequest()
-        requestedBundledAsset = false
-        requestedBundledDescriptor = .reviewedVest
+        requestedBundledAsset = presentation.geometrySource != .procedural
+        if case .bundled(let descriptor) = presentation.geometrySource {
+            requestedBundledDescriptor = descriptor
+        } else {
+            requestedBundledDescriptor = .reviewedVest
+        }
         cachedBundledGarment = nil
-        assetState = .procedural
+        assetState = requestedBundledAsset ? .loading : .procedural
         releaseScene()
         state = .idle
     }
@@ -154,7 +165,7 @@ final class RendererLabModel: ObservableObject {
 
     @discardableResult
     func retryGarmentLoad() -> Task<Void, Never>? {
-        guard presentation.allowsAssetSelection, isPresented, isActive, state == .ready,
+        guard isPresented, isActive, state == .ready,
               requestedBundledAsset else { return nil }
         return beginBundledGarmentLoad(requestedBundledDescriptor)
     }
@@ -162,6 +173,12 @@ final class RendererLabModel: ObservableObject {
     func restoreGarment() {
         if presentation.allowsAssetSelection {
             selectProceduralGarment()
+            return
+        }
+        // Recovery stays on the presentation's source: retry the file or restore
+        // only the original approved procedural shirt.
+        if requestedBundledAsset {
+            _ = retryGarmentLoad()
             return
         }
         guard let session, state == .ready else { return }
