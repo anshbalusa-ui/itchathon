@@ -1,5 +1,7 @@
 # Segment 0: isolated avatar-first foundation
 
+> Historical PR #8 record. [I1's consolidated audit](FULL_STACK_I1_AUDIT.md) subsequently scopes legacy preferences to the legacy root and hardens nonrecursive cleanup and exclusive protected staging creation. Failed creation preserves a colliding entry rather than treating it as owned staging; the original segment's results below remain historical.
+
 Scope: strengthen PR #7, not implement the scanner or a consumer-ready avatar experience. No camera capture, body geometry estimation, mesh, catalog, fit prediction, retailer connection, or external component was added.
 
 ## Repository assessment

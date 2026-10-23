@@ -23,6 +23,8 @@ Segment R2 adds a bounded **file-backed garment demonstration** in the independe
 
 Segment R3 adds **Geometric Vest Concept** to the internal synthetic catalog. Select its Navy S or M label and choose **View illustrative 3D preview** to automatically verify and load the exact R2 vest file into the existing Metal viewer. Product geometry and color are locked; both size labels use identical authored geometry. Loading failures offer retry/back without a substitute shirt. Everyday/Weekend previews remain procedural, and the independent Lab retains manual controls. The vest is fictional, not for sale, not a real retailer garment or personalized avatar, and represents no physical size, drape or fit. See [R3 association, lifecycle, real-mesh evidence and limits](Docs/RENDERER_R3_CATALOG_ASSET_HANDOFF.md).
 
+Segment I1 reviews the accumulated stack, repairs nonrecursive profile cleanup and exclusive protected staging ownership, and scopes legacy preference loading to the legacy home. See the [consolidated audit, evidence, risk register and proposed review/merge sequence](Docs/FULL_STACK_I1_AUDIT.md). No PR is merged by the audit.
+
 **Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
 
 FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to compare chest, shoulders, and length against that reference. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.
@@ -41,7 +43,9 @@ The [critical foundation audit](Docs/FOUNDATION_AUDIT.md) records reproduced del
 - Results show only the Body/Favorite selector and concise dimension scores; no physical-check disclaimer card or measurement-source/limits prose. This owner-approved presentation replaces the older contradictory-favorite alert.
 - Enter size-chart rows from **finished-garment measurements** and compare actual sizes. Body-size recommendation charts are not interchangeable with garment measurements.
 
-## Scanner status and limits
+## Preserved legacy scanner — historical status and limits
+
+The device-installation statement below is historical. The physical phone is unavailable for I1; it is not fresh guided-scanner, GPU or accuracy evidence.
 
 The guided front/side depth scan measures waist width/depth and returns an editable partial body draft with estimated waist circumference, shoulder width, and torso length. It does not measure chest circumference; manually measure and enter chest circumference before saving the body profile. The scanner still uses depth sensing for 3D spans; it does not infer circumference from a single width. An AR garment ruler is also included. Both camera flows support portrait and landscape; garment raycasts accept horizontal or vertical surfaces. Rotating a frozen body frame requires Retake, which keeps completed spans. The app has been built and installed on the connected iPhone 17 Pro Max (iOS 27.0); physical landscape capture and marker alignment still need a live check. An owner reports a physical measurement check on that phone had “pretty good accuracy” and they would trust it; no numeric tape-error or repeatability values were recorded. Treat this as qualitative anecdotal evidence, not a general accuracy claim. Garment-ruler measurement validation and timed live-demo rehearsal remain unverified. Only the connected phone was in scope; no second-phone validation was performed.
 
@@ -56,6 +60,16 @@ brew install xcodegen
 xcodegen generate
 open FitCheck.xcodeproj
 ```
+
+Run the complete local development verification with **Python 3.9+**:
+
+```bash
+python3 Scripts/verify_development.py
+```
+
+The runner discovers an available iPhone simulator (or accepts `--simulator UDID`), creates a unique evidence directory outside the repository, runs clean Debug unit/UI tests and SDK/Release checks, verifies every requested Release selector executed, and inspects actual binaries, resources, fixture digests and privacy manifests. It does not enable cloud CI or validate physical hardware. Inspect exported synthetic simulator screenshots separately. `--inspect-derived PATH` inspects existing artifacts only and is explicitly not fresh build/test proof.
+
+Keep the verification host awake with its lid open; host sleep can interrupt XCTest gesture synthesis. To prevent idle sleep for a run, use `caffeinate -disu python3 Scripts/verify_development.py`. This does not prevent forced lid-close sleep.
 
 The full iOS 27 simulator suite passed **46/46** on October 1, 2026 (45 unit tests and one UI test). Physical front/side scan accuracy still needs tape measurements and repeat captures. Select an installed simulator with `xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -showdestinations`, then replace the simulator name below if needed:
 

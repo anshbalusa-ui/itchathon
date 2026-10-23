@@ -291,7 +291,7 @@ final class AvatarProfileRepositoryTests: XCTestCase {
         let saved = eligibleProfile()
         try await repository.save(saved)
         let failingRepository = AvatarProfileRepository(
-            directoryURL: directory, fileManager: DeletionFailingFileManager()
+            directoryURL: directory, removeFile: { _ in throw CocoaError(.fileWriteNoPermission) }
         )
         do {
             try await failingRepository.delete()
@@ -331,8 +331,3 @@ final class AvatarProfileRepositoryTests: XCTestCase {
     }
 }
 
-private final class DeletionFailingFileManager: FileManager, @unchecked Sendable {
-    override func removeItem(at URL: URL) throws {
-        throw CocoaError(.fileWriteNoPermission)
-    }
-}
