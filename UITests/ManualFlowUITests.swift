@@ -39,6 +39,15 @@ final class ManualFlowUITests: XCTestCase {
     XCTAssertTrue((chestScore.value as? String)?.contains("+50 relative to Favorite") == true)
 
     app.terminate()
+    #if DEBUG
+    // Internal navigation must not replace the legacy root's persisted records.
+    app.launchArguments = ["-fitcheck-catalog-internal"]
+    app.launch()
+    XCTAssertTrue(app.buttons["catalog.product.sample-studio.everyday-tee"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.staticTexts["Measurements saved"].exists)
+    app.terminate()
+    app.launchArguments = []
+    #endif
     app.launch()
     XCTAssertTrue(app.staticTexts["Measurements saved"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["Favorite"].exists)

@@ -16,15 +16,17 @@ actor AvatarProfileRepository: AvatarProfilePersisting {
 
     private let fileURL: URL
     private let stagingURL: URL
-    private let fileManager: FileManager
+    private let removeFile: @Sendable (URL) throws -> Void
 
     init(
         directoryURL: URL = .applicationSupportDirectory,
-        fileManager: FileManager = .default
+        removeFile: @escaping @Sendable (URL) throws -> Void = {
+            try AvatarProfileRepository.unlinkFile(at: $0)
+        }
     ) {
         self.fileURL = directoryURL.appendingPathComponent("fitcheck-avatar-profile.json")
         self.stagingURL = directoryURL.appendingPathComponent(".fitcheck-avatar-profile.pending")
-        self.fileManager = fileManager
+        self.removeFile = removeFile
     }
 
     func load() async throws -> AvatarProfileRecord? {
@@ -69,14 +71,16 @@ actor AvatarProfileRepository: AvatarProfilePersisting {
         }
         let bytes = try JSONEncoder().encode(profile)
         try removeFileIfPresent(at: stagingURL)
-        try fileManager.createDirectory(
+        try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+        // A replacement entry after cleanup is not ours to overwrite or remove.
+        // Failed creation leaves it untouched; a partial write remains unpublished.
+        try bytes.write(to: stagingURL, options: [.withoutOverwriting, .completeFileProtection])
         // Prepare metadata before publishing it. A failed replacement must leave
         // the previous profile intact, including if backup exclusion fails.
         do {
-            try bytes.write(to: stagingURL, options: [.completeFileProtection])
             try excludeFromBackup(stagingURL)
             // Same-directory rename is atomic and preserves the staged protection
             // and backup attributes; no unprotected replacement window.
@@ -103,10 +107,21 @@ actor AvatarProfileRepository: AvatarProfilePersisting {
                 // Never recursively remove an unexpected directory at the file path.
                 throw CocoaError(.fileWriteUnknown)
             }
-            try fileManager.removeItem(at: currentURL)
+            try removeFile(currentURL)
         } catch {
             if !Self.isMissingFile(error) {
                 throw error
+            }
+        }
+    }
+
+    static func unlinkFile(at url: URL) throws {
+        // The kind check above is not atomic with removal. unlink never recurses
+        // into a directory substituted between those operations.
+        try url.withUnsafeFileSystemRepresentation { path in
+            guard let path else { throw CocoaError(.fileWriteInvalidFileName) }
+            guard Darwin.unlink(path) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
         }
     }
