@@ -33,6 +33,10 @@ MARKERS = (
     "SyntheticCatalog", "OfflineCatalogRepository", "avatar-pilot-root",
     "internal.open-avatar", "internal.open-catalog", "-fitcheck-avatar-internal",
     "-fitcheck-catalog-internal", "-fitcheck-integrated-internal",
+    "AvatarGeometryLabView", "AvatarGeometryLabModel", "SyntheticGeometryGenerator",
+    "GeometryKernel", "GeometryResult", "GeometryRendererAdapter", "GeometryViewport",
+    "GeometryFixtureID", "internal.open-geometry", "geometry.scene",
+    "Synthetic surface A", "Synthetic surface B",
 )
 RELEASE_SELECTORS = (
     "FitCheckTests/AvatarFeatureIsolationTests",
@@ -44,6 +48,7 @@ RELEASE_SELECTORS = (
     "FitCheckUITests/CatalogUITests/testNormalLaunchAndReleaseOptInRemainIsolated",
     "FitCheckUITests/IntegrationUITests/testInternalRouteFlagsRemainLegacyInRelease",
     "FitCheckUITests/RendererUITests/testRendererLabRemainsUnavailableFromProductionLaunches",
+    "FitCheckUITests/AvatarGeometryUITests/testGeometryLabIsAbsentFromProductionLaunches",
 )
 MACHO_MAGICS = {bytes.fromhex(value) for value in (
     "cffaedfe", "cefaedfe", "feedfacf", "feedface", "cafebabe", "bebafeca", "cafebabf", "bfbafeca",
@@ -223,7 +228,7 @@ def main():
     output_root = args.output_root.expanduser().resolve()
     require(not output_root.is_relative_to(ROOT), "Verification artifacts must remain outside the repository")
     output_root.mkdir(parents=True, exist_ok=True)
-    output = Path(tempfile.mkdtemp(prefix="i1-", dir=output_root))
+    output = Path(tempfile.mkdtemp(prefix="verification-", dir=output_root))
     print(f"Evidence directory: {output}", flush=True)
     verification = Verification(output)
     try:

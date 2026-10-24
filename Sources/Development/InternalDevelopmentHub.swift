@@ -41,6 +41,15 @@ struct InternalDevelopmentHub: View {
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("internal.open-renderer")
 
+                NavigationLink {
+                    AvatarGeometryLabView()
+                } label: {
+                    Label("Avatar Geometry Lab", systemImage: "square.3.layers.3d")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("internal.open-geometry")
+
                 Text("Catalog browsing needs no avatar or body information. Products, prices and availability are fictional fixtures, not retailer offers.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
