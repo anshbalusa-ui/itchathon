@@ -155,7 +155,7 @@ struct RendererAppearance: Equatable {
     }
 }
 
-enum RendererAssetRole: String, Equatable, Sendable { case mannequin, garment }
+enum RendererAssetRole: String, Equatable, Sendable { case mannequin, garment, syntheticGeometry }
 enum RendererAssetType: String, Equatable, Sendable { case proceduralFixture, bundledMeshPackage, usdz, unknown }
 enum RendererAssetSource: String, Equatable, Sendable { case bundledFixture, remote, userImport, unknown }
 enum RendererAssetProvenance: String, Equatable, Sendable { case firstPartyFixture, retailer, userProvided, unknown }
@@ -203,6 +203,9 @@ struct RendererAssetDescriptor: Hashable, Sendable {
     )
 
     func validate(for expectedRole: RendererAssetRole) throws {
+        guard expectedRole == .mannequin || expectedRole == .garment else {
+            throw RendererFailure.unsupportedAsset
+        }
         let expected = expectedRole == .mannequin ? Self.mannequinFixture : Self.garmentFixture
         guard type == .proceduralFixture, role == expectedRole,
               schemaVersion == 1, assetID == expected.assetID, revision == expected.revision,

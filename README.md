@@ -9,7 +9,7 @@ Segment I0 combines the repaired #8 → #9 → #10 foundation/scanner with #11's
 | None | Preserved legacy home |
 | `-fitcheck-avatar-internal` | Avatar metadata onboarding → guided scanner |
 | `-fitcheck-catalog-internal` | Independent offline catalog |
-| `-fitcheck-integrated-internal` | Internal hub: avatar/scanner, catalog, and **3D Renderer Lab** |
+| `-fitcheck-integrated-internal` | Internal hub: avatar/scanner, catalog, **3D Renderer Lab** and **Avatar Geometry Lab** |
 
 Conflicting internal flags fail closed to legacy home; Release ignores every internal route. No body setup, completed-avatar claim, try-on, fit estimate, purchase or live retailer data is introduced.
 
@@ -24,6 +24,8 @@ Segment R2 adds a bounded **file-backed garment demonstration** in the independe
 Segment R3 adds **Geometric Vest Concept** to the internal synthetic catalog. Select its Navy S or M label and choose **View illustrative 3D preview** to automatically verify and load the exact R2 vest file into the existing Metal viewer. Product geometry and color are locked; both size labels use identical authored geometry. Loading failures offer retry/back without a substitute shirt. Everyday/Weekend previews remain procedural, and the independent Lab retains manual controls. The vest is fictional, not for sale, not a real retailer garment or personalized avatar, and represents no physical size, drape or fit. See [R3 association, lifecycle, real-mesh evidence and limits](Docs/RENDERER_R3_CATALOG_ASSET_HANDOFF.md).
 
 Segment I1 reviews the accumulated stack, repairs nonrecursive profile cleanup and exclusive protected staging ownership, and scopes legacy preference loading to the legacy home. See the [consolidated audit, evidence, risk register and proposed review/merge sequence](Docs/FULL_STACK_I1_AUDIT.md). No PR is merged by the audit.
+
+Segment S2A adds **Avatar Geometry Lab** to the Debug hub. Its bounded deterministic kernel generates an open 3D surface from reviewed synthetic front/side section extents and displays the actual new mesh through the existing Metal renderer. Select synthetic A/B to change geometry, rotate/reset, and exercise missing/invalid/unverified-source rejection with no stale surface. No camera, customer profile, saved avatar, physical measurements or fit inference is involved. Scanner candidates remain unauthorized; normal Release excludes the lab and engine. See the [S2A geometry contract, ownership, verification and limitations](Docs/AVATAR_GEOMETRY_S2A_HANDOFF.md).
 
 **Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
 

@@ -75,16 +75,30 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     private var commandQueue: MTLCommandQueue?
     private(set) var pipelineState: MTLRenderPipelineState?
     private var depthState: MTLDepthStencilState?
+    private let isSyntheticGeometryScene: Bool
     private var cachedGarment: RendererRenderObject?
     private let configuration: RendererSceneConfiguration
     private var orbit = RendererOrbit.initial
     private var appearance = RendererAppearance()
     private var isProceduralGarmentCached = false
-    init(configuration: RendererSceneConfiguration = .standard,
-         mannequinAsset: RendererAssetDescriptor = .mannequinFixture,
-         garmentAsset: RendererAssetDescriptor? = .garmentFixture) throws {
+
+    convenience init(configuration: RendererSceneConfiguration = .standard,
+                      mannequinAsset: RendererAssetDescriptor = .mannequinFixture,
+                      garmentAsset: RendererAssetDescriptor? = .garmentFixture) throws {
+        try self.init(configuration: configuration, mannequinAsset: mannequinAsset, garmentAsset: garmentAsset,
+                      generatedMesh: nil)
+    }
+
+    convenience init(geometry: GeometryResult) throws {
+        let mesh = try GeometryRendererAdapter.mesh(from: geometry)
+        try self.init(configuration: .standard, mannequinAsset: .mannequinFixture, garmentAsset: nil,
+                      generatedMesh: mesh)
+    }
+
+    private init(configuration: RendererSceneConfiguration, mannequinAsset: RendererAssetDescriptor,
+                 garmentAsset: RendererAssetDescriptor?, generatedMesh: RendererMesh?) throws {
         try configuration.validate()
-        try mannequinAsset.validate(for: .mannequin)
+        if generatedMesh == nil { try mannequinAsset.validate(for: .mannequin) }
         guard let device = MTLCreateSystemDefaultDevice() else { throw RendererFailure.graphicsUnavailable }
         guard let queue = device.makeCommandQueue() else { throw RendererFailure.graphicsUnavailable }
         let view = MTKView(frame: .zero, device: device)
@@ -98,13 +112,17 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         self.device = device
         self.commandQueue = queue
         self.view = view
+        self.isSyntheticGeometryScene = generatedMesh != nil
         self.camera = RendererCamera(position: SIMD3<Float>(0, configuration.targetHeight, configuration.cameraDistance),
                                      target: SIMD3<Float>(0, configuration.targetHeight, 0),
                                      nearClip: configuration.nearClip, farClip: configuration.farClip,
                                      verticalFieldOfView: configuration.verticalFieldOfView)
-        mannequin = try RendererRenderObject(mesh: RendererProceduralAssets.mannequin(),
-                                            color: SIMD4<Float>(0.68, 0.65, 0.60, 1), device: device)
-        if let garmentAsset {
+        mannequin = try RendererRenderObject(mesh: generatedMesh ?? RendererProceduralAssets.mannequin(),
+                                            color: generatedMesh == nil
+                                                ? SIMD4<Float>(0.68, 0.65, 0.60, 1)
+                                                : SIMD4<Float>(0.34, 0.49, 0.39, 1),
+                                            device: device)
+        if generatedMesh == nil, let garmentAsset {
             do {
                 try garmentAsset.validate(for: .garment)
                 cachedGarment = try RendererRenderObject(mesh: RendererProceduralAssets.garment(),
@@ -114,7 +132,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
             } catch {
                 garmentFailure = (error as? RendererFailure) ?? .sceneCreationFailed
             }
-        } else {
+        } else if generatedMesh == nil {
             garmentFailure = .missingAsset
         }
         do {
@@ -140,6 +158,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         view.delegate = self
         updateTransforms(aspect: 1)
     }
+    var hasSyntheticGeometry: Bool { isSyntheticGeometryScene }
 
     func apply(orbit: RendererOrbit, appearance: RendererAppearance) {
         guard !isDisposed else { return }
@@ -149,14 +168,17 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         let pitch = simd_quatf(angle: orbit.pitch, axis: SIMD3<Float>(1, 0, 0))
         modelTransform = Self.translation(SIMD3<Float>(0, configuration.targetHeight, 0)) *
             simd_float4x4(yaw * pitch) * Self.translation(SIMD3<Float>(0, -configuration.targetHeight, 0))
-        mannequin.update(color: SIMD4<Float>(0.68, 0.65, 0.60, 1), isEnabled: true)
+        mannequin.update(color: isSyntheticGeometryScene
+                         ? SIMD4<Float>(0.34, 0.49, 0.39, 1)
+                         : SIMD4<Float>(0.68, 0.65, 0.60, 1), isEnabled: true)
         garment?.update(color: RendererProceduralAssets.color(for: appearance.material), isEnabled: appearance.garmentVisible)
         updateTransforms(aspect: viewportAspect)
         view.setNeedsDisplay()
     }
-
     func replaceGarment(asset: RendererAssetDescriptor?) throws {
+
         guard !isDisposed else { throw RendererFailure.sceneCreationFailed }
+        guard !isSyntheticGeometryScene else { throw RendererFailure.unsupportedAsset }
         guard let asset else {
             clearGarment()
             garmentFailure = .missingAsset
@@ -185,9 +207,10 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
             throw garmentFailure!
         }
     }
-
     func installGarment(_ asset: RendererLoadedGarment) throws {
+
         guard !isDisposed else { throw RendererFailure.sceneCreationFailed }
+        guard !isSyntheticGeometryScene else { throw RendererFailure.unsupportedAsset }
         try asset.descriptor.validate()
         guard asset.descriptor.asset.type == .bundledMeshPackage,
               asset.descriptor.asset.role == .garment,
