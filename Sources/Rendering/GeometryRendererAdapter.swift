@@ -11,20 +11,28 @@ enum GeometryRendererAdapter {
               result.mesh.indices.count <= GeometryMesh.maximumIndices else {
             throw GeometryFailure.invalidMetadata
         }
+        return try rendererMesh(result.mesh)
+    }
 
-        let vertexBytes = result.mesh.vertices.count.multipliedReportingOverflow(by: MemoryLayout<RendererVertex>.stride)
-        let indexBytes = result.mesh.indices.count.multipliedReportingOverflow(by: MemoryLayout<UInt16>.stride)
+    static func mesh(from artifact: VerifiedSyntheticArtifact) throws -> RendererMesh {
+        try artifact.validate()
+        return try rendererMesh(artifact.mesh)
+    }
+
+    private static func rendererMesh(_ mesh: GeometryMesh) throws -> RendererMesh {
+        let vertexBytes = mesh.vertices.count.multipliedReportingOverflow(by: MemoryLayout<RendererVertex>.stride)
+        let indexBytes = mesh.indices.count.multipliedReportingOverflow(by: MemoryLayout<UInt16>.stride)
         guard !vertexBytes.overflow, !indexBytes.overflow,
               vertexBytes.partialValue <= GeometryMesh.maximumPayloadBytes,
               indexBytes.partialValue <= GeometryMesh.maximumPayloadBytes - vertexBytes.partialValue else {
             throw GeometryFailure.invalidMesh
         }
 
-        let vertices = result.mesh.vertices.map {
+        let vertices = mesh.vertices.map {
             RendererVertex(position: $0.position, normal: $0.normal)
         }
-        return RendererMesh(vertices: vertices, indices: result.mesh.indices,
-                            minimum: result.mesh.minimum, maximum: result.mesh.maximum)
+        return RendererMesh(vertices: vertices, indices: mesh.indices,
+                            minimum: mesh.minimum, maximum: mesh.maximum)
     }
 }
 #endif

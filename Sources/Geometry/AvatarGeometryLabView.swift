@@ -23,10 +23,15 @@ struct AvatarGeometryLabView: View {
                             .font(.headline)
                             .accessibilityIdentifier("geometry.selection")
                         if model.state == .ready {
-                            Text("Generated surface ready")
+                            Text(model.loadedArtifact == nil ? "Generated surface ready" : "Saved synthetic surface ready")
                                 .accessibilityIdentifier("geometry.ready")
+                            Text(model.loadedArtifact == nil
+                                 ? "Source: Generated in memory"
+                                 : "Source: Loaded from verified saved synthetic artifact")
+                                .accessibilityIdentifier(model.loadedArtifact == nil ? "geometry.generated" : "geometry.artifact.loaded")
                             rotationControls
                         }
+                        artifactControls
                         Text("Reviewed synthetic fixtures")
                             .font(.headline)
                             .accessibilityAddTraits(.isHeader)
@@ -88,7 +93,13 @@ struct AvatarGeometryLabView: View {
                             .font(.footnote)
                     case .suspended:
                         Text("Generation and rendering paused while inactive")
-                    case .idle, .processing, .ready:
+                    case .idle:
+                        Text("No synthetic surface is displayed. Generate a fixture or load a saved artifact.")
+                            .accessibilityIdentifier("geometry.empty")
+                    case .processing where model.artifactState == .loading:
+                        ProgressView("Loading saved synthetic artifact")
+                            .accessibilityIdentifier("geometry.artifact.loading")
+                    case .processing, .ready:
                         ProgressView("Generating synthetic surface")
                             .accessibilityIdentifier("geometry.processing")
                     }
@@ -100,6 +111,31 @@ struct AvatarGeometryLabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(uiColor: .secondarySystemBackground))
         }
+    }
+
+    private var artifactControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Local synthetic artifact")
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            Text(model.artifactStatus)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("geometry.artifact.status")
+                .accessibilityValue(model.artifactState.accessibilityValue)
+            Button("Save generated synthetic artifact") { model.saveArtifact() }
+                .disabled(!model.canSaveArtifact)
+                .accessibilityIdentifier("geometry.artifact.save")
+            Button("Load saved synthetic artifact") { model.loadArtifact() }
+                .disabled(!model.canUseArtifactControls)
+                .accessibilityIdentifier("geometry.artifact.load")
+            Button("Delete saved synthetic artifact") { model.deleteArtifact() }
+                .disabled(model.artifactState == .deleting || model.state == .suspended)
+                .accessibilityIdentifier("geometry.artifact.delete")
+            Text("Synthetic geometry only. Not a personal scan or verified avatar. Only reviewed synthetic fixtures are saved locally. Loading verifies the actual file before displaying it.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.bordered)
     }
 
     private var rotationControls: some View {

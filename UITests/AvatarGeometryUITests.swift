@@ -83,9 +83,145 @@ final class AvatarGeometryUITests: XCTestCase {
     }
 
     @MainActor
-    private func openLab(_ app: XCUIApplication, largeText: Bool = false) {
+    func testArtifactColdRelaunchLoadsSavedBIntoRealSceneThenDeletionStaysMissing() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        let namespace = UUID().uuidString.lowercased()
+        openLab(app, artifactNamespace: namespace)
+        let a = try rendered(app)
+        tap("geometry.artifact.save", app: app)
+        artifactState("saved", app: app)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Internal Development"].waitForExistence(timeout: 5))
+        app.terminate()
+        openLab(app, artifactNamespace: namespace)
+        tap("geometry.artifact.load", app: app)
+        artifactState("loaded", app: app)
+        try matches(app, reference: a)
+        XCTAssertEqual(app.descendants(matching: .any)["geometry.scene"].value as? String, "Disk-loaded Synthetic surface A")
+        tap("geometry.right", app: app)
+        try changed(app, from: a)
+        tap("geometry.reset-view", app: app)
+        try matches(app, reference: a)
+        capture(app, "S2B — A decoded from disk after exit and true process relaunch")
+        tap("geometry.fixture.surfaceB", app: app)
+        let b = try changed(app, from: a)
+        tap("geometry.artifact.save", app: app)
+        artifactState("saved", app: app)
+        capture(app, "S2B — actual synthetic B written to app-private artifact")
+        tap("geometry.fixture.surfaceA", app: app)
+        try matches(app, reference: a)
+        tap("geometry.artifact.load", app: app)
+        artifactState("loaded", app: app)
+        XCTAssertTrue(app.staticTexts["geometry.artifact.loaded"].exists)
+        try matches(app, reference: b)
+        tap("geometry.right", app: app)
+        try changed(app, from: b)
+        tap("geometry.reset-view", app: app)
+        try matches(app, reference: b)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        artifactState("loaded", app: app)
+        try matches(app, reference: b)
+
+        app.terminate()
+        openLab(app, artifactNamespace: namespace)
+        try matches(app, reference: a)
+        XCTAssertFalse(app.staticTexts["geometry.artifact.loaded"].exists)
+        tap("geometry.artifact.load", app: app)
+        artifactState("loaded", app: app)
+        try matches(app, reference: b)
+        let scene = app.descendants(matching: .any)["geometry.scene"]
+        XCTAssertEqual(scene.value as? String, "Disk-loaded Synthetic surface B")
+        capture(app, "S2B — B decoded from disk after true process relaunch and rendered")
+        tap("geometry.artifact.delete", app: app)
+        artifactState("deleted", app: app)
+        XCTAssertFalse(scene.exists)
+        app.terminate()
+        openLab(app, artifactNamespace: namespace)
+        tap("geometry.artifact.load", app: app)
+        artifactState("missing", app: app)
+        XCTAssertFalse(scene.exists)
+        XCTAssertFalse(app.staticTexts["geometry.artifact.loaded"].exists)
+        XCTAssertEqual(app.alerts.count, 0)
+        capture(app, "S2B — deleted artifact remains missing after cold relaunch")
+    }
+
+    @MainActor
+    func testArtifactCorruptionAndFutureVersionPreserveFailureUntilExplicitDelete() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        for seed in ["corrupt", "future"] {
+            app.terminate()
+            openLab(app, artifactNamespace: UUID().uuidString.lowercased(), artifactSeed: seed)
+            let a = try rendered(app)
+            tap("geometry.artifact.load", app: app)
+            artifactState("failed", app: app)
+            XCTAssertTrue(app.staticTexts["geometry.failure"].exists)
+            XCTAssertFalse(app.descendants(matching: .any)["geometry.scene"].exists)
+            XCTAssertFalse(app.staticTexts["geometry.artifact.loaded"].exists)
+            capture(app, "S2B — real \(seed) file rejected without stale surface")
+            tap("geometry.generate", app: app)
+            try matches(app, reference: a)
+            tap("geometry.artifact.save", app: app)
+            artifactState("failed", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["geometry.scene"].exists)
+            tap("geometry.artifact.delete", app: app)
+            artifactState("deleted", app: app)
+            tap("geometry.generate", app: app)
+            _ = try rendered(app)
+            tap("geometry.artifact.save", app: app)
+            artifactState("saved", app: app)
+            tap("geometry.artifact.load", app: app)
+            artifactState("loaded", app: app)
+            try matches(app, reference: a)
+            tap("geometry.artifact.delete", app: app)
+            artifactState("deleted", app: app)
+        }
+    }
+
+    @MainActor
+    func testArtifactControlsRemainUsableAtLargestAccessibilitySize() throws {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        openLab(app, largeText: true, artifactNamespace: UUID().uuidString.lowercased())
+        let a = try rendered(app)
+        tap("geometry.artifact.save", app: app)
+        artifactState("saved", app: app)
+        tap("geometry.artifact.load", app: app)
+        artifactState("loaded", app: app)
+        try matches(app, reference: a)
+        tap("geometry.right", app: app)
+        try changed(app, from: a)
+        tap("geometry.reset-view", app: app)
+        try matches(app, reference: a)
+        capture(app, "S2B — largest accessibility text with actual disk-loaded synthetic mesh")
+        tap("geometry.artifact.delete", app: app)
+        artifactState("deleted", app: app)
+        tap("geometry.artifact.load", app: app)
+        artifactState("missing", app: app)
+        XCTAssertFalse(app.descendants(matching: .any)["geometry.scene"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Internal Development"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func artifactState(_ value: String, app: XCUIApplication) {
+        let status = app.staticTexts["geometry.artifact.status"]
+        let expected = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            status.exists && status.value as? String == value
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [expected], timeout: 10), .completed,
+                       "Real artifact operation must finish in the requested state")
+    }
+
+    @MainActor
+    private func openLab(_ app: XCUIApplication, largeText: Bool = false,
+                         artifactNamespace: String? = nil, artifactSeed: String? = nil) {
         app.launchArguments = ["-fitcheck-integrated-internal", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
+        if let artifactNamespace { app.launchArguments += ["-fitcheck-synthetic-artifact-test-namespace", artifactNamespace] }
+        if let artifactSeed { app.launchArguments += ["-fitcheck-synthetic-artifact-test-seed", artifactSeed] }
         app.launch()
         tap("internal.open-geometry", app: app)
         XCTAssertTrue(app.navigationBars["Avatar Geometry Lab"].waitForExistence(timeout: 8))
@@ -216,6 +352,23 @@ final class AvatarGeometryUITests: XCTestCase {
             XCTAssertFalse(app.buttons["internal.open-geometry"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["geometry.scene"].exists)
             XCTAssertFalse(app.buttons["geometry.fixture.surfaceA"].exists)
+        }
+    }
+
+    func testArtifactPersistenceIsAbsentFromProductionLaunches() {
+        let app = XCUIApplication()
+        defer { app.terminate() }
+        for flag in ["-fitcheck-integrated-internal", "-fitcheck-geometry-internal"] {
+            app.terminate()
+            app.launchArguments = [flag, "-fitcheck-synthetic-artifact-test-namespace", UUID().uuidString,
+                                   "-fitcheck-synthetic-artifact-test-seed", "corrupt"]
+            app.launch()
+            XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["geometry.artifact.save"].exists)
+            XCTAssertFalse(app.buttons["geometry.artifact.load"].exists)
+            XCTAssertFalse(app.buttons["geometry.artifact.delete"].exists)
+            XCTAssertFalse(app.staticTexts["geometry.artifact.loaded"].exists)
+            XCTAssertFalse(app.descendants(matching: .any)["geometry.scene"].exists)
         }
     }
     #endif

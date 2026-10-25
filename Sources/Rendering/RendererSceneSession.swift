@@ -95,6 +95,13 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
                       generatedMesh: mesh)
     }
 
+    /// Uses the admitted disk-decoded arrays; it cannot mint GeometryResult authority.
+    convenience init(artifact: VerifiedSyntheticArtifact) throws {
+        let mesh = try GeometryRendererAdapter.mesh(from: artifact)
+        try self.init(configuration: .standard, mannequinAsset: .mannequinFixture, garmentAsset: nil,
+                      generatedMesh: mesh)
+    }
+
     private init(configuration: RendererSceneConfiguration, mannequinAsset: RendererAssetDescriptor,
                  garmentAsset: RendererAssetDescriptor?, generatedMesh: RendererMesh?) throws {
         try configuration.validate()

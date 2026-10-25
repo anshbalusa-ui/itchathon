@@ -37,6 +37,10 @@ MARKERS = (
     "GeometryKernel", "GeometryResult", "GeometryRendererAdapter", "GeometryViewport",
     "GeometryFixtureID", "internal.open-geometry", "geometry.scene",
     "Synthetic surface A", "Synthetic surface B",
+    "SyntheticArtifactCodec", "SyntheticArtifactRepository", "VerifiedSyntheticArtifact",
+    "SyntheticArtifactLabStorage", "FitCheckSyntheticGeometryS2B", "reviewed-synthetic.geometry-artifact",
+    "geometry.artifact.save", "geometry.artifact.load", "geometry.artifact.delete", "geometry.artifact.loaded",
+    "-fitcheck-synthetic-artifact-test-namespace", "-fitcheck-synthetic-artifact-test-seed",
 )
 RELEASE_SELECTORS = (
     "FitCheckTests/AvatarFeatureIsolationTests",
@@ -49,6 +53,7 @@ RELEASE_SELECTORS = (
     "FitCheckUITests/IntegrationUITests/testInternalRouteFlagsRemainLegacyInRelease",
     "FitCheckUITests/RendererUITests/testRendererLabRemainsUnavailableFromProductionLaunches",
     "FitCheckUITests/AvatarGeometryUITests/testGeometryLabIsAbsentFromProductionLaunches",
+    "FitCheckUITests/AvatarGeometryUITests/testArtifactPersistenceIsAbsentFromProductionLaunches",
 )
 MACHO_MAGICS = {bytes.fromhex(value) for value in (
     "cffaedfe", "cefaedfe", "feedfacf", "feedface", "cafebabe", "bebafeca", "cafebabf", "bfbafeca",
@@ -100,6 +105,11 @@ def inspect_bundles(derived):
         require(manifest.get("NSPrivacyTracking") is False, f"Tracking declaration changed: {app}")
         require(manifest.get("NSPrivacyCollectedDataTypes") == [], f"Collection declaration changed: {app}")
         bundle = {"path": str(app), "privacy": manifest}
+        artifacts = [str(path.relative_to(app)) for path in app.rglob("*")
+                     if path.suffix.lower() in (".geometry-artifact", ".stage")
+                     or path.name == ".repository.lock" or path.name.startswith("FitCheckSyntheticGeometryS2B")]
+        require(not artifacts, f"Runtime synthetic storage was packaged into {name}: {artifacts}")
+        bundle["syntheticArtifactResources"] = artifacts
         if name in ("debug", "iPhone"):
             bundle["assetSHA256"] = development_asset(app)
         else:
