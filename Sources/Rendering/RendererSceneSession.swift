@@ -102,6 +102,12 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
                       generatedMesh: mesh)
     }
 
+    convenience init(replay: ReplayGeometryResult) throws {
+        let mesh = try GeometryRendererAdapter.mesh(from: replay)
+        try self.init(configuration: .standard, mannequinAsset: .mannequinFixture, garmentAsset: nil,
+                      generatedMesh: mesh)
+    }
+
     private init(configuration: RendererSceneConfiguration, mannequinAsset: RendererAssetDescriptor,
                  garmentAsset: RendererAssetDescriptor?, generatedMesh: RendererMesh?) throws {
         try configuration.validate()
