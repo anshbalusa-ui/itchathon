@@ -18,7 +18,7 @@ struct GeometryViewport: UIViewRepresentable {
         context.coordinator.panGesture = pan
         view.isAccessibilityElement = true
         view.accessibilityIdentifier = "geometry.scene"
-        view.accessibilityLabel = "Generated synthetic surface, interactive 3D scene"
+        view.accessibilityLabel = "Synthetic surface, interactive 3D scene"
         view.accessibilityHint = "Drag to rotate or use the rotation buttons. Not reconstructed from a person."
         view.accessibilityTraits = .image
         return view
@@ -26,7 +26,9 @@ struct GeometryViewport: UIViewRepresentable {
 
     func updateUIView(_ view: MTKView, context: Context) {
         context.coordinator.model = model
-        view.accessibilityValue = model.selected.title
+        view.accessibilityValue = model.loadedArtifact == nil
+            ? "Generated \(model.selected.title)"
+            : "Disk-loaded \(model.selected.title)"
     }
 
     static func dismantleUIView(_ view: MTKView, coordinator: Coordinator) {
