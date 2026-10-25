@@ -9,7 +9,7 @@ Segment I0 combines the repaired #8 → #9 → #10 foundation/scanner with #11's
 | None | Preserved legacy home |
 | `-fitcheck-avatar-internal` | Avatar metadata onboarding → guided scanner |
 | `-fitcheck-catalog-internal` | Independent offline catalog |
-| `-fitcheck-integrated-internal` | Internal hub: avatar/scanner, catalog, **3D Renderer Lab** and **Avatar Geometry Lab** |
+| `-fitcheck-integrated-internal` | Internal hub: avatar/scanner, catalog, **3D Renderer Lab**, **Avatar Geometry Lab** and **LiDAR Reconstruction Lab — Synthetic Replay** |
 
 Conflicting internal flags fail closed to legacy home; Release ignores every internal route. No body setup, completed-avatar claim, try-on, fit estimate, purchase or live retailer data is introduced.
 
@@ -28,6 +28,8 @@ Segment I1 reviews the accumulated stack, repairs nonrecursive profile cleanup a
 Segment S2A adds **Avatar Geometry Lab** to the Debug hub. Its bounded deterministic kernel generates an open 3D surface from reviewed synthetic front/side section extents and displays the actual new mesh through the existing Metal renderer. Select synthetic A/B to change geometry, rotate/reset, and exercise missing/invalid/unverified-source rejection with no stale surface. No camera, customer profile, saved avatar, physical measurements or fit inference is involved. Scanner candidates remain unauthorized; normal Release excludes the lab and engine. See the [S2A geometry contract, ownership, verification and limitations](Docs/AVATAR_GEOMETRY_S2A_HANDOFF.md).
 
 Segment S2B adds real **Save generated synthetic artifact / Load saved synthetic artifact / Delete saved synthetic artifact** controls inside that lab. The protected, backup-excluded, versioned file contains actual mesh data in its own Application Support namespace. A cold load must pass bounded decoding, integrity, compatibility and exact approved-fixture admission before its decoded arrays reach Metal. Generated and disk-loaded sources are labelled separately; corrupt/unsupported files remain intact until explicit deletion. **Synthetic geometry only. Not a personal scan or verified avatar.** See the [S2B storage, lifecycle, verification and threat-boundary handoff](Docs/AVATAR_ARTIFACT_S2B_HANDOFF.md).
+
+Segment S2C adds **LiDAR Reconstruction Lab — Synthetic Replay**, separate from scanning and saved A/B artifacts. First-party ray-cast depth, confidence and mask rasters pass explicit calibration/pose validation, pinhole unprojection, world mapping, independent front/side section fits and angular coverage admission before a new partial surface reaches the existing Metal renderer. Select simulated A/B, rotate/reset, or exercise real missing-depth, calibration, conflicting-view and coverage rejection. Unsupported angular regions remain open; replay results are transient and cannot be saved as approved S2B artifacts or personal avatars. **Synthetic LiDAR replay. No real person scanned. Geometry accuracy on physical hardware is unverified.** See the [S2C mathematics, provenance, numerical/rendering evidence and scanner integration gaps](Docs/LIDAR_SPATIAL_RECONSTRUCTION_S2C_HANDOFF.md).
 
 **Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
 
