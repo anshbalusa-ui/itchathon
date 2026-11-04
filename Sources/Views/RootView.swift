@@ -12,6 +12,8 @@ struct RootView: View {
             NavigationStack { CatalogRootView() }
         case .integrated:
             NavigationStack { InternalDevelopmentHub() }
+        case .demo:
+            NavigationStack { FridayDemoShowcase() }
         }
         #else
         LegacyHomeRoot()

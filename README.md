@@ -1,5 +1,19 @@
 # FitCheck iOS
 
+## Friday Demo Showcase (Debug only)
+
+From the repository root on a Mac with Xcode, an installed iPhone simulator, XcodeGen and Python 3:
+
+```bash
+Scripts/launch_friday_demo.sh
+```
+
+The helper builds unsigned Debug, boots an available iPhone simulator without erasing data, installs FitCheck and launches `-fitcheck-demo-internal`. Use `--simulator UDID` to select a device or `--app /absolute/path/to/Debug-iphonesimulator/FitCheck.app` to reuse a build. Release and device bundles are rejected. The existing internal development hub also offers **FitCheck Demo Showcase**.
+
+Start with the live rotatable mannequin, use Left / Right / Reset or drag, toggle the garment, then scroll through the **Sample collection**. Approved samples are **Everyday Tee / Navy**, **Weekend Tee / Sage** and **Geometric Vest Concept / Navy**, each with **S/M labels**. Both sizes use identical geometry. Open **3D Avatar** for two authored synthetic surfaces, or **LiDAR Reconstruction Demo** for two real synthetic depth-to-surface reconstructions; Back returns to the clothing showcase.
+
+Everything is fictional and camera-free. The mannequin is not a measured person; no verified fit, physical drape or real-device LiDAR accuracy is represented. Normal Release remains the legacy app. See [D1 handoff, visual evidence, verification and meeting fallback](Docs/FRIDAY_DEMO_D1_HANDOFF.md).
+
 ## Internal integrated development app
 
 Segment I0 combines the repaired #8 → #9 → #10 foundation/scanner with #11's synthetic offline catalog. Use a **Debug** build and exactly one launch argument (Xcode scheme → Run → Arguments):

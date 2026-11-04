@@ -15,6 +15,15 @@ struct InternalDevelopmentHub: View {
                     .foregroundStyle(.secondary)
 
                 NavigationLink {
+                    FridayDemoShowcase()
+                } label: {
+                    Label("FitCheck Demo Showcase", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("internal.open-demo")
+
+                NavigationLink {
                     AvatarPilotRootView()
                 } label: {
                     Label("Avatar foundation and scanner", systemImage: "camera.viewfinder")

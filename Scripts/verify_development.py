@@ -45,8 +45,17 @@ MARKERS = (
     "ReviewedSyntheticReplay", "ReplayCameraMath", "ReplaySpatialMapper",
     "ReplayReconstructionEngine", "ReplayGeometryResult", "SyntheticReplayReconstructor",
     "internal.open-replay", "replay.scene", "Simulated column A", "Simulated column B",
+    "FridayDemoShowcase", "FridayDemoSelection", "FridayAvatarDemoView", "FridayReplayDemoView",
+    "-fitcheck-demo-internal",
+    "demo.showcase", "demo.scene", "demo.left", "demo.right", "demo.reset", "demo.garment-visible",
+    "demo.product.", "demo.size.", "demo.product-context", "demo.open-avatar", "demo.open-replay",
+    "demo.avatar.scene", "demo.avatar.shape-a", "demo.avatar.shape-b",
+    "demo.avatar.left", "demo.avatar.right", "demo.avatar.reset", "demo.avatar.retry",
+    "demo.replay.scene", "demo.replay.shape-a", "demo.replay.shape-b",
+    "demo.replay.left", "demo.replay.right", "demo.replay.reset", "demo.replay.retry",
 )
 RELEASE_SELECTORS = (
+    "FitCheckUITests/FridayDemoUITests/testDemoRemainsExcludedFromRelease",
     "FitCheckTests/AvatarFeatureIsolationTests",
     "FitCheckTests/CatalogIsolationTests",
     "FitCheckTests/InternalDevelopmentRouteTests",

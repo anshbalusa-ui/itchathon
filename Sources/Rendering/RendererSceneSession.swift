@@ -78,6 +78,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     private let isSyntheticGeometryScene: Bool
     private var cachedGarment: RendererRenderObject?
     private let configuration: RendererSceneConfiguration
+    private let fittedSurfaceRadius: Float?
     private var orbit = RendererOrbit.initial
     private var appearance = RendererAppearance()
     private var isProceduralGarmentCached = false
@@ -89,10 +90,10 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
                       generatedMesh: nil)
     }
 
-    convenience init(geometry: GeometryResult) throws {
+    convenience init(geometry: GeometryResult, fitSurface: Bool = false) throws {
         let mesh = try GeometryRendererAdapter.mesh(from: geometry)
         try self.init(configuration: .standard, mannequinAsset: .mannequinFixture, garmentAsset: nil,
-                      generatedMesh: mesh)
+                      generatedMesh: mesh, fitSurface: fitSurface)
     }
 
     /// Uses the admitted disk-decoded arrays; it cannot mint GeometryResult authority.
@@ -102,16 +103,29 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
                       generatedMesh: mesh)
     }
 
-    convenience init(replay: ReplayGeometryResult) throws {
+    convenience init(replay: ReplayGeometryResult, fitSurface: Bool = false) throws {
         let mesh = try GeometryRendererAdapter.mesh(from: replay)
         try self.init(configuration: .standard, mannequinAsset: .mannequinFixture, garmentAsset: nil,
-                      generatedMesh: mesh)
+                      generatedMesh: mesh, fitSurface: fitSurface)
     }
 
     private init(configuration: RendererSceneConfiguration, mannequinAsset: RendererAssetDescriptor,
-                 garmentAsset: RendererAssetDescriptor?, generatedMesh: RendererMesh?) throws {
+                 garmentAsset: RendererAssetDescriptor?, generatedMesh: RendererMesh?, fitSurface: Bool = false) throws {
         try configuration.validate()
         if generatedMesh == nil { try mannequinAsset.validate(for: .mannequin) }
+        if fitSurface {
+            guard let generatedMesh else { throw RendererFailure.invalidConfiguration }
+            // Frame only admitted geometry. The orbit pivot and exact CPU/GPU
+            // vertices stay unchanged; this sphere contains every allowed rotation.
+            let pivot = SIMD3<Float>(0, configuration.targetHeight, 0)
+            let extent = simd_max(simd_abs(generatedMesh.minimum - pivot),
+                                  simd_abs(generatedMesh.maximum - pivot))
+            let radius = simd_length(extent)
+            guard radius.isFinite, radius > 0 else { throw RendererFailure.invalidConfiguration }
+            fittedSurfaceRadius = radius
+        } else {
+            fittedSurfaceRadius = nil
+        }
         guard let device = MTLCreateSystemDefaultDevice() else { throw RendererFailure.graphicsUnavailable }
         guard let queue = device.makeCommandQueue() else { throw RendererFailure.graphicsUnavailable }
         let view = MTKView(frame: .zero, device: device)
@@ -328,9 +342,12 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         let safeAspect = aspect.isFinite && aspect > 0 ? max(0.01, min(aspect, 100)) : 1
         let halfVertical = configuration.verticalFieldOfView * .pi / 360
         let largestVerticalExtent = max(configuration.targetHeight, 1.8 - configuration.targetHeight)
-        let radius = sqrt(largestVerticalExtent * largestVerticalExtent + 0.4 * 0.4)
+        let radius = fittedSurfaceRadius ?? sqrt(largestVerticalExtent * largestVerticalExtent + 0.4 * 0.4)
         let horizontalHalf = atan(tan(halfVertical) * min(safeAspect, 1))
-        let distance = max(configuration.cameraDistance, radius / sin(horizontalHalf) * 1.02)
+        let framedDistance = radius / sin(horizontalHalf) * (fittedSurfaceRadius == nil ? 1.02 : 1.08)
+        let distance = fittedSurfaceRadius == nil
+            ? max(configuration.cameraDistance, framedDistance)
+            : max(framedDistance, radius + configuration.nearClip * 2)
         camera.position = SIMD3<Float>(0, configuration.targetHeight, distance)
         camera.farClip = max(configuration.farClip, distance + radius + 0.1)
         viewProjection = projection(verticalFOV: configuration.verticalFieldOfView, aspect: safeAspect,

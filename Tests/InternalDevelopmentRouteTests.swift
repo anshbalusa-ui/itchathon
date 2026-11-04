@@ -25,7 +25,7 @@ final class InternalDevelopmentRouteTests: XCTestCase {
     }
 
     func testDistinctConflictingRoutesFailClosedRegardlessOfOrder() {
-        let flags = ["-fitcheck-avatar-internal", "-fitcheck-catalog-internal", "-fitcheck-integrated-internal"]
+        let flags = ["-fitcheck-avatar-internal", "-fitcheck-catalog-internal", "-fitcheck-integrated-internal", "-fitcheck-demo-internal"]
         for first in flags {
             for second in flags where first != second {
                 XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: [first, second]), .legacy)
@@ -48,5 +48,17 @@ final class InternalDevelopmentRouteTests: XCTestCase {
             XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: [flag, flag]), .legacy)
             #endif
         }
+    }
+
+    func testDemoRequiresExactDebugOptInAndConflictsFailClosed() {
+        for argument in ["fitcheck-demo-internal", "-fitcheck-demo-internal=true", "-FITCHECK-DEMO-INTERNAL"] {
+            XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: [argument]), .legacy)
+        }
+        #if DEBUG
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["FitCheck", "-fitcheck-demo-internal"]), .demo)
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["-fitcheck-demo-internal", "-fitcheck-demo-internal"]), .demo)
+        #else
+        XCTAssertEqual(InternalDevelopmentRoute.resolve(arguments: ["FitCheck", "-fitcheck-demo-internal"]), .legacy)
+        #endif
     }
 }

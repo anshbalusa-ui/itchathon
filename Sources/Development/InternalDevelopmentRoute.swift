@@ -6,6 +6,9 @@ enum InternalDevelopmentRoute: Equatable {
     case avatar
     case catalog
     case integrated
+    #if DEBUG
+    case demo
+    #endif
 
     static var current: Self { resolve(arguments: ProcessInfo.processInfo.arguments) }
 
@@ -18,6 +21,7 @@ enum InternalDevelopmentRoute: Equatable {
             case "-fitcheck-avatar-internal": candidate = .avatar
             case "-fitcheck-catalog-internal": candidate = .catalog
             case "-fitcheck-integrated-internal": candidate = .integrated
+            case "-fitcheck-demo-internal": candidate = .demo
             default: continue
             }
             guard selected == .legacy || selected == candidate else { return .legacy }

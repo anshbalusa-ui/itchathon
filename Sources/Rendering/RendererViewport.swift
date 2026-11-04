@@ -6,6 +6,7 @@ import UIKit
 struct RendererViewport: UIViewRepresentable {
     let session: RendererSceneSession
     @ObservedObject var model: RendererLabModel
+    var sceneIdentifier = "renderer.scene"
 
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
@@ -16,7 +17,7 @@ struct RendererViewport: UIViewRepresentable {
         view.addGestureRecognizer(pan)
         context.coordinator.panGesture = pan
         view.isAccessibilityElement = true
-        view.accessibilityIdentifier = "renderer.scene"
+        view.accessibilityIdentifier = sceneIdentifier
         view.accessibilityLabel = "Generic mannequin, interactive 3D scene"
         view.accessibilityHint = "Drag to rotate, or use the rotation buttons below. Not a personal avatar."
         view.accessibilityTraits = .image
