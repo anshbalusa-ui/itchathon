@@ -1,0 +1,10 @@
+CC0 1.0 Universal
+
+The MakeHuman base mesh is released under CC0 1.0 Universal, as stated by the MakeHuman project. See its asset-license statement in NOTICE.txt.
+
+FitCheck dedicates the converted body geometry, the original authored shirt, vest, shorts and converter to the public domain under CC0 1.0 Universal.
+
+Canonical CC0 1.0 Universal legal code: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+MakeHuman asset license (including the CC0 dedication and full legal text): https://github.com/makehumancommunity/makehuman/blob/master/LICENSE.ASSETS.md
+
+MakeHuman’s software/code is licensed separately under AGPL and is not included or used by this asset pipeline.

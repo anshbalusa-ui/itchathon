@@ -4,6 +4,9 @@ options:
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
+fileGroups:
+  - DevelopmentAssets
+
 
 settings:
   base:
@@ -19,6 +22,36 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+    postBuildScripts:
+      - name: Stage internal mesh only in Debug
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
+        inputFiles:
+          - $(SRCROOT)/DevelopmentAssets/FitCheckGeometricVest.fitmesh
+          - $(SRCROOT)/DevelopmentAssets/HumanShowcase/human-showcase-v1.bin
+          - $(SRCROOT)/DevelopmentAssets/HumanShowcase/LICENSE.txt
+          - $(SRCROOT)/DevelopmentAssets/HumanShowcase/NOTICE.txt
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FitCheckDevelopmentAssets
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/HumanShowcase
+        script: |
+          set -eu
+          destination="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+          legacy="${destination}/FitCheckDevelopmentAssets"
+          showcase="${destination}/HumanShowcase"
+          if [ "${CONFIGURATION}" = "Debug" ]; then
+            /bin/mkdir -p "${legacy}"
+            /bin/cp -f "${SRCROOT}/DevelopmentAssets/FitCheckGeometricVest.fitmesh" "${legacy}/FitCheckGeometricVest.fitmesh"
+            /bin/rm -rf "${showcase}"
+            /bin/cp -R "${SRCROOT}/DevelopmentAssets/HumanShowcase" "${showcase}"
+          else
+            # Remove only this build phase's own generated resources, never unrelated resources.
+            /bin/rm -f "${legacy}/FitCheckGeometricVest.fitmesh"
+            if [ -d "${legacy}" ]; then
+              /bin/rmdir "${legacy}"
+            fi
+            /bin/rm -rf "${showcase}"
+          fi
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

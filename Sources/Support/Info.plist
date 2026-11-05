@@ -11,7 +11,7 @@
 <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
 <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
 <key>LSRequiresIPhoneOS</key><true/>
-<key>NSCameraUsageDescription</key><string>FitCheck uses the camera and depth sensors to measure clothing and help create your measurement profile.</string>
+<key>NSCameraUsageDescription</key><string>FitCheck uses the camera and depth sensors for guided body capture and clothing tools. Camera views are processed on your iPhone.</string>
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
 </dict>

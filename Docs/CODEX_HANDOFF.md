@@ -1,6 +1,12 @@
 # FitCheck handoff
 
-## Current state
+## Current team entry
+
+Start with the repository README and [current human-demo handoff](FRIDAY_DEMO_D1_HANDOFF.md). [PR #24](https://github.com/anshbalusa-ui/itchathon/pull/24) consolidates the development stack and anatomical human showcase onto shared `main`; new work should branch from updated `main`, not restart archived kickoff prompts.
+
+The camera-free human/clothing showcase, synthetic surface studies and synthetic LiDAR reconstruction are Debug-only. Normal Release retains the legacy app. The generic human and authored spacing map are not a personal scan or validated garment fit; physical-device LiDAR validation remains pending.
+
+## Legacy prototype state — historical, October 2026
 
 - GitHub `main` is the canonical SwiftUI/XcodeGen source; generate the ignored Xcode project from `project.yml`.
 - Guided front/side scene-depth scan measures waist width/depth and returns an editable partial body draft with estimated waist circumference, shoulder width, and torso length. It does not measure chest circumference; manually measure and enter chest circumference before saving the body profile. Depth sensing remains required for 3D spans; a single width does not establish circumference.
