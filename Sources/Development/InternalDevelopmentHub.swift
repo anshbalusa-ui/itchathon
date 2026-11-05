@@ -50,6 +50,15 @@ struct InternalDevelopmentHub: View {
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("internal.open-geometry")
 
+                NavigationLink {
+                    SpatialReplayLabView()
+                } label: {
+                    Label("LiDAR Reconstruction Lab — Synthetic Replay", systemImage: "viewfinder")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("internal.open-replay")
+
                 Text("Catalog browsing needs no avatar or body information. Products, prices and availability are fictional fixtures, not retailer offers.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

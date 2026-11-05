@@ -19,6 +19,11 @@ enum GeometryRendererAdapter {
         return try rendererMesh(artifact.mesh)
     }
 
+    static func mesh(from replay: ReplayGeometryResult) throws -> RendererMesh {
+        try replay.validate()
+        return try rendererMesh(replay.mesh)
+    }
+
     private static func rendererMesh(_ mesh: GeometryMesh) throws -> RendererMesh {
         let vertexBytes = mesh.vertices.count.multipliedReportingOverflow(by: MemoryLayout<RendererVertex>.stride)
         let indexBytes = mesh.indices.count.multipliedReportingOverflow(by: MemoryLayout<UInt16>.stride)

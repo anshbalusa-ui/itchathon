@@ -235,63 +235,8 @@ enum GeometryKernel {
         let sections = input.sections
         // Every ring is an authored synthetic section. Only the lateral surface
         // between adjacent rings is interpolated. No caps or unknown regions.
-        let radial = input.radialSegments
-        var vertices: [GeometryVertex] = []
-        var indices: [UInt16] = []
-        vertices.reserveCapacity(sections.count * radial)
-        indices.reserveCapacity((sections.count - 1) * radial * 6)
-        for section in sections {
-            try checkCancellation(cancellationCheck)
-            for segment in 0..<radial {
-                let theta = 2 * Float.pi * Float(segment) / Float(radial)
-                vertices.append(GeometryVertex(
-                    position: SIMD3<Float>(section.halfWidthMetres * cos(theta), section.heightMetres,
-                                           section.halfDepthMetres * sin(theta)),
-                    normal: .zero
-                ))
-            }
-        }
-        for ring in 0..<(sections.count - 1) {
-            try checkCancellation(cancellationCheck)
-            for segment in 0..<radial {
-                let next = (segment + 1) % radial
-                let lower = ring * radial
-                let upper = lower + radial
-                indices.append(UInt16(lower + segment))
-                indices.append(UInt16(upper + segment))
-                indices.append(UInt16(lower + next))
-                indices.append(UInt16(upper + segment))
-                indices.append(UInt16(upper + next))
-                indices.append(UInt16(lower + next))
-            }
-        }
-        // Area-weighted smooth normals include the changing section slope.
-        // Accumulate directly into output vertices: no second full mesh allocation.
-        for offset in stride(from: 0, to: indices.count, by: 3) {
-            let a = Int(indices[offset]), b = Int(indices[offset + 1]), c = Int(indices[offset + 2])
-            let ab = vertices[b].position - vertices[a].position
-            let ac = vertices[c].position - vertices[a].position
-            let normal = cross(ab, ac)
-            guard length(normal) > 1e-8 else { throw GeometryFailure.invalidMesh }
-            vertices[a].normal += normal
-            vertices[b].normal += normal
-            vertices[c].normal += normal
-        }
-        for index in vertices.indices {
-            let magnitude = length(vertices[index].normal)
-            guard magnitude.isFinite, magnitude > 0 else { throw GeometryFailure.invalidMesh }
-            vertices[index].normal /= magnitude
-        }
-        // Exact bounds come only from emitted, observed section rings.
-        var minimum = SIMD3<Float>(repeating: .infinity)
-        var maximum = SIMD3<Float>(repeating: -.infinity)
-        for vertex in vertices {
-            minimum = SIMD3<Float>(min(minimum.x, vertex.position.x), min(minimum.y, vertex.position.y), min(minimum.z, vertex.position.z))
-            maximum = SIMD3<Float>(max(maximum.x, vertex.position.x), max(maximum.y, vertex.position.y), max(maximum.z, vertex.position.z))
-        }
-        let mesh = GeometryMesh(vertices: vertices, indices: indices, minimum: minimum, maximum: maximum)
-        try mesh.validate()
-        try checkCancellation(cancellationCheck)
+        let mesh = try GeometrySectionLoft.generate(sections: sections, radialSegments: input.radialSegments,
+                                                    cancellationCheck: cancellationCheck)
         return GeometryResult(
             mesh: mesh, fixture: fixture, schemaVersion: 1, algorithm: .openEllipticalLoftV1,
             provenance: .reviewedSyntheticFixture,

@@ -41,6 +41,10 @@ MARKERS = (
     "SyntheticArtifactLabStorage", "FitCheckSyntheticGeometryS2B", "reviewed-synthetic.geometry-artifact",
     "geometry.artifact.save", "geometry.artifact.load", "geometry.artifact.delete", "geometry.artifact.loaded",
     "-fitcheck-synthetic-artifact-test-namespace", "-fitcheck-synthetic-artifact-test-seed",
+    "SpatialReplayLabView", "SpatialReplayLabModel", "SyntheticDepthReplayFactory",
+    "ReviewedSyntheticReplay", "ReplayCameraMath", "ReplaySpatialMapper",
+    "ReplayReconstructionEngine", "ReplayGeometryResult", "SyntheticReplayReconstructor",
+    "internal.open-replay", "replay.scene", "Simulated column A", "Simulated column B",
 )
 RELEASE_SELECTORS = (
     "FitCheckTests/AvatarFeatureIsolationTests",
@@ -54,6 +58,7 @@ RELEASE_SELECTORS = (
     "FitCheckUITests/RendererUITests/testRendererLabRemainsUnavailableFromProductionLaunches",
     "FitCheckUITests/AvatarGeometryUITests/testGeometryLabIsAbsentFromProductionLaunches",
     "FitCheckUITests/AvatarGeometryUITests/testArtifactPersistenceIsAbsentFromProductionLaunches",
+    "FitCheckUITests/SpatialReplayUITests/testSyntheticReplayIsAbsentFromEveryProductionLaunch",
 )
 MACHO_MAGICS = {bytes.fromhex(value) for value in (
     "cffaedfe", "cefaedfe", "feedfacf", "feedface", "cafebabe", "bebafeca", "cafebabf", "bfbafeca",
@@ -110,6 +115,11 @@ def inspect_bundles(derived):
                      or path.name == ".repository.lock" or path.name.startswith("FitCheckSyntheticGeometryS2B")]
         require(not artifacts, f"Runtime synthetic storage was packaged into {name}: {artifacts}")
         bundle["syntheticArtifactResources"] = artifacts
+        replay_resources = [str(path.relative_to(app)) for path in app.rglob("*")
+                            if path.suffix.lower() in (".lidarreplay", ".depth-replay")
+                            or path.name == "SpatialReplayFixtures"]
+        require(not replay_resources, f"Synthetic replay resources packaged into {name}: {replay_resources}")
+        bundle["syntheticReplayResources"] = replay_resources
         if name in ("debug", "iPhone"):
             bundle["assetSHA256"] = development_asset(app)
         else:
