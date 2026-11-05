@@ -1,5 +1,17 @@
 # FitCheck iOS
 
+## Shared `main` for team development
+
+The complete development stack and anatomical human demo are consolidated by [PR #24](https://github.com/anshbalusa-ui/itchathon/pull/24). Start new work from `main`, not an old stacked feature branch:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c feature/teammate-work
+```
+
+For a new checkout, clone `https://github.com/anshbalusa-ui/itchathon.git` and enter the repository first. Preserve any existing local work before switching branches. Use the Debug demo below; normal Release still opens the legacy application. Archived planning/kickoff documents are historical, not instructions to restart completed segments.
+
 ## Friday Demo Showcase (Debug only)
 
 From the repository root on a Mac with Xcode, an installed iPhone simulator, XcodeGen and Python 3:

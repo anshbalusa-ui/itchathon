@@ -2,6 +2,21 @@
 
 The D1 baseline below is retained as historical verification and media evidence. The **requested human-avatar refinement** at the end supersedes its blocky showcase artwork, clothing meshes and “3D Avatar” link title. Use the current branch's launch helper; its prebuilt-app checks intentionally reject old D1 bundles without the human assets.
 
+## Owner-authorized team integration — PR #24
+
+The owner's later explicit request to push and merge all work supersedes this document's earlier draft-only/no-merge publication restrictions. Those earlier branch, draft-PR and “not merged” statements are retained as historical segment records, not current instructions. Scanner, privacy, authorization and Release boundaries remain unchanged.
+
+- Verified human-demo source baseline: `3c84360a3890d7fccd85ab947cb0e83e4c1fe831`.
+- Consolidation branch: `integration/team-main-20261105`.
+- Shared destination and review: `main`, [PR #24](https://github.com/anshbalusa-ui/itchathon/pull/24). Its merge record supplies the final shared commit.
+- All original open PR heads are included: **#1 and #5–#23**. PR #20 was merged through its original S2B base at `45b68f31db9a97ac07ca10656c0bc365c771ede2` because #21 has the same S2C head and already targets `main`; that resulting #19 head is also included.
+- Independent #1/#6 authored plans and #5 experiment notes are retained with prominent historical/proposal labels. Their older README/handoff replacements, ungated scanner entry and superseded scanner implementation do not replace the current tested behavior.
+- #11's catalog is already included through `f346176` and later I0/R1–R3 integration. Its original ancestry is now included without reverting the corrected independent routes, privacy declaration or renderer integration.
+
+The complete build/test input SHA-256 remains `1f0a67740ffe3757de897d98348694f8d550b7e1c9a32beb7ab5483eca69a649`: app sources, tests, development assets, `project.yml` and the verifier are byte-identical to the final D2 input set. That exact set passed **367/367 Debug**, **17/17 Release isolation**, unsigned iPhone SDK compilation, normal Release and resource/privacy inspection. This integration does not relabel those retained full-suite results as a new full-suite run.
+
+Integration-specific ancestry, source-fingerprint and fresh simulator-smoke evidence is retained outside Git at `/Users/anshbalusa/fitcheck-main-integration-artifacts/`; PR #24 records the completed integration checks. For teammate setup and the simplest launch command, use the README's **Shared `main`** and **Friday Demo Showcase** sections. The existing real screenshots and 55-second recording below remain the meeting fallback; no personal scan or physical garment-fit validation is implied.
+
 ## Scope and base
 
 - Repository: `anshbalusa-ui/itchathon`.
@@ -349,7 +364,7 @@ It generated the Xcode project, built current unsigned Debug, installed and dire
 
 Prebuilt launches were also exercised on the main, smaller and larger simulators. An old D1 app without human assets was correctly rejected before installation. The normal Release route and independent experimental labs remain unchanged.
 
-### Published human-avatar refinement
+### Original human-avatar publication — historical, before team integration
 
 - Final verified implementation commit: `cd583bc024a17914ba898eb463b956c0c251c396`.
 - Published branch: `feature/human-avatar-inspection-d2`.
