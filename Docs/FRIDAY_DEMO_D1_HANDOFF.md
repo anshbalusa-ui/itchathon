@@ -349,3 +349,12 @@ It generated the Xcode project, built current unsigned Debug, installed and dire
 
 Prebuilt launches were also exercised on the main, smaller and larger simulators. An old D1 app without human assets was correctly rejected before installation. The normal Release route and independent experimental labs remain unchanged.
 
+### Published human-avatar refinement
+
+- Final verified implementation commit: `cd583bc024a17914ba898eb463b956c0c251c396`.
+- Published branch: `feature/human-avatar-inspection-d2`.
+- Draft PR: [#23 — Anatomical human and body-area inspection](https://github.com/anshbalusa-ui/itchathon/pull/23).
+- Review base: `feature/friday-visual-demo-d1` at `40cee194750647657783e9eac622cc997dcb3f2e`, not `main`.
+
+A documentation-only commit records this review identity after the implementation commit; it changes no verified build/test input. The exact delivered branch-tip SHA is recorded in `/Users/anshbalusa/fitcheck-d2-artifacts/delivery.json` and the PR head. PR #21 remains draft against `main` at S2C commit `235bee6a5cd7b334d4689ad6e09ff9f4080acb16`; PR #22 remains draft against S2C at the unchanged D1 head. No existing PR or branch was merged or modified.
+
