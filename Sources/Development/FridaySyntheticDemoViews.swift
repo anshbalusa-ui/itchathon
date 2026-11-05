@@ -47,7 +47,7 @@ struct FridayAvatarDemoView: View {
             .padding(.top, 12)
         }
         .background(Color(uiColor: .systemBackground))
-        .navigationTitle("3D Avatar")
+        .navigationTitle("Synthetic surface study")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { model.open(isActive: scenePhase == .active) }
         .onDisappear { model.close() }

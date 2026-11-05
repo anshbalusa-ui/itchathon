@@ -20,8 +20,9 @@ final class RendererRenderObject {
     let mesh: RendererMesh
     private(set) var vertexBuffer: MTLBuffer?
     private(set) var indexBuffer: MTLBuffer?
+    private(set) var clearanceBuffer: MTLBuffer?
 
-    init(mesh: RendererMesh, color: SIMD4<Float>, device: MTLDevice) throws {
+    init(mesh: RendererMesh, color: SIMD4<Float>, device: MTLDevice, usesClearance: Bool = true) throws {
         self.mesh = mesh
         self.color = color
         guard !mesh.vertices.isEmpty, !mesh.indices.isEmpty,
@@ -35,6 +36,16 @@ final class RendererRenderObject {
         }
         vertexBuffer = vertices
         indexBuffer = indices
+        if usesClearance, let clearance = mesh.sampleClearance {
+            guard clearance.count == mesh.vertices.count,
+                  clearance.allSatisfy({ $0.isFinite && $0 >= 0 && $0 <= 0.1 }),
+                  let buffer = device.makeBuffer(bytes: clearance,
+                                                 length: clearance.count * MemoryLayout<Float>.stride,
+                                                 options: .storageModeShared) else {
+                throw RendererFailure.invalidConfiguration
+            }
+            clearanceBuffer = buffer
+        }
     }
 
     func update(color: SIMD4<Float>, isEnabled: Bool) {
@@ -45,6 +56,7 @@ final class RendererRenderObject {
     func releaseBuffers() {
         vertexBuffer = nil
         indexBuffer = nil
+        clearanceBuffer = nil
     }
 }
 
@@ -53,10 +65,14 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     private struct VertexUniforms {
         var modelViewProjection: simd_float4x4
         var model: simd_float4x4
+        var hasClearance: UInt32
     }
 
     private struct FragmentUniforms {
         var color: SIMD4<Float>
+        var regionMinimum: SIMD4<Float>
+        var regionMaximum: SIMD4<Float>
+        var mapEnabled: UInt32
     }
 
     let id = UUID()
@@ -76,6 +92,10 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     private(set) var pipelineState: MTLRenderPipelineState?
     private var depthState: MTLDepthStencilState?
     private let isSyntheticGeometryScene: Bool
+    let isHumanAvatarScene: Bool
+    private var modestyGarment: RendererRenderObject?
+    private var humanRegion = HumanBodyRegion.whole
+    private var humanMapVisible = false
     private var cachedGarment: RendererRenderObject?
     private let configuration: RendererSceneConfiguration
     private let fittedSurfaceRadius: Float?
@@ -88,6 +108,11 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
                       garmentAsset: RendererAssetDescriptor? = .garmentFixture) throws {
         try self.init(configuration: configuration, mannequinAsset: mannequinAsset, garmentAsset: garmentAsset,
                       generatedMesh: nil)
+    }
+
+    convenience init(human: HumanShowcaseMeshes, garment: HumanShowcaseGarment) throws {
+        try self.init(configuration: .standard, mannequinAsset: .mannequinFixture, garmentAsset: nil,
+                      generatedMesh: nil, human: human, humanGarment: garment)
     }
 
     convenience init(geometry: GeometryResult, fitSurface: Bool = false) throws {
@@ -110,9 +135,11 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     }
 
     private init(configuration: RendererSceneConfiguration, mannequinAsset: RendererAssetDescriptor,
-                 garmentAsset: RendererAssetDescriptor?, generatedMesh: RendererMesh?, fitSurface: Bool = false) throws {
+                 garmentAsset: RendererAssetDescriptor?, generatedMesh: RendererMesh?, fitSurface: Bool = false,
+                 human: HumanShowcaseMeshes? = nil, humanGarment: HumanShowcaseGarment? = nil) throws {
         try configuration.validate()
-        if generatedMesh == nil { try mannequinAsset.validate(for: .mannequin) }
+        guard human == nil || generatedMesh == nil else { throw RendererFailure.invalidConfiguration }
+        if generatedMesh == nil, human == nil { try mannequinAsset.validate(for: .mannequin) }
         if fitSurface {
             guard let generatedMesh else { throw RendererFailure.invalidConfiguration }
             // Frame only admitted geometry. The orbit pivot and exact CPU/GPU
@@ -140,16 +167,23 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         self.commandQueue = queue
         self.view = view
         self.isSyntheticGeometryScene = generatedMesh != nil
+        self.isHumanAvatarScene = human != nil
         self.camera = RendererCamera(position: SIMD3<Float>(0, configuration.targetHeight, configuration.cameraDistance),
                                      target: SIMD3<Float>(0, configuration.targetHeight, 0),
                                      nearClip: configuration.nearClip, farClip: configuration.farClip,
                                      verticalFieldOfView: configuration.verticalFieldOfView)
-        mannequin = try RendererRenderObject(mesh: generatedMesh ?? RendererProceduralAssets.mannequin(),
-                                            color: generatedMesh == nil
-                                                ? SIMD4<Float>(0.68, 0.65, 0.60, 1)
-                                                : SIMD4<Float>(0.34, 0.49, 0.39, 1),
-                                            device: device)
-        if generatedMesh == nil, let garmentAsset {
+        mannequin = try RendererRenderObject(mesh: human?.body ?? generatedMesh ?? RendererProceduralAssets.mannequin(),
+                                            color: human != nil ? SIMD4<Float>(0.70, 0.72, 0.74, 1)
+                                                : generatedMesh == nil ? SIMD4<Float>(0.68, 0.65, 0.60, 1)
+                                                : SIMD4<Float>(0.34, 0.49, 0.39, 1), device: device)
+        if let human {
+            guard let humanGarment else { throw RendererFailure.invalidConfiguration }
+            modestyGarment = try RendererRenderObject(mesh: human.shorts, color: SIMD4<Float>(0.32, 0.35, 0.38, 1),
+                                                      device: device, usesClearance: false)
+            let mesh = humanGarment == .shirt ? human.shirt : human.vest
+            garment = try RendererRenderObject(mesh: mesh, color: RendererProceduralAssets.color(for: .navy), device: device)
+            garmentAssetIdentifier = humanGarment.assetIdentifier
+        } else if generatedMesh == nil, let garmentAsset {
             do {
                 try garmentAsset.validate(for: .garment)
                 cachedGarment = try RendererRenderObject(mesh: RendererProceduralAssets.garment(),
@@ -179,6 +213,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         } catch {
             mannequin.releaseBuffers()
             cachedGarment?.releaseBuffers()
+            modestyGarment?.releaseBuffers()
             throw (error as? RendererFailure) ?? RendererFailure.graphicsUnavailable
         }
         super.init()
@@ -195,17 +230,26 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         let pitch = simd_quatf(angle: orbit.pitch, axis: SIMD3<Float>(1, 0, 0))
         modelTransform = Self.translation(SIMD3<Float>(0, configuration.targetHeight, 0)) *
             simd_float4x4(yaw * pitch) * Self.translation(SIMD3<Float>(0, -configuration.targetHeight, 0))
-        mannequin.update(color: isSyntheticGeometryScene
-                         ? SIMD4<Float>(0.34, 0.49, 0.39, 1)
+        mannequin.update(color: isHumanAvatarScene ? SIMD4<Float>(0.70, 0.72, 0.74, 1)
+                         : isSyntheticGeometryScene ? SIMD4<Float>(0.34, 0.49, 0.39, 1)
                          : SIMD4<Float>(0.68, 0.65, 0.60, 1), isEnabled: true)
         garment?.update(color: RendererProceduralAssets.color(for: appearance.material), isEnabled: appearance.garmentVisible)
         updateTransforms(aspect: viewportAspect)
         view.setNeedsDisplay()
     }
+
+    func applyHuman(orbit: RendererOrbit, appearance: RendererAppearance,
+                    region: HumanBodyRegion, mapVisible: Bool) throws {
+        guard !isDisposed, isHumanAvatarScene else { throw RendererFailure.unsupportedAsset }
+        humanRegion = region
+        humanMapVisible = mapVisible
+        apply(orbit: orbit, appearance: appearance)
+    }
+
     func replaceGarment(asset: RendererAssetDescriptor?) throws {
 
         guard !isDisposed else { throw RendererFailure.sceneCreationFailed }
-        guard !isSyntheticGeometryScene else { throw RendererFailure.unsupportedAsset }
+        guard !isSyntheticGeometryScene, !isHumanAvatarScene else { throw RendererFailure.unsupportedAsset }
         guard let asset else {
             clearGarment()
             garmentFailure = .missingAsset
@@ -237,7 +281,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     func installGarment(_ asset: RendererLoadedGarment) throws {
 
         guard !isDisposed else { throw RendererFailure.sceneCreationFailed }
-        guard !isSyntheticGeometryScene else { throw RendererFailure.unsupportedAsset }
+        guard !isSyntheticGeometryScene, !isHumanAvatarScene else { throw RendererFailure.unsupportedAsset }
         try asset.descriptor.validate()
         guard asset.descriptor.asset.type == .bundledMeshPackage,
               asset.descriptor.asset.role == .garment,
@@ -282,6 +326,8 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         pipelineState = nil
         depthState = nil
         mannequin.releaseBuffers()
+        modestyGarment?.releaseBuffers()
+        modestyGarment = nil
         if let garment, garment !== cachedGarment { garment.releaseBuffers() }
         cachedGarment?.releaseBuffers()
         garment = nil
@@ -316,6 +362,10 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         encoder.setDepthStencilState(depth)
         encoder.setVertexBuffer(mannequinVertices, offset: 0, index: 0)
         encode(object: mannequin, encoder: encoder)
+        if let cover = modestyGarment, let vertices = cover.vertexBuffer, cover.indexBuffer != nil {
+            encoder.setVertexBuffer(vertices, offset: 0, index: 0)
+            encode(object: cover, encoder: encoder)
+        }
         if let garment, garment.isEnabled, let vertices = garment.vertexBuffer, garment.indexBuffer != nil {
             encoder.setVertexBuffer(vertices, offset: 0, index: 0)
             encode(object: garment, encoder: encoder)
@@ -341,13 +391,38 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     private func updateTransforms(aspect: Float) {
         let safeAspect = aspect.isFinite && aspect > 0 ? max(0.01, min(aspect, 100)) : 1
         let halfVertical = configuration.verticalFieldOfView * .pi / 360
+        let verticalTangent = tan(halfVertical)
+        if isHumanAvatarScene, humanRegion != .whole {
+            let horizontalHalf = atan(verticalTangent * min(safeAspect, 1))
+            let target = humanRegion.target
+            let transformed = modelTransform * SIMD4<Float>(target.x, target.y, target.z, 1)
+            camera.target = SIMD3<Float>(transformed.x, transformed.y, transformed.z)
+            let focusDistance = max(humanRegion.radius / sin(horizontalHalf) * 1.10,
+                                    humanRegion.radius + configuration.nearClip * 2)
+            camera.position = camera.target + SIMD3<Float>(0, 0, focusDistance)
+            camera.farClip = max(configuration.farClip, focusDistance + 2)
+            viewProjection = projection(verticalFOV: configuration.verticalFieldOfView, aspect: safeAspect,
+                                        near: configuration.nearClip, far: camera.farClip) *
+                lookAt(eye: camera.position, target: camera.target)
+            return
+        }
         let largestVerticalExtent = max(configuration.targetHeight, 1.8 - configuration.targetHeight)
         let radius = fittedSurfaceRadius ?? sqrt(largestVerticalExtent * largestVerticalExtent + 0.4 * 0.4)
-        let horizontalHalf = atan(tan(halfVertical) * min(safeAspect, 1))
-        let framedDistance = radius / sin(horizontalHalf) * (fittedSurfaceRadius == nil ? 1.02 : 1.08)
-        let distance = fittedSurfaceRadius == nil
-            ? max(configuration.cameraDistance, framedDistance)
-            : max(framedDistance, radius + configuration.nearClip * 2)
+        let distance: Float
+        if isHumanAvatarScene {
+            let bounds = mannequin.mesh
+            let halfWidth = max(abs(bounds.minimum.x), abs(bounds.maximum.x))
+            let depth = max(abs(bounds.minimum.z), abs(bounds.maximum.z))
+            distance = max(largestVerticalExtent / verticalTangent,
+                           halfWidth / (verticalTangent * safeAspect)) * 1.10 + depth
+        } else {
+            let horizontalHalf = atan(verticalTangent * min(safeAspect, 1))
+            let framedDistance = radius / sin(horizontalHalf) * (fittedSurfaceRadius == nil ? 1.02 : 1.08)
+            distance = fittedSurfaceRadius == nil
+                ? max(configuration.cameraDistance, framedDistance)
+                : max(framedDistance, radius + configuration.nearClip * 2)
+        }
+        camera.target = SIMD3<Float>(0, configuration.targetHeight, 0)
         camera.position = SIMD3<Float>(0, configuration.targetHeight, distance)
         camera.farClip = max(configuration.farClip, distance + radius + 0.1)
         viewProjection = projection(verticalFOV: configuration.verticalFieldOfView, aspect: safeAspect,
@@ -358,10 +433,19 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
 
     private func encode(object: RendererRenderObject, encoder: MTLRenderCommandEncoder) {
         guard let indexBuffer = object.indexBuffer else { return }
-        var uniforms = VertexUniforms(modelViewProjection: viewProjection * modelTransform, model: modelTransform)
-        var fragment = FragmentUniforms(color: object.color)
+        var uniforms = VertexUniforms(modelViewProjection: viewProjection * modelTransform, model: modelTransform,
+                                      hasClearance: object.clearanceBuffer == nil ? 0 : 1)
+        let bounds = humanRegion.bounds
+        var fragment = FragmentUniforms(
+            color: object.color,
+            regionMinimum: SIMD4<Float>(bounds.minimum.x, bounds.minimum.y, bounds.minimum.z,
+                                         isHumanAvatarScene && humanRegion != .whole ? 1 : 0),
+            regionMaximum: SIMD4<Float>(bounds.maximum.x, bounds.maximum.y, bounds.maximum.z,
+                                         isHumanAvatarScene ? 1 : 0),
+            mapEnabled: isHumanAvatarScene && humanMapVisible && object === garment && object.clearanceBuffer != nil ? 1 : 0)
         encoder.setVertexBytes(&uniforms, length: MemoryLayout<VertexUniforms>.stride, index: 1)
         encoder.setFragmentBytes(&fragment, length: MemoryLayout<FragmentUniforms>.stride, index: 0)
+        encoder.setVertexBuffer(object.clearanceBuffer ?? object.vertexBuffer, offset: 0, index: 2)
         encoder.drawIndexedPrimitives(type: .triangle, indexCount: object.mesh.indices.count,
                                       indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
     }
@@ -392,16 +476,39 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     #include <metal_stdlib>
     using namespace metal;
     struct Vertex { float3 position; float3 normal; };
-    struct VertexUniforms { float4x4 mvp; float4x4 model; };
-    struct FragmentUniforms { float4 color; };
-    struct Out { float4 position [[position]]; float3 normal; };
-    vertex Out rendererVertex(uint id [[vertex_id]], const device Vertex *vertices [[buffer(0)]], constant VertexUniforms &u [[buffer(1)]]) {
-        Out o; o.position = u.mvp * float4(vertices[id].position, 1); o.normal = normalize((u.model * float4(vertices[id].normal, 0)).xyz); return o;
+    struct VertexUniforms { float4x4 mvp; float4x4 model; uint hasClearance; };
+    struct FragmentUniforms { float4 color; float4 regionMinimum; float4 regionMaximum; uint mapEnabled; };
+    struct Out { float4 position [[position]]; float3 normal; float3 localPosition; float clearance; };
+    vertex Out rendererVertex(uint id [[vertex_id]], const device Vertex *vertices [[buffer(0)]], constant VertexUniforms &u [[buffer(1)]], const device float *clearances [[buffer(2)]]) {
+        Out o;
+        o.position = u.mvp * float4(vertices[id].position, 1);
+        o.normal = normalize((u.model * float4(vertices[id].normal, 0)).xyz);
+        o.localPosition = vertices[id].position;
+        o.clearance = u.hasClearance != 0 ? clearances[id] : -1.0;
+        return o;
     }
     fragment float4 rendererFragment(Out in [[stage_in]], constant FragmentUniforms &u [[buffer(0)]]) {
         float3 n = normalize(in.normal); float3 light = normalize(float3(-0.35, 0.75, 0.65));
-        float diffuse = max(dot(n, light), 0.0); float illumination = 0.30 + 0.70 * diffuse;
-        return float4(u.color.rgb * illumination, u.color.a);
+        float diffuse = max(dot(n, light), 0.0);
+        float illumination = 0.30 + 0.70 * diffuse;
+        float3 base = u.color.rgb;
+        if (u.regionMaximum.w > 0.5) {
+            float fill = max(dot(n, normalize(float3(0.7, 0.25, 0.5))), 0.0);
+            illumination = 0.25 + 0.60 * diffuse + 0.18 * fill;
+            if (u.mapEnabled != 0 && in.clearance >= 0.0) {
+                float t = clamp((in.clearance - 0.004) / 0.026, 0.0, 1.0);
+                float3 close = float3(0.94, 0.13, 0.10);
+                float3 middle = float3(0.98, 0.63, 0.12);
+                float3 roomy = float3(0.16, 0.70, 0.34);
+                base = t < 0.45 ? mix(close, middle, t / 0.45) : mix(middle, roomy, (t - 0.45) / 0.55);
+            }
+            if (u.regionMinimum.w > 0.5 && all(in.localPosition >= u.regionMinimum.xyz) && all(in.localPosition <= u.regionMaximum.xyz)) {
+                base = mix(base, float3(0.32, 0.66, 0.90), 0.12);
+            }
+            float specular = pow(max(dot(reflect(-light, n), float3(0, 0, 1)), 0.0), 36.0) * 0.07;
+            return float4(base * illumination + specular, u.color.a);
+        }
+        return float4(base * illumination, u.color.a);
     }
     """
 }

@@ -19,6 +19,8 @@ PRIVACY = {
     "NSPrivacyAccessedAPICategoryFileTimestamp": ["C617.1"],
 }
 MARKERS = (
+    "HumanShowcaseAssets", "HumanShowcaseModel", "HumanBodyRegion",
+    "demo.fit-map", "demo.region-summary", "demo.region",
     "CatalogPreviewAssociation", "CatalogIllustrativePreview", "RendererPresentation",
     "catalog.preview.open", "renderer.product-context", "View illustrative 3D preview",
     "RendererLabView", "RendererSceneSession", "RendererProceduralAssets", "renderer.scene",
@@ -98,10 +100,40 @@ def development_asset(app):
     require(actual == DIGEST, f"Development fixture digest mismatch: {path}")
     return actual
 
+HUMAN_SHOWCASE_DIGESTS = {
+    "human-showcase-v1.bin": "6977bd1aeba54c9f4ef82f9d7f9b8b996d030b2758e226b61dcb9fbccfe4f6e9",
+    "LICENSE.txt": "7e4f16bdf34354d23b9385a976bc289db1b2ac415afea472fa92718451fbab77",
+    "NOTICE.txt": "527c6652bf4d9528cad4b4cd1edff6b602a7d581e8cefc0ff76113a33a752a6a",
+}
+HUMAN_SHOWCASE_FILES = (
+    "human-showcase-v1.bin",
+    "LICENSE.txt",
+    "NOTICE.txt",
+)
+
+def human_showcase_assets(app):
+    directory = app / "HumanShowcase"
+    require(directory.is_dir() and not directory.is_symlink(),
+            f"Missing/nonregular human showcase resources: {directory}")
+    actual_entries = {path.name for path in directory.iterdir()}
+    require(actual_entries == set(HUMAN_SHOWCASE_FILES),
+            f"Unexpected human showcase resource set: {directory}: {sorted(actual_entries)}")
+    hashes = {}
+    for filename in HUMAN_SHOWCASE_FILES:
+        path = directory / filename
+        require(path.is_file() and not path.is_symlink(),
+                f"Missing/nonregular human showcase resource: {path}")
+        hashes[filename] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashes
+
+
 
 def inspect_bundles(derived):
     source_hash = hashlib.sha256((ROOT / "DevelopmentAssets" / ASSET).read_bytes()).hexdigest()
     require(source_hash == DIGEST, "Reviewed source fixture digest changed")
+    human_source_hashes = human_showcase_assets(ROOT / "DevelopmentAssets")
+    require(human_source_hashes == HUMAN_SHOWCASE_DIGESTS,
+            f"Reviewed human showcase source hashes changed: {human_source_hashes}")
     apps = {
         "debug": derived / "DebugDerived/Build/Products/Debug-iphonesimulator/FitCheck.app",
         "iPhone": derived / "iPhoneDerived/Build/Products/Debug-iphoneos/FitCheck.app",
@@ -131,9 +163,14 @@ def inspect_bundles(derived):
         bundle["syntheticReplayResources"] = replay_resources
         if name in ("debug", "iPhone"):
             bundle["assetSHA256"] = development_asset(app)
+            bundled_human_hashes = human_showcase_assets(app)
+            require(bundled_human_hashes == HUMAN_SHOWCASE_DIGESTS,
+                    f"Human showcase resource hashes changed in {name}: {bundled_human_hashes}")
+            bundle["humanShowcaseSHA256"] = bundled_human_hashes
         else:
             leaks = [str(path.relative_to(app)) for path in app.rglob("*")
-                     if path.suffix.lower() == ".fitmesh" or path.name == "FitCheckDevelopmentAssets"]
+                     if path.suffix.lower() == ".fitmesh" or path.name == "FitCheckDevelopmentAssets"
+                     or path.name == "HumanShowcase" or path.name in HUMAN_SHOWCASE_FILES]
             require(not leaks, f"Development resources leaked into {name}: {leaks}")
             bundle["developmentResourceLeaks"] = leaks
         result["bundles"][name] = bundle

@@ -66,7 +66,7 @@ fi
 
 [[ -d "$APP" ]] || fail "app bundle not found: $APP"
 APP="$(cd "$APP" && pwd -P)"
-python3 - "$APP" <<'PY' || fail 'app does not appear to be a Debug FitCheck simulator build'
+python3 - "$APP" <<'PY' || fail 'app is not a Debug FitCheck simulator build with the human showcase assets'
 import pathlib, plistlib, sys
 app = pathlib.Path(sys.argv[1])
 try:
@@ -77,13 +77,18 @@ try:
         sys.exit(1)
     executable = app / info["CFBundleExecutable"]
     binaries = [executable, app / (executable.name + ".debug.dylib")]
-    if not any(path.is_file() and b"-fitcheck-demo-internal" in path.read_bytes() for path in binaries):
+    payloads = [path.read_bytes() for path in binaries if path.is_file()]
+    if not all(any(marker in data for data in payloads)
+               for marker in (b"-fitcheck-demo-internal", b"HumanShowcaseModel")):
         sys.exit(1)
 except (OSError, KeyError, plistlib.InvalidFileException):
     sys.exit(1)
 # The development fixture is staged only by the Debug build phase.
 assets = app / "FitCheckDevelopmentAssets" / "FitCheckGeometricVest.fitmesh"
 if not assets.is_file():
+    sys.exit(1)
+human = app / "HumanShowcase"
+if not all((human / name).is_file() for name in ("human-showcase-v1.bin", "LICENSE.txt", "NOTICE.txt")):
     sys.exit(1)
 PY
 

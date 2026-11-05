@@ -11,6 +11,8 @@ struct RendererMesh: Sendable {
     let indices: [UInt16]
     var minimum: SIMD3<Float>
     var maximum: SIMD3<Float>
+    /// Authored shell-to-body offsets for the human showcase only; never personal fit data.
+    var sampleClearance: [Float]? = nil
 }
 
 enum RendererProceduralAssets {

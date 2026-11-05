@@ -8,11 +8,15 @@ From the repository root on a Mac with Xcode, an installed iPhone simulator, Xco
 Scripts/launch_friday_demo.sh
 ```
 
-The helper builds unsigned Debug, boots an available iPhone simulator without erasing data, installs FitCheck and launches `-fitcheck-demo-internal`. Use `--simulator UDID` to select a device or `--app /absolute/path/to/Debug-iphonesimulator/FitCheck.app` to reuse a build. Release and device bundles are rejected. The existing internal development hub also offers **FitCheck Demo Showcase**.
+The helper builds unsigned Debug, boots an available iPhone simulator without erasing data, installs FitCheck and launches `-fitcheck-demo-internal`. Use `--simulator UDID` to select a device or `--app /absolute/path/to/Debug-iphonesimulator/FitCheck.app` to reuse a current build. Release, device and older builds without the human-showcase assets are rejected. The existing internal development hub also offers **FitCheck Demo Showcase**.
 
-Start with the live rotatable mannequin, use Left / Right / Reset or drag, toggle the garment, then scroll through the **Sample collection**. Approved samples are **Everyday Tee / Navy**, **Weekend Tee / Sage** and **Geometric Vest Concept / Navy**, each with **S/M labels**. Both sizes use identical geometry. Open **3D Avatar** for two authored synthetic surfaces, or **LiDAR Reconstruction Demo** for two real synthetic depth-to-surface reconstructions; Back returns to the clothing showcase.
+Start with the live rotatable anatomical human model, use Left / Right / Reset or drag, and toggle the garment. The **Sample collection** supports **Everyday Tee / Navy**, **Weekend Tee / Sage** and **Geometric Vest Concept / Navy**, each with **S/M labels**. Both sizes use identical geometry. Choose **Head, Shoulders, Chest, Waist, Hips, Arms or Legs** under **Inspect the human model** to focus the camera; **Whole body** or Reset restores full framing.
 
-Everything is fictional and camera-free. The mannequin is not a measured person; no verified fit, physical drape or real-device LiDAR accuracy is represented. Normal Release remains the legacy app. See [D1 handoff, visual evidence, verification and meeting fallback](Docs/FRIDAY_DEMO_D1_HANDOFF.md).
+**Show sample fit map** colors the selected garment from close spacing (red) to more room (green). The field is authored shell-to-body spacing on this generic illustration—not measured tightness, pressure, personal fit or a size recommendation. The body is adapted from a pinned CC0 MakeHuman base; compatible sample shirt, vest and modesty shorts are bundled geometry, not downloaded at runtime. See [asset provenance and reproduction](DevelopmentAssets/HumanShowcase/NOTICE.txt). Original R0–R3 diagnostic and catalog-preview geometry remains unchanged.
+
+Open **Synthetic surface study** for two generated partial surfaces, or **LiDAR Reconstruction Demo** for two actual synthetic depth-to-surface reconstructions; Back returns to the clothing showcase. These separate technical studies are not the complete authored human model.
+
+Everything is fictional and camera-free. The human model is not a measured person; no verified fit, physical drape or real-device LiDAR accuracy is represented. Normal Release remains the legacy app. See [handoff, visual evidence, verification and meeting fallback](Docs/FRIDAY_DEMO_D1_HANDOFF.md).
 
 ## Internal integrated development app
 

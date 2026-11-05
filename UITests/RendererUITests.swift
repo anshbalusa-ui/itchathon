@@ -274,7 +274,7 @@ final class RendererUITests: XCTestCase {
         // Search upward to the persistent collection landmark, then downward.
         let notice = app.descendants(matching: .any)["catalog.sample-disclosure"]
         for _ in 0..<8 {
-            if product.exists || (notice.exists && notice.isHittable) { break }
+            if (product.exists && product.isHittable) || (notice.exists && notice.isHittable) { break }
             app.scrollViews.firstMatch.swipeDown()
         }
         reveal(product, app: app)
@@ -605,30 +605,28 @@ final class RendererUITests: XCTestCase {
     @MainActor
     private func reveal(_ element: XCUIElement, app: XCUIApplication) {
         let controls = app.scrollViews["renderer.controls"]
-        let scroll = controls.exists ? controls : app.scrollViews.firstMatch
-        for _ in 0..<(controls.exists ? 40 : 14) {
+        let isRenderer = controls.exists
+        let scroll = isRenderer ? controls : app.scrollViews.firstMatch
+        for _ in 0..<(isRenderer ? 40 : 60) {
             if element.exists && element.isHittable { break }
-            if controls.exists {
-                let scene = app.descendants(matching: .any)["renderer.scene"]
-                let top = max(scroll.frame.minY, scene.frame.maxY + 12)
-                let bottom = min(scroll.frame.maxY, app.frame.maxY - 20)
-                let height = bottom - top
-                guard height > 50 else {
-                    return XCTFail("Renderer controls need a visible scrolling region")
-                }
-                let center = CGPoint(x: scroll.frame.midX, y: top + height / 2)
-                let direction: CGFloat = element.exists && element.frame.midY < center.y ? 1 : -1
-                let start = app.coordinate(withNormalizedOffset: .zero)
-                    .withOffset(CGVector(dx: center.x - app.frame.minX, dy: center.y - app.frame.minY))
-                // Stop before lifting so inertia cannot skip a large-text button.
-                start.press(forDuration: 0.05,
-                            thenDragTo: start.withOffset(CGVector(dx: 0, dy: direction * min(120, height / 3))),
-                            withVelocity: .slow, thenHoldForDuration: 0.2)
-            } else if element.exists && element.frame.midY < scroll.frame.minY {
-                scroll.swipeDown()
-            } else {
-                scroll.swipeUp()
+            let landmark = isRenderer
+                ? app.descendants(matching: .any)["renderer.scene"].frame.maxY
+                : app.navigationBars.firstMatch.frame.maxY
+            let top = max(scroll.frame.minY, landmark + 12)
+            let bottom = min(scroll.frame.maxY, app.frame.maxY - 20)
+            let height = bottom - top
+            guard height > 50 else {
+                return XCTFail("Controls need a visible scrolling region")
             }
+            let center = CGPoint(x: scroll.frame.midX, y: top + height / 2)
+            let direction: CGFloat = element.exists && element.frame.midY < center.y ? 1 : -1
+            let start = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: center.x - app.frame.minX, dy: center.y - app.frame.minY))
+            // A short drag with no release inertia cannot skip a lazy large-text
+            // product card, then incorrectly keep searching below its new position.
+            start.press(forDuration: 0.05,
+                        thenDragTo: start.withOffset(CGVector(dx: 0, dy: direction * min(120, height / 3))),
+                        withVelocity: .slow, thenHoldForDuration: 0.2)
         }
         XCTAssertTrue(element.waitForExistence(timeout: 5))
         XCTAssertTrue(element.isHittable)

@@ -31,14 +31,14 @@ struct FridayDemoShowcase: View {
 private struct FridayGarmentDemoView: View {
     @ObservedObject var selection: FridayDemoSelection
     let preview: CatalogIllustrativePreview
-    @StateObject private var model: RendererLabModel
+    @StateObject private var model: HumanShowcaseModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(selection: FridayDemoSelection, preview: CatalogIllustrativePreview) {
         self.selection = selection
         self.preview = preview
-        _model = StateObject(wrappedValue: RendererLabModel(presentation: preview.rendererPresentation))
+        _model = StateObject(wrappedValue: HumanShowcaseModel(preview: preview))
     }
 
     var body: some View {
@@ -66,8 +66,9 @@ private struct FridayGarmentDemoView: View {
                         productHeading
                         viewControls
                         collection
+                        bodyInspection
                         nextChapter
-                        Text("Fictional demo data · Not for sale. Generic mannequin, not your measured body. Sizes are labels: S and M use the same geometry. No physical drape or verified fit.")
+                        Text("Fictional demo data · Not for sale. Authored human model, not your measured body. S and M are labels using the same sample geometry. No verified fit or physical cloth simulation.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -92,7 +93,7 @@ private struct FridayGarmentDemoView: View {
                 .font(.title3.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("demo.product-context")
-            Label("Generic mannequin · Drag to explore", systemImage: "hand.draw")
+            Label("Illustrative human · Drag to explore", systemImage: "hand.draw")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -100,20 +101,18 @@ private struct FridayGarmentDemoView: View {
 
     @ViewBuilder
     private var viewport: some View {
-        if let session = model.session, model.state == .ready,
-           model.assetState == .procedural || model.assetState == .loaded,
-           model.garmentFailure == nil {
-            RendererViewport(session: session, model: model, sceneIdentifier: "demo.scene")
+        if let session = model.session, model.state == .ready {
+            GeometryViewport(session: session, model: model, sceneIdentifier: "demo.scene",
+                             sceneLabel: "Human avatar and sample clothing, interactive 3D scene",
+                             sceneHint: "Drag to rotate or select a body region below to inspect it. Not a personal scan.")
                 .id(session.id)
         } else {
             ScrollView {
                 VStack(spacing: 12) {
                     if case .failed = model.state {
                         sceneRecovery
-                    } else if case .failed = model.assetState {
-                        garmentRecovery
-                    } else if model.garmentFailure != nil, model.state == .ready {
-                        garmentRecovery
+                    } else if model.state == .loading {
+                        ProgressView("Preparing human model…")
                     } else if model.state == .suspended {
                         Label("3D preview paused", systemImage: "pause.circle")
                         Text("Your preview resumes when FitCheck is active.").font(.footnote)
@@ -132,26 +131,17 @@ private struct FridayGarmentDemoView: View {
 
     private var sceneRecovery: some View {
         VStack(spacing: 12) {
-            Label("3D preview unavailable", systemImage: "cube.transparent")
+            Label("Human preview unavailable", systemImage: "person.crop.rectangle")
                 .font(.headline)
-            Text("The graphics device could not prepare this scene. Retry to rebuild the preview.")
-                .font(.subheadline)
+            if case .failed(let message) = model.state {
+                Text(message).font(.subheadline)
+            }
             Button("Retry 3D preview") { model.retry() }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("demo.retry")
         }
     }
 
-    private var garmentRecovery: some View {
-        VStack(spacing: 12) {
-            Text("Sample garment unavailable").font(.headline)
-            Text("This item's reviewed geometry could not be loaded. Retry or select another sample below.")
-                .font(.subheadline)
-            Button("Retry sample garment") { model.restoreGarment() }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("demo.retry-garment")
-        }
-    }
 
     private var viewControls: some View {
         VStack(spacing: 12) {
@@ -190,6 +180,67 @@ private struct FridayGarmentDemoView: View {
             .accessibilityIdentifier("demo.reset")
         }
         .buttonStyle(.bordered)
+    }
+
+    private var bodyInspection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Inspect the human model").font(.headline).accessibilityAddTraits(.isHeader)
+            Text("Choose a region to move closer. Drag to look around it.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 10) {
+                    ForEach(HumanBodyRegion.allCases) { regionButton($0) }
+                }
+            } else {
+                Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+                    ForEach(0..<3) { row in
+                        GridRow {
+                            ForEach(0..<3) { column in
+                                let index = row * 3 + column
+                                if index < HumanBodyRegion.allCases.count {
+                                    regionButton(HumanBodyRegion.allCases[index])
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Text(model.regionSummary)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("demo.region-summary")
+            Toggle("Show sample fit map", isOn: Binding(
+                get: { model.fitMapVisible }, set: { model.setFitMapVisible($0) }
+            ))
+            .accessibilityIdentifier("demo.fit-map")
+            if model.fitMapVisible {
+                HStack(spacing: 16) {
+                    Label("Closer", systemImage: "circle.fill").foregroundStyle(.red)
+                    Label("More room", systemImage: "circle.fill").foregroundStyle(.green)
+                }
+                .font(.subheadline)
+                .accessibilityElement(children: .combine)
+            }
+            Text("Illustrative sample spacing only — not your body, a pressure simulation or verified fit.")
+                .font(.footnote).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("demo.fit-disclaimer")
+        }
+        .disabled(model.state != .ready)
+    }
+
+    private func regionButton(_ region: HumanBodyRegion) -> some View {
+        Button { model.focus(region) } label: {
+            Text(region.title)
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.bordered)
+        .tint(model.region == region ? .indigo : .primary)
+        .accessibilityIdentifier("demo.region.\(region.rawValue)")
+        .accessibilityValue(model.region == region ? "Selected" : "Not selected")
+        .accessibilityAddTraits(model.region == region ? .isSelected : [])
     }
 
     private var collection: some View {
@@ -260,7 +311,7 @@ private struct FridayGarmentDemoView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Explore the technology").font(.headline).accessibilityAddTraits(.isHeader)
             NavigationLink { FridayAvatarDemoView() } label: {
-                Label("3D Avatar", systemImage: "square.3.layers.3d")
+                Label("Synthetic surface study", systemImage: "square.3.layers.3d")
                     .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
             }
             .buttonStyle(.borderedProminent)
@@ -272,7 +323,7 @@ private struct FridayGarmentDemoView: View {
             }
             .buttonStyle(.bordered)
             .accessibilityIdentifier("demo.open-replay")
-            Text("Two synthetic shape studies, separate from the clothing mannequin. No camera needed.")
+            Text("Separate reconstruction studies, not the authored human model above. No camera needed.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
