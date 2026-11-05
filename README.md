@@ -119,3 +119,24 @@ Tests/                      Unit tests
 UITests/                    Manual-flow UI tests
 Docs/                       Frontend handoff
 ```
+
+## Historical avatar-first planning (PR #6)
+
+These October 2026 proposals are retained for reference, not as the current implementation contract or an instruction to restart completed work. Start with the showcase instructions above and the [current demo handoff](Docs/FRIDAY_DEMO_D1_HANDOFF.md). Personalized avatar creation and validated garment-fit prediction remain future work.
+
+- [Archived production kickoff prompt](Docs/PRODUCTION_KICKOFF_PROMPT.md)
+- [Commercial development segments and quality gates](Docs/PRODUCTION_SEGMENTS.md)
+- [Product requirements and acceptance criteria](Docs/AVATAR_MVP_REQUIREMENTS.md)
+- [Technical architecture and open-source asset strategy](Docs/AVATAR_MVP_ARCHITECTURE.md)
+- [Prioritized user stories and two-week timeline](Docs/AVATAR_MVP_STORIES.md)
+- [Master prompt and individual coding-agent story prompts](Docs/AVATAR_MVP_AGENT_PROMPTS.md)
+
+The original repository and PR-status statements in these documents are historical. The integrated scanner is Debug-only and still lacks physical-device validation; approximate visualization is not a validated garment-fit prediction.
+
+### Earlier planning and experiment (PRs #1 and #5)
+
+- [September product specification](Docs/superpowers/specs/2026-09-27-fitcheck-ios-design.md)
+- [Dated feasibility/source audit](Docs/superpowers/research/2026-09-27-fitcheck-feasibility.md)
+- [Historical implementation plan](Docs/superpowers/plans/2026-09-27-fitcheck-ios.md)
+- [Superseded first scanner experiment](Docs/AVATAR_FIRST_MVP.md)
+
