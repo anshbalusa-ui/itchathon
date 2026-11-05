@@ -17,6 +17,8 @@ The complete build/test input SHA-256 remains `1f0a67740ffe3757de897d98348694f8d
 
 Integration-specific ancestry, source-fingerprint and fresh simulator-smoke evidence is retained outside Git at `/Users/anshbalusa/fitcheck-main-integration-artifacts/`; PR #24 records the completed integration checks. For teammate setup and the simplest launch command, use the README's **Shared `main`** and **Friday Demo Showcase** sections. The existing real screenshots and 55-second recording below remain the meeting fallback; no personal scan or physical garment-fit validation is implied.
 
+Fresh integration Debug compilation and **3/3 simulator UI checks passed**, with zero failures, skips or expected failures. The existing human pixel/product/region/map/lifecycle test, largest-accessibility/navigation test and complete synthetic-avatar/replay journey ran unchanged on iPhone 17 / iOS 26.5. Results: `DebugSmoke.xcresult`, `DebugSmoke-summary.json` and `DebugSmoke-tests.json` in the integration evidence directory. This is additional focused execution, not a replacement for or a claimed rerun of the retained complete 367/17 suites.
+
 ## Scope and base
 
 - Repository: `anshbalusa-ui/itchathon`.
