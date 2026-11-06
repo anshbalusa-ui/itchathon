@@ -737,7 +737,7 @@ final class RendererUITests: XCTestCase {
             app.terminate()
             app.launchArguments = flags
             app.launch()
-            XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["internal.open-renderer"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["renderer.scene"].exists)
             XCTAssertFalse(app.buttons["catalog.preview.open"].exists)

@@ -5,7 +5,11 @@ final class AvatarPilotUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-fitcheck-legacy"]
         app.launch()
+        #if DEBUG
         XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+        #else
+        XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
+        #endif
         XCTAssertFalse(app.descendants(matching: .any)["avatar-pilot-root"].exists)
         app.terminate()
 
@@ -17,7 +21,7 @@ final class AvatarPilotUITests: XCTestCase {
         XCTAssertEqual(app.textFields.count, 0)
         XCTAssertEqual(app.alerts.count, 0, "Metadata onboarding must not request camera permission")
         #else
-        XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.descendants(matching: .any)["avatar-pilot-root"].exists)
         #endif
         app.terminate()

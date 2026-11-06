@@ -1,17 +1,17 @@
 import SwiftUI
 
 @main
-struct FitCheckApp: App {
+struct OnYouApp: App {
   var body: some Scene {
     WindowGroup {
       #if DEBUG
       if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-fitcheck-") }) {
         RootView()
       } else {
-        NavigationStack { FridayDemoShowcase() }
+        OnYouRootView()
       }
       #else
-      RootView()
+      OnYouRootView()
       #endif
     }
   }

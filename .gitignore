@@ -1,16 +1,44 @@
-# Xcode
-DerivedData/
-*.xcuserstate
-xcuserdata/
-*.xccheckout
-*.xcscmblueprint
-
-# XcodeGen generated project
-FitCheck.xcodeproj/
-
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
 
-# Swift
+# Xcode
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.profraw
+.derived-data-log-*
+
+# Swift Package Manager
 .build/
 .swiftpm/
+
+# CocoaPods
+Pods/
+
+# npm
+node_modules/
+
+# IDE
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.local
+
+# Build
+build/
+build-*/
+
+# Imported XcodeGen projects
+FitCheck.xcodeproj/
+On You.xcodeproj/
+DerivedData/

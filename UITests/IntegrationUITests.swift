@@ -2,7 +2,7 @@ import XCTest
 
 final class IntegrationUITests: XCTestCase {
     #if !DEBUG
-    func testInternalRouteFlagsRemainLegacyInRelease() {
+    func testInternalRouteFlagsRemainUnavailableInRelease() {
         let app = XCUIApplication()
         defer { app.launchArguments = []; app.terminate() }
         for flags in [
@@ -16,7 +16,7 @@ final class IntegrationUITests: XCTestCase {
             app.terminate()
             app.launchArguments = flags
             app.launch()
-            XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.descendants(matching: .any)["internal-development-hub"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["avatar-pilot-root"].exists)
             XCTAssertFalse(app.buttons["catalog.product.sample-studio.everyday-tee"].exists)

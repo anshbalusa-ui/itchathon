@@ -3,7 +3,7 @@
     "Debug": "debug",
     "Release": "release"
   },
-  "name": "Itchathon",
+  "name": "On You",
   "options": {
     "groupSortPosition": "bottom",
     "transitivelyLinkDependencies": false
@@ -17,7 +17,7 @@
       "info": {
         "path": "Sources/Support/Info.plist",
         "properties": {
-          "CFBundleDisplayName": "Itchathon",
+          "CFBundleDisplayName": "On You",
           "CFBundleShortVersionString": "1.0",
           "CFBundleVersion": "1",
           "ITSAppUsesNonExemptEncryption": false,
@@ -28,7 +28,7 @@
             "UIInterfaceOrientationLandscapeLeft",
             "UIInterfaceOrientationLandscapeRight"
           ],
-          "NSCameraUsageDescription": "Itchathon uses the camera and depth sensors for guided body capture and clothing tools. Camera views are processed on your iPhone."
+          "NSCameraUsageDescription": "On You uses the camera for body capture and clothing measurements."
         }
       },
       "platform": "iOS",
@@ -38,9 +38,10 @@
         "CURRENT_PROJECT_VERSION": "1",
         "MARKETING_VERSION": "1.0",
         "PRODUCT_BUNDLE_IDENTIFIER": "app.bitrig.new.0bab6520-e754-44f9-acd8-d1ecceeda6e3",
-        "PRODUCT_NAME": "$(TARGET_NAME)",
+        "PRODUCT_NAME": "On You",
         "SWIFT_VERSION": "5.10",
-        "TARGETED_DEVICE_FAMILY": "1"
+        "TARGETED_DEVICE_FAMILY": "1",
+        "PRODUCT_MODULE_NAME": "FitCheck"
       },
       "sources": [
         {
@@ -53,7 +54,7 @@
       "type": "application",
       "postBuildScripts": [
         {
-          "name": "Stage internal mesh only in Debug",
+          "name": "Stage body model and internal fixtures",
           "basedOnDependencyAnalysis": false,
           "showEnvVars": false,
           "inputFiles": [
@@ -66,7 +67,7 @@
             "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FitCheckDevelopmentAssets",
             "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/HumanShowcase"
           ],
-          "script": "set -eu\ndestination=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nlegacy=\"${destination}/FitCheckDevelopmentAssets\"\nshowcase=\"${destination}/HumanShowcase\"\nif [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n  /bin/mkdir -p \"${legacy}\"\n  /bin/cp -f \"${SRCROOT}/DevelopmentAssets/FitCheckGeometricVest.fitmesh\" \"${legacy}/FitCheckGeometricVest.fitmesh\"\n  /bin/rm -rf \"${showcase}\"\n  /bin/cp -R \"${SRCROOT}/DevelopmentAssets/HumanShowcase\" \"${showcase}\"\nelse\n  # Remove only this build phase's own generated resources, never unrelated resources.\n  /bin/rm -f \"${legacy}/FitCheckGeometricVest.fitmesh\"\n  if [ -d \"${legacy}\" ]; then\n    /bin/rmdir \"${legacy}\"\n  fi\n  /bin/rm -rf \"${showcase}\"\nfi\n"
+          "script": "set -eu\ndestination=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nshowcase=\"${destination}/HumanShowcase\"\n/bin/mkdir -p \"${showcase}\"\n/bin/cp -f \"${SRCROOT}/DevelopmentAssets/HumanShowcase/\"* \"${showcase}/\"\nlegacy=\"${destination}/FitCheckDevelopmentAssets\"\nif [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n  /bin/mkdir -p \"${legacy}\"\n  /bin/cp -f \"${SRCROOT}/DevelopmentAssets/FitCheckGeometricVest.fitmesh\" \"${legacy}/FitCheckGeometricVest.fitmesh\"\nelse\n  /bin/rm -f \"${legacy}/FitCheckGeometricVest.fitmesh\"\nfi\n"
         }
       ]
     },
@@ -85,7 +86,8 @@
       ],
       "settings": {
         "GENERATE_INFOPLIST_FILE": "YES",
-        "CODE_SIGNING_ALLOWED": "NO"
+        "CODE_SIGNING_ALLOWED": "NO",
+        "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/On You.app/On You"
       }
     },
     "FitCheckUITests": {

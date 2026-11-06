@@ -167,7 +167,7 @@ final class SpatialReplayUITests: NativeMeshUITestCase {
             app.terminate()
             app.launchArguments = flags
             app.launch()
-            XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["internal.open-replay"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["replay.scene"].exists)
             XCTAssertFalse(app.buttons["replay.run"].exists)

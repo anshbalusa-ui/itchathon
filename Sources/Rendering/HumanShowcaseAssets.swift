@@ -1,4 +1,3 @@
-#if DEBUG
 import CryptoKit
 import Foundation
 import simd
@@ -153,4 +152,3 @@ private struct HumanShowcaseReader {
     }
     mutating func f32() throws -> Float { Float(bitPattern: try u32()) }
 }
-#endif

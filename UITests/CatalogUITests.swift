@@ -4,9 +4,13 @@ final class CatalogUITests: XCTestCase {
     func testNormalLaunchAndReleaseOptInRemainIsolated() {
         let app = XCUIApplication()
         defer { app.launchArguments = []; app.terminate() }
-        app.launchArguments = []
+        app.launchArguments = ["-fitcheck-legacy"]
         app.launch()
+        #if DEBUG
         XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+        #else
+        XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
+        #endif
         XCTAssertFalse(app.buttons["catalog.product.sample-studio.everyday-tee"].exists)
         app.terminate()
         app.launchArguments = ["-fitcheck-catalog-internal"]
@@ -15,7 +19,7 @@ final class CatalogUITests: XCTestCase {
         XCTAssertTrue(app.buttons["catalog.product.sample-studio.everyday-tee"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["My Body"].exists)
         #else
-        XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["catalog.product.sample-studio.everyday-tee"].exists)
         #endif
     }

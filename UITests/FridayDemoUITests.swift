@@ -14,10 +14,10 @@ final class FridayDemoUITests: NativeMeshUITestCase {
     }
 
     @MainActor
-    func testDebugDefaultLaunchOpensActualShowcase() throws {
+    func testDebugDirectLaunchOpensActualShowcase() throws {
         let app = XCUIApplication()
         defer { app.terminate() }
-        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchArguments = ["-fitcheck-demo-internal", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["demo.scene"].waitForExistence(timeout: 12))
         activeSceneID = "demo.scene"
@@ -295,7 +295,7 @@ final class FridayDemoUITests: NativeMeshUITestCase {
             app.terminate()
             app.launchArguments = flags
             app.launch()
-            XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["internal.open-demo"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["demo.scene"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["demo.avatar.scene"].exists)

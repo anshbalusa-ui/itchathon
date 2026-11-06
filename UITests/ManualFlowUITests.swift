@@ -1,3 +1,4 @@
+#if DEBUG
 import XCTest
 
 final class ManualFlowUITests: XCTestCase {
@@ -91,3 +92,5 @@ final class ManualFlowUITests: XCTestCase {
     app.swipeDown()
   }
 }
+
+#endif
