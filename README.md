@@ -1,0 +1,164 @@
+# Local Bitrig reproduction
+
+Imported from https://github.com/anshbalusa-ui/itchathon at commit `40feaf4931614637c3e1dc05407af2660eb56f19`.
+
+`Project.json` is the local build configuration. Run `bitrig preview -platform iOS` to build and open the iPhone app. Debug opens the latest anatomical human showcase by default; explicit upstream internal launch flags still select their original routes. Release preserves the upstream legacy entry and excludes development assets. This is a local reproduction of the upstream prototype, not a production-ready personal-fit product.
+
+Source, fixtures, licenses, documentation, and tests are preserved from upstream. The local app display name is Itchathon; the module remains FitCheck so existing tests compile. Use `bitrig test -scheme FitCheck -destination 'platform=iOS Simulator'` for tests. Upstream commands and historical notes below describe the original checkout; use Bitrig commands in this workspace.
+
+---
+
+# FitCheck iOS
+
+## Shared `main` for team development
+
+The complete development stack and anatomical human demo are consolidated by [PR #24](https://github.com/anshbalusa-ui/itchathon/pull/24). Start new work from `main`, not an old stacked feature branch:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c feature/teammate-work
+```
+
+For a new checkout, clone `https://github.com/anshbalusa-ui/itchathon.git` and enter the repository first. Preserve any existing local work before switching branches. Use the Debug demo below; normal Release still opens the legacy application. Archived planning/kickoff documents are historical, not instructions to restart completed segments.
+
+## Friday Demo Showcase (Debug only)
+
+From the repository root on a Mac with Xcode, an installed iPhone simulator, XcodeGen and Python 3:
+
+```bash
+Scripts/launch_friday_demo.sh
+```
+
+The helper builds unsigned Debug, boots an available iPhone simulator without erasing data, installs FitCheck and launches `-fitcheck-demo-internal`. Use `--simulator UDID` to select a device or `--app /absolute/path/to/Debug-iphonesimulator/FitCheck.app` to reuse a current build. Release, device and older builds without the human-showcase assets are rejected. The existing internal development hub also offers **FitCheck Demo Showcase**.
+
+Start with the live rotatable anatomical human model, use Left / Right / Reset or drag, and toggle the garment. The **Sample collection** supports **Everyday Tee / Navy**, **Weekend Tee / Sage** and **Geometric Vest Concept / Navy**, each with **S/M labels**. Both sizes use identical geometry. Choose **Head, Shoulders, Chest, Waist, Hips, Arms or Legs** under **Inspect the human model** to focus the camera; **Whole body** or Reset restores full framing.
+
+**Show sample fit map** colors the selected garment from close spacing (red) to more room (green). The field is authored shell-to-body spacing on this generic illustration—not measured tightness, pressure, personal fit or a size recommendation. The body is adapted from a pinned CC0 MakeHuman base; compatible sample shirt, vest and modesty shorts are bundled geometry, not downloaded at runtime. See [asset provenance and reproduction](DevelopmentAssets/HumanShowcase/NOTICE.txt). Original R0–R3 diagnostic and catalog-preview geometry remains unchanged.
+
+Open **Synthetic surface study** for two generated partial surfaces, or **LiDAR Reconstruction Demo** for two actual synthetic depth-to-surface reconstructions; Back returns to the clothing showcase. These separate technical studies are not the complete authored human model.
+
+Everything is fictional and camera-free. The human model is not a measured person; no verified fit, physical drape or real-device LiDAR accuracy is represented. Normal Release remains the legacy app. See [handoff, visual evidence, verification and meeting fallback](Docs/FRIDAY_DEMO_D1_HANDOFF.md).
+
+## Internal integrated development app
+
+Segment I0 combines the repaired #8 → #9 → #10 foundation/scanner with #11's synthetic offline catalog. Use a **Debug** build and exactly one launch argument (Xcode scheme → Run → Arguments):
+
+| Argument | Entry |
+| --- | --- |
+| None | Preserved legacy home |
+| `-fitcheck-avatar-internal` | Avatar metadata onboarding → guided scanner |
+| `-fitcheck-catalog-internal` | Independent offline catalog |
+| `-fitcheck-integrated-internal` | Internal hub: avatar/scanner, catalog, **3D Renderer Lab**, **Avatar Geometry Lab** and **LiDAR Reconstruction Lab — Synthetic Replay** |
+
+Conflicting internal flags fail closed to legacy home; Release ignores every internal route. No body setup, completed-avatar claim, try-on, fit estimate, purchase or live retailer data is introduced.
+
+See the [I0 integration handoff](Docs/INTEGRATION_HANDOFF.md), [catalog foundation](Docs/CATALOG_FOUNDATION.md) and [minimum authorized retailer contract](Docs/RETAILER_CATALOG_CONTRACT.md). Segment 1B physical scanner validation remains **NOT RUN**. Legacy device statements below are historical, not new hardware results.
+
+Segment R0 adds a genuine MetalKit 3D mannequin viewer with a separate illustrative garment. Open **3D Renderer Lab** from the Debug hub; drag or use rotation buttons, Reset View, show/hide the garment, select Navy/Stone/Sage, and Reset Appearance. It uses no camera, saved profile, personal measurements or retailer assets. These are generic procedural fixtures, not a personalized avatar, sized product, drape simulation or fit prediction. There is no standalone renderer launch flag. See [R0 architecture, compatibility and verification](Docs/RENDERER_R0_HANDOFF.md).
+
+Segment R1 connects the offline catalog to that same Metal viewer. Select an available **Everyday Tee Navy S/M** or **Weekend Tee Sage S/M**, then **View illustrative 3D preview**. The viewer keeps the selected sample color; return to product details to change the selection. Cream has no approved material mapping and remains unsupported, as do unrelated, unavailable, unknown-availability, and discontinued variants. Sizes are catalog labels only: every supported SKU uses the same geometric shirt and generic mannequin, without a saved avatar or scan. The independent Renderer Lab and launch routes are unchanged. See [R1 association, lifecycle and fresh verification](Docs/RENDERER_R1_CATALOG_PREVIEW_HANDOFF.md).
+
+Segment R2 adds a bounded **file-backed garment demonstration** in the independent Renderer Lab. Scroll to **Garment asset demonstration** and choose **Bundled geometric vest** to load the reviewed first-party `.fitmesh` resource through identity, SHA-256, metadata and geometry checks into the same Metal renderer. Rotate, show/hide and recolor it, or explicitly return to the procedural shirt. **Check incompatible asset** exercises a real rejection with retry/manual recovery, never a silent fallback. R2 did not associate the vest with a catalog SKU; R3 below adds one reviewed fictional association without changing R1's T-shirt previews. The loader and fixture are excluded from production Release. This is not arbitrary file import, a real retailer garment, personalized geometry or physical fit. See [R2 format, provenance, limits and verification](Docs/RENDERER_R2_ASSET_PIPELINE_HANDOFF.md).
+
+Segment R3 adds **Geometric Vest Concept** to the internal synthetic catalog. Select its Navy S or M label and choose **View illustrative 3D preview** to automatically verify and load the exact R2 vest file into the existing Metal viewer. Product geometry and color are locked; both size labels use identical authored geometry. Loading failures offer retry/back without a substitute shirt. Everyday/Weekend previews remain procedural, and the independent Lab retains manual controls. The vest is fictional, not for sale, not a real retailer garment or personalized avatar, and represents no physical size, drape or fit. See [R3 association, lifecycle, real-mesh evidence and limits](Docs/RENDERER_R3_CATALOG_ASSET_HANDOFF.md).
+
+Segment I1 reviews the accumulated stack, repairs nonrecursive profile cleanup and exclusive protected staging ownership, and scopes legacy preference loading to the legacy home. See the [consolidated audit, evidence, risk register and proposed review/merge sequence](Docs/FULL_STACK_I1_AUDIT.md). No PR is merged by the audit.
+
+Segment S2A adds **Avatar Geometry Lab** to the Debug hub. Its bounded deterministic kernel generates an open 3D surface from reviewed synthetic front/side section extents and displays the actual new mesh through the existing Metal renderer. Select synthetic A/B to change geometry, rotate/reset, and exercise missing/invalid/unverified-source rejection with no stale surface. No camera, customer profile, saved avatar, physical measurements or fit inference is involved. Scanner candidates remain unauthorized; normal Release excludes the lab and engine. See the [S2A geometry contract, ownership, verification and limitations](Docs/AVATAR_GEOMETRY_S2A_HANDOFF.md).
+
+Segment S2B adds real **Save generated synthetic artifact / Load saved synthetic artifact / Delete saved synthetic artifact** controls inside that lab. The protected, backup-excluded, versioned file contains actual mesh data in its own Application Support namespace. A cold load must pass bounded decoding, integrity, compatibility and exact approved-fixture admission before its decoded arrays reach Metal. Generated and disk-loaded sources are labelled separately; corrupt/unsupported files remain intact until explicit deletion. **Synthetic geometry only. Not a personal scan or verified avatar.** See the [S2B storage, lifecycle, verification and threat-boundary handoff](Docs/AVATAR_ARTIFACT_S2B_HANDOFF.md).
+
+Segment S2C adds **LiDAR Reconstruction Lab — Synthetic Replay**, separate from scanning and saved A/B artifacts. First-party ray-cast depth, confidence and mask rasters pass explicit calibration/pose validation, pinhole unprojection, world mapping, independent front/side section fits and angular coverage admission before a new partial surface reaches the existing Metal renderer. Select simulated A/B, rotate/reset, or exercise real missing-depth, calibration, conflicting-view and coverage rejection. Unsupported angular regions remain open; replay results are transient and cannot be saved as approved S2B artifacts or personal avatars. **Synthetic LiDAR replay. No real person scanned. Geometry accuracy on physical hardware is unverified.** See the [S2C mathematics, provenance, numerical/rendering evidence and scanner integration gaps](Docs/LIDAR_SPATIAL_RECONSTRUCTION_S2C_HANDOFF.md).
+
+**Your body + your favorite shirt + a candidate shirt → three signed comparisons.**
+
+FitCheck is a native SwiftUI prototype. Choose Body or Favorite atop results to compare chest, shoulders, and length against that reference. Scores are prototype heuristics, not fit probabilities, guarantees, or validated measurement accuracy.
+
+## Avatar-first production work
+
+[Segment 0](Docs/AVATAR_S0_HANDOFF.md) records the protected local avatar-profile foundation in PR #8. [Segment 1A](Docs/SCANNER_S1A_HANDOFF.md) adds development-only guided LiDAR/Vision capture and an [exact Segment 1B physical-device checklist](Docs/SCANNER_S1B_DEVICE_CHECKLIST.md). Use `-fitcheck-avatar-internal`, then **Try guided capture → Start guided scan**. Capture remains provisional and requires device validation; personalized avatar rendering and fit interpretation are unavailable. The separate catalog does not use scan observations or approve avatar readiness. The legacy measurement flow remains the default, including in Release.
+
+The [critical foundation audit](Docs/FOUNDATION_AUDIT.md) records reproduced deletion, camera-ownership, orientation-evidence, and continuity defects and their repairs. [Data/backend boundaries](Docs/DATA_ARCHITECTURE_AUDIT.md) document on-device responsibilities, future service ownership, and account/concurrent-store gaps. Passing automated tests is not physical scan validation or approval for the new customer release.
+
+## Preserved legacy prototype flow
+
+- Enter and save body measurements, then enter and save a named favorite shirt and candidate shirt. Measurements are edited as local drafts and stored on-device.
+- Enter chest width, shoulder width, and length for each shirt. Results switch all three signed scores between Body and Favorite; negative means smaller/shorter, zero means equal to the selected reference, positive means larger/longer. There is no overall score. Body chest compares twice flat garment width against body circumference; its 0.96 m score scale maps 48 cm additional room to +50.
+- Physical chest and aligned waist checks still gate size recommendations. Favorite and Body size rankings use their respective dimensions, but neither recommends a garment when measured physical checks or the favorite reference fail.
+- Results show only the Body/Favorite selector and concise dimension scores; no physical-check disclaimer card or measurement-source/limits prose. This owner-approved presentation replaces the older contradictory-favorite alert.
+- Enter size-chart rows from **finished-garment measurements** and compare actual sizes. Body-size recommendation charts are not interchangeable with garment measurements.
+
+## Preserved legacy scanner — historical status and limits
+
+The device-installation statement below is historical. The physical phone is unavailable for I1; it is not fresh guided-scanner, GPU or accuracy evidence.
+
+The guided front/side depth scan measures waist width/depth and returns an editable partial body draft with estimated waist circumference, shoulder width, and torso length. It does not measure chest circumference; manually measure and enter chest circumference before saving the body profile. The scanner still uses depth sensing for 3D spans; it does not infer circumference from a single width. An AR garment ruler is also included. Both camera flows support portrait and landscape; garment raycasts accept horizontal or vertical surfaces. Rotating a frozen body frame requires Retake, which keeps completed spans. The app has been built and installed on the connected iPhone 17 Pro Max (iOS 27.0); physical landscape capture and marker alignment still need a live check. An owner reports a physical measurement check on that phone had “pretty good accuracy” and they would trust it; no numeric tape-error or repeatability values were recorded. Treat this as qualitative anecdotal evidence, not a general accuracy claim. Garment-ruler measurement validation and timed live-demo rehearsal remain unverified. Only the connected phone was in scope; no second-phone validation was performed.
+
+No raw body images are stored or uploaded by the app. Do not put secrets or real measurements/photos in this repository, commits, or coding-agent prompts.
+
+## Setup and verification
+
+Requires macOS, Xcode, and XcodeGen. `project.yml` is canonical; generate the existing project before opening it:
+
+```bash
+brew install xcodegen
+xcodegen generate
+open FitCheck.xcodeproj
+```
+
+Run the complete local development verification with **Python 3.9+**:
+
+```bash
+python3 Scripts/verify_development.py
+```
+
+The runner discovers an available iPhone simulator (or accepts `--simulator UDID`), creates a unique evidence directory outside the repository, runs clean Debug unit/UI tests and SDK/Release checks, verifies every requested Release selector executed, and inspects actual binaries, resources, fixture digests and privacy manifests. It does not enable cloud CI or validate physical hardware. Inspect exported synthetic simulator screenshots separately. `--inspect-derived PATH` inspects existing artifacts only and is explicitly not fresh build/test proof.
+
+Keep the verification host awake with its lid open; host sleep can interrupt XCTest gesture synthesis. To prevent idle sleep for a run, use `caffeinate -disu python3 Scripts/verify_development.py`. This does not prevent forced lid-close sleep.
+
+The full iOS 27 simulator suite passed **46/46** on October 1, 2026 (45 unit tests and one UI test). Physical front/side scan accuracy still needs tape measurements and repeat captures. Select an installed simulator with `xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -showdestinations`, then replace the simulator name below if needed:
+
+```bash
+xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -derivedDataPath /tmp/fitcheck-simulator-derived \
+  -parallel-testing-enabled NO \
+  -maximum-concurrent-test-simulator-destinations 1 \
+  CODE_SIGNING_ALLOWED=NO test -quiet
+```
+
+## Repository map
+
+```text
+project.yml                 XcodeGen project and schemes
+Sources/Models/             Body, garment, chart, and measurement types
+Sources/Services/           Local profile store and fit/scoring engine
+Sources/Views/              Manual entry, results, size chart, home flow
+Sources/BodyScan/           Guided depth capture and body measurement
+Sources/AR/                 Garment ruler
+Tests/                      Unit tests
+UITests/                    Manual-flow UI tests
+Docs/                       Frontend handoff
+```
+
+## Historical avatar-first planning (PR #6)
+
+These October 2026 proposals are retained for reference, not as the current implementation contract or an instruction to restart completed work. Start with the showcase instructions above and the [current demo handoff](Docs/FRIDAY_DEMO_D1_HANDOFF.md). Personalized avatar creation and validated garment-fit prediction remain future work.
+
+- [Archived production kickoff prompt](Docs/PRODUCTION_KICKOFF_PROMPT.md)
+- [Commercial development segments and quality gates](Docs/PRODUCTION_SEGMENTS.md)
+- [Product requirements and acceptance criteria](Docs/AVATAR_MVP_REQUIREMENTS.md)
+- [Technical architecture and open-source asset strategy](Docs/AVATAR_MVP_ARCHITECTURE.md)
+- [Prioritized user stories and two-week timeline](Docs/AVATAR_MVP_STORIES.md)
+- [Master prompt and individual coding-agent story prompts](Docs/AVATAR_MVP_AGENT_PROMPTS.md)
+
+The original repository and PR-status statements in these documents are historical. The integrated scanner is Debug-only and still lacks physical-device validation; approximate visualization is not a validated garment-fit prediction.
+
+### Earlier planning and experiment (PRs #1 and #5)
+
+- [September product specification](Docs/superpowers/specs/2026-09-27-fitcheck-ios-design.md)
+- [Dated feasibility/source audit](Docs/superpowers/research/2026-09-27-fitcheck-feasibility.md)
+- [Historical implementation plan](Docs/superpowers/plans/2026-09-27-fitcheck-ios.md)
+- [Superseded first scanner experiment](Docs/AVATAR_FIRST_MVP.md)
+

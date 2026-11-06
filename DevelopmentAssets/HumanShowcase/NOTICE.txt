@@ -1,0 +1,21 @@
+FitCheck Human Showcase asset provenance
+
+Third-party source
+------------------
+Source: MakeHuman Community, data/base/hm08/base.obj
+Pinned repository commit: 3ef8a20dfec873fdf84d3315aeaf98694cad91bf
+Immutable source URL: https://raw.githubusercontent.com/makehumancommunity/makehuman2/3ef8a20dfec873fdf84d3315aeaf98694cad91bf/data/base/hm08/base.obj
+Source SHA-256: 9e8e529a386823fa0af5aa0cf4f082076f24f0f1a1a904003b2ab2b57b911342
+The OBJ header explicitly says the asset is CC0 (September 2020). The MakeHuman asset-license statement identifies base meshes and proxies as CC0 1.0 Universal: https://github.com/makehumancommunity/makehuman/blob/master/LICENSE.md (section C) and https://github.com/makehumancommunity/makehuman/blob/master/LICENSE.ASSETS.md.
+
+Only the source OBJ's `body` geometry group is converted. Joint-helper cubes, eyes, eyelash/hair/genital/teeth helpers, tights, and all non-body groups are excluded. Source +Y remains renderer +Y, normalized to a 1.80 m floor-standing body, with +Z facing forward. The body remains the source's smooth detailed base topology. Shirt, vest, and modest shorts are first-party geometry produced by offsetting the complete body along its smooth normals, clipping reviewed garment regions with planar boundaries, and welding their shared edges; they are not third-party garment or retailer assets. The converter is Scripts/build_human_showcase.py and uses only Python's standard library. It does not import or copy MakeHuman program code (which is AGPL).
+
+Payload
+-------
+DevelopmentAssets/HumanShowcase/human-showcase-v1.bin
+Format: FCHUMAN1 version 1, little-endian; four indexed meshes (body, shirt, vest, shorts), 32-bit float positions/normals, UInt16 triangle indices, and authored per-vertex illustrative shell-spacing values on the three garments. Continuous sample offsets range from 5 mm at the chest/shoulders to 30 mm at the waist, with up to 22 mm sleeve room; modest shorts use 12–16 mm. These authored normal offsets are interpolated where garment boundaries clip the source triangles. Values represent only this sample geometry, not personal body measurements, pressure, or verified fit.
+Payload SHA-256: 6977bd1aeba54c9f4ef82f9d7f9b8b996d030b2758e226b61dcb9fbccfe4f6e9
+
+License
+-------
+The source base-mesh asset and its adapted body geometry are CC0 1.0 Universal. The first-party garment surfaces and converter are also dedicated to CC0 1.0 Universal. See LICENSE.txt. No MakeHuman software code is included.
