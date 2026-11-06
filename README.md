@@ -12,6 +12,23 @@ git switch -c feature/teammate-work
 
 For a new checkout, clone `https://github.com/anshbalusa-ui/itchathon.git` and enter the repository first. Preserve any existing local work before switching branches. Use the Debug demo below; normal Release still opens the legacy application. Archived planning/kickoff documents are historical, not instructions to restart completed segments.
 
+## Measurement-driven avatar demo (M1, Debug only)
+
+The editable-measurement demo is on `feature/measurement-avatar-demo-m1`, based on the integrated `main` above. To reproduce this work from an existing checkout, preserve local changes first, then:
+
+```bash
+git fetch origin
+git switch feature/measurement-avatar-demo-m1
+git pull --ff-only
+Scripts/launch_friday_demo.sh
+```
+
+In **FitCheck Demo Showcase**, tap **Create avatar**. Enter height, chest/waist/hip circumferences and shoulder width in **cm**, or choose fictional **Sample A / Sample B**, then **Generate avatar**. Drag or use Left / Right / Reset; show the illustrative shirt, or choose **Edit measurements** to generate another shape. The internal hub also has **Measurement avatar demo**.
+
+The entered values change actual smooth human mesh geometry in native Metal—not only its label or an image. Clothing follows the same illustrative deformation, without a fit/pressure map. Values stay in memory for the preview and clear when leaving. This is a generic measurement-shaped demonstration, not an exact body reconstruction, personal scan, validated fit or size recommendation. Scanning remains separate; normal Release is unchanged.
+
+The launch helper rejects prebuilt apps without this measurement demo, preventing an old human-showcase build from looking like the current feature. It finishes simulator boot/install/launch before opening the graphical Simulator; no simulator is erased. See the [current demo handoff](Docs/FRIDAY_DEMO_D1_HANDOFF.md) for evidence and limitations.
+
 ## Friday Demo Showcase (Debug only)
 
 From the repository root on a Mac with Xcode, an installed iPhone simulator, XcodeGen and Python 3:
@@ -20,7 +37,7 @@ From the repository root on a Mac with Xcode, an installed iPhone simulator, Xco
 Scripts/launch_friday_demo.sh
 ```
 
-The helper builds unsigned Debug, boots an available iPhone simulator without erasing data, installs FitCheck and launches `-fitcheck-demo-internal`. Use `--simulator UDID` to select a device or `--app /absolute/path/to/Debug-iphonesimulator/FitCheck.app` to reuse a current build. Release, device and older builds without the human-showcase assets are rejected. The existing internal development hub also offers **FitCheck Demo Showcase**.
+The helper builds unsigned Debug, boots an available iPhone simulator without erasing data, installs FitCheck and launches `-fitcheck-demo-internal`. Use `--simulator UDID` to select a device or `--app /absolute/path/to/Debug-iphonesimulator/FitCheck.app` to reuse a current build. Release, device and older builds without the measurement demo and pinned human assets are rejected. The existing internal development hub also offers **FitCheck Demo Showcase**.
 
 Start with the live rotatable anatomical human model, use Left / Right / Reset or drag, and toggle the garment. The **Sample collection** supports **Everyday Tee / Navy**, **Weekend Tee / Sage** and **Geometric Vest Concept / Navy**, each with **S/M labels**. Both sizes use identical geometry. Choose **Head, Shoulders, Chest, Waist, Hips, Arms or Legs** under **Inspect the human model** to focus the camera; **Whole body** or Reset restores full framing.
 

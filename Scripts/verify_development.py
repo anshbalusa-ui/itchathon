@@ -21,6 +21,9 @@ PRIVACY = {
 MARKERS = (
     "HumanShowcaseAssets", "HumanShowcaseModel", "HumanBodyRegion",
     "demo.fit-map", "demo.region-summary", "demo.region",
+    "MeasurementAvatarInput", "MeasurementAvatarGenerator", "MeasurementAvatarModel", "MeasurementAvatarDemoView",
+    "measurements.form", "measurements.scene", "measurements.generate",
+    "demo.open-measurements", "internal.open-measurements",
     "CatalogPreviewAssociation", "CatalogIllustrativePreview", "RendererPresentation",
     "catalog.preview.open", "renderer.product-context", "View illustrative 3D preview",
     "RendererLabView", "RendererSceneSession", "RendererProceduralAssets", "renderer.scene",
@@ -58,6 +61,7 @@ MARKERS = (
 )
 RELEASE_SELECTORS = (
     "FitCheckUITests/FridayDemoUITests/testDemoRemainsExcludedFromRelease",
+    "FitCheckUITests/MeasurementAvatarUITests/testMeasurementDemoIsExcludedFromRelease",
     "FitCheckTests/AvatarFeatureIsolationTests",
     "FitCheckTests/CatalogIsolationTests",
     "FitCheckTests/InternalDevelopmentRouteTests",

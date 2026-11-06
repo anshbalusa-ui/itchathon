@@ -1,6 +1,6 @@
 # FitCheck — Friday Demo D1
 
-The D1 baseline below is retained as historical verification and media evidence. The **requested human-avatar refinement** at the end supersedes its blocky showcase artwork, clothing meshes and “3D Avatar” link title. Use the current branch's launch helper; its prebuilt-app checks intentionally reject old D1 bundles without the human assets.
+The D1 baseline below is retained as historical verification and media evidence. The **requested human-avatar refinement** supersedes its blocky artwork; the final **M1 — Measurement-driven human avatar** section adds editable dimensions and supersedes D2's fixed-body limitation. D1/D2 test totals and recordings are historical, not M1 verification. Use the current branch's launch helper; prebuilt apps must include the measurement demo and pinned human assets.
 
 ## Owner-authorized team integration — PR #24
 
@@ -374,4 +374,67 @@ Prebuilt launches were also exercised on the main, smaller and larger simulators
 - Review base: `feature/friday-visual-demo-d1` at `40cee194750647657783e9eac622cc997dcb3f2e`, not `main`.
 
 A documentation-only commit records this review identity after the implementation commit; it changes no verified build/test input. The exact delivered branch-tip SHA is recorded in `/Users/anshbalusa/fitcheck-d2-artifacts/delivery.json` and the PR head. PR #21 remains draft against `main` at S2C commit `235bee6a5cd7b334d4689ad6e09ff9f4080acb16`; PR #22 remains draft against S2C at the unchanged D1 head. No existing PR or branch was merged or modified.
+
+## M1 — Measurement-driven human avatar
+
+### Source and scope
+
+- Exact base: integrated `main` at `40feaf4931614637c3e1dc05407af2660eb56f19`.
+- Implementation branch: `feature/measurement-avatar-demo-m1`.
+- New entry: **Create avatar** on the Friday showcase, or **Measurement avatar demo** in the internal development hub. No new launch argument is required.
+- Everything new is Debug-only. Normal Release still opens the existing legacy application. Scanner, profile, S2A/S2B/S2C authorization and synthetic replay admission are unchanged.
+
+This is a numbers-to-model demonstration, not a substitute for device scanning. Five entered dimensions reshape an authored generic human; those five dimensions cannot uniquely identify or reproduce a real person. No camera is used, no completed personal scan is claimed, and no measurements are saved, uploaded or promoted into a profile.
+
+### Presenter / teammate journey
+
+```bash
+git fetch origin
+git switch feature/measurement-avatar-demo-m1
+git pull --ff-only
+Scripts/launch_friday_demo.sh
+```
+
+Preserve existing local work before switching branches. The helper requires Xcode, an installed iPhone simulator, XcodeGen and Python 3; no signing credentials or physical device are needed. It boots, installs and launches before opening the graphical Simulator, and never erases a simulator. Use `--simulator UDID` to select a device. A prebuilt app without the measurement route is rejected rather than silently showing the old fixed-human demo.
+
+1. **FitCheck Demo Showcase → Create avatar**.
+2. Choose fictional **Sample A / Sample B**, or edit the five numbers in **cm**.
+3. **Generate avatar** shows the actual smooth human surface in native Metal.
+4. Drag, **Left / Right / Reset**, and **Show illustrative shirt** inspect the generated result.
+5. **Edit measurements** regenerates another shape. Back returns to the showcase; reopening starts at Sample A, not the last person's values.
+
+The scanner remains a separate experimental module, not part of this required journey. There is no measurement-entry feature in normal Release.
+
+### Inputs and fictional presets
+
+| Dimension, cm | Accepted range | Sample A | Sample B |
+| --- | ---: | ---: | ---: |
+| Height | 140–210 | 180 | 170 |
+| Chest circumference | 60–150 | 96 | 110 |
+| Waist circumference | 50–140 | 80 | 100 |
+| Hip circumference | 60–155 | 98 | 112 |
+| Shoulder width | 30–65 | 43 | 48 |
+
+Values must be finite. Invalid input leaves no successful-looking scene and presents a field-specific range message beside Generate, including at the largest accessibility text size. The presets are quick controls before the editable fields; numeric keyboard dismissal has an explicit **Done** button.
+
+### What genuinely changes
+
+- The pinned CC0 human source stays unchanged. A cached one-level Loop refinement smooths its actual surface before measurement deformation; normals are recomputed from generated triangles.
+- Height controls actual floor-to-head world height. Chest, waist and hip targets calibrate actual central torso cross-section perimeters rather than applying one global scale. Shoulder width changes the upper trunk and carries the arms laterally.
+- Smooth bounded interpolation transitions between body regions. The head and hands retain their local proportions; the arms move with the shoulders rather than developing torso-dependent deltoid bulges.
+- The shirt and shorts use the same spatial deformation field and remain illustrative compatible geometry. The renderer frames actual generated bounds, including rotation and narrow viewports.
+- Each generated scene has distinct measurement-result authority. It cannot enable D2's authored shell-spacing map, substitute an unrelated garment, or become a saved personal avatar.
+- Backgrounding releases GPU ownership; foregrounding rebuilds the current CPU result. Editing, leaving or rapid navigation cancels generation and disposes the prior scene; late results cannot replace a newer session.
+
+The source-defined fitting bands are hip 51%, waist 57%, chest 72% and upper-trunk width 75.5% of source height. These are demonstration-model controls, not validated clinical landmarks or measurement instructions. A smooth generic model matching selected dimensions is not evidence that an individual's anatomy, clothing pressure or fit has been reconstructed.
+
+### Verification coverage and limits
+
+M1 adds geometry regressions for actual section dimensions, independently changing each input, closed topology, normals, paired-limb/surface symmetry, head/hand preservation, clothing deformation and invalid inputs. Session tests cover cancellation, background rebuilding, retry and disposal; renderer tests project actual generated vertices at multiple heights, aspect ratios and rotations and enforce the no-clearance-map boundary.
+
+Actual UI journeys inspect rendered body/garment pixels and changed silhouettes, manually type a waist value, switch presets, rotate/reset, background/foreground, reopen, rapidly dismiss, and exercise the largest accessibility text size. Release isolation separately attempts both Debug entry paths and checks that normal legacy UI remains.
+
+No LiDAR phone, real person's measurements, physical garment validation, scan accuracy, physical drape, size recommendation or pressure/tightness measurement is claimed. The existing D2 spacing-map illustration belongs only to its authored fixed-body scene. Future personalized geometry and fit claims still require authorized inputs and real-device/physical validation.
+
+> FitCheck can now turn five demo measurements into a smooth, interactive 3D human and reshape illustrative clothing with it. This proves the numbers-to-model path; scanning remains separate, and the result is not an exact person or verified garment fit.
 
