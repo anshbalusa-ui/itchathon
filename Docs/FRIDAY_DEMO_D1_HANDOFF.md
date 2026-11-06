@@ -438,3 +438,55 @@ No LiDAR phone, real person's measurements, physical garment validation, scan ac
 
 > FitCheck can now turn five demo measurements into a smooth, interactive 3D human and reshape illustrative clothing with it. This proves the numbers-to-model path; scanning remains separate, and the result is not an exact person or verified garment fit.
 
+### M1 publication
+
+- Verified implementation source: [`dadab48a1ebd70f76fbc63926977329e4c03c91a`](https://github.com/anshbalusa-ui/itchathon/commit/dadab48a1ebd70f76fbc63926977329e4c03c91a).
+- Published branch: `feature/measurement-avatar-demo-m1`.
+- Draft review: [PR #25 — Smooth measurement-driven human avatar demo](https://github.com/anshbalusa-ui/itchathon/pull/25), targeting `main`. This new feature is not merged.
+
+A later documentation-only commit records final verification and visual evidence without changing the verified build/test inputs. The delivered branch-tip identity is recorded in the PR head and the external M1 delivery artifact.
+
+### M1 actual simulator visuals and backup recording
+
+| Simulator | Appearance | Actual screenshot size | M1 rendered UI journeys |
+| --- | --- | --- | ---: |
+| iPhone 17e | Light | 1170×2532 | 2/2 passed; zero skips |
+| iPhone 17 Pro Max | Dark | 1320×2868 | 2/2 passed; zero skips |
+
+Both journeys exercise actual model pixels, a visibly different Sample B, a manually typed waist value, rotation/reset, illustrative clothing, background restoration, rapid dismissal/reopening and the largest accessibility text size. Original results are `/Users/anshbalusa/fitcheck-m1-artifacts/SmallLight.xcresult` and `LargeDark.xcresult`; their screenshot exports/manifests are `SmallLightScreenshots/` and `LargeDarkScreenshots/` in the same directory.
+
+Full-body framing, smoother head/arms/torso, five editable values, clothing contrast, readable controls and always-visible validation were inspected in the actual images. Eleven byte-identical, human-readable screenshot copies are in:
+
+`/Users/anshbalusa/fitcheck-m1-artifacts/MeasurementScreenshots/`
+
+Key images: `m1-01-sample-inputs.png`, `m1-02-generated-a.png`, `m1-03-rotated-human.png`, `m1-04-illustrative-clothing.png`, `m1-05-generated-b.png`, `m1-06-manual-waist.png`, `m1-09-invalid-input-accessibility.png` and `m1-11-rapid-navigation-recovery.png`.
+
+| Finished actual recording | Duration | Location |
+| --- | ---: | --- |
+| Measurement demo meeting edit | 49.9 s | `/Users/anshbalusa/fitcheck-m1-artifacts/measurement-demo-50s-cfr.mp4` |
+| Unmodified Simulator source | 690.745 s | `/Users/anshbalusa/fitcheck-m1-artifacts/measurement-demo-original.mov` |
+
+The source was captured with `xcrun simctl io … recordVideo --codec=h264` during the passing large/dark UI run; the recorder finalized with exit 0. Native AVFoundation shortened waits/navigation and normalized output to 30 fps, retaining the actual 1320×2868 app footage. This is not a real-time generation-performance claim. The edit shows numbers → generated A → rotation/clothing → generated B → typing waist 82 → narrower generated waist → clean reopening.
+
+The finished file was decoded and its segments visually inspected, including the numeric keyboard and changed silhouette. `visual-evidence.json` retains source/output SHA-256 identities and unchanged screenshot hashes. Exact source ranges are in `measurement-demo-50s-story.json` and `measurement-demo-50s-cfr.metadata.json`; decoded frames/metadata are in `OriginalVideoInspection/`, `MeetingVideoInspection/` and `MeetingVideoDetailInspection/`.
+
+The first optional edit export failed with AVFoundation `-11800` / underlying `-16364`; its original evidence and failed filename are explicitly recorded in `initial-video-export-failure.json`. Only the `-cfr.mp4` file above is the finished meeting edit.
+
+If graphical Simulator access is unavailable:
+
+```bash
+open /Users/anshbalusa/fitcheck-m1-artifacts/measurement-demo-50s-cfr.mp4
+open /Users/anshbalusa/fitcheck-m1-artifacts/MeasurementScreenshots/m1-01-sample-inputs.png
+open /Users/anshbalusa/fitcheck-m1-artifacts/MeasurementScreenshots/m1-05-generated-b.png
+```
+
+These are backup materials, not a replacement for live Metal rendering. Earlier D2 media remains valid evidence of the fixed-human showcase only; it is not relabelled as M1 measurement generation.
+
+### Original M1 full-run evidence — not a complete gate pass
+
+`/Users/anshbalusa/fitcheck-m1-artifacts/full-verification/verification-g9l9c9o9` preserves the first completed full-script attempt. Its complete Debug suite passed **381/381**, with zero failures/skips; all **367** previous Debug case identities remain represented and passing (`Debug-regression-preservation.json`). The unsigned iPhone SDK and normal Release build commands also completed.
+
+Release isolation did **not** pass in that attempt: nine unit cases passed, but the UI runner was killed with signal 9 before connecting/finishing bootstrap, so no Release UI case ran. This is an XCTest runner/bootstrap failure, not a passed UI suite or a product assertion failure. The exact reason for the OS kill is unconfirmed. Original logs/results remain unchanged; exported scheduling/session diagnostics are in `/Users/anshbalusa/fitcheck-m1-artifacts/ReleaseBootstrapDiagnostics/`.
+
+Secondary simulators and media processing were stopped, and the owned main simulator was shut down and booted headlessly without erasing data. A complete unchanged-source verification rerun was then started. No test, source condition, pixel threshold or Release boundary was weakened to recover this failure.
+
