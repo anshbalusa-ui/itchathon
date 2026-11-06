@@ -490,3 +490,51 @@ Release isolation did **not** pass in that attempt: nine unit cases passed, but 
 
 Secondary simulators and media processing were stopped, and the owned main simulator was shut down and booted headlessly without erasing data. A complete unchanged-source verification rerun was then started. No test, source condition, pixel threshold or Release boundary was weakened to recover this failure.
 
+### M1 final fresh verification — PASS
+
+The complete unchanged-source rerun finished successfully:
+
+```bash
+python3 Scripts/verify_development.py \
+  --simulator 66353AE4-9E8A-4854-B729-53BA83B99BB4 \
+  --output-root /Users/anshbalusa/fitcheck-m1-artifacts/full-verification
+```
+
+Authoritative report:
+
+`/Users/anshbalusa/fitcheck-m1-artifacts/full-verification/verification-1n5bxsj5/verification.json`
+
+| Fresh gate | Result |
+| --- | --- |
+| Debug build and complete tests | **381/381** — 348 unit, 33 UI |
+| Unsigned generic iPhone SDK build | Passed |
+| Normal Release build | Passed; `ENABLE_TESTABILITY=NO` |
+| Release isolation | **18/18** — 9 unit, 9 UI |
+| Failures / skips / expected failures in either suite | **0 / 0 / 0** |
+| Resource and privacy inspections | Passed for Debug, iPhone, normal Release and Release-test bundles |
+| Normal Release development symbols/resources | No marker or resource leaks |
+
+Verified build/test-input SHA-256:
+
+`12223f5a4cb90c2fb8d4fa48a6be5015a6fa5291e266cea9fd1c9addd6ca2af2`
+
+All **367 previous Debug** and **17 previous Release** case identities remain present and passing; M1 adds **14 Debug** and **1 Release** cases. `regression-preservation.json` retains every final case identity/result and the set comparison. No previous regression was skipped, deleted or weakened. The successful report is separate from the original bootstrap failure; neither evidence directory was overwritten.
+
+Development visual findings were fixed before freezing the verified inputs: torso-dependent upper-arm bulges now use coherent shoulder translation; largest-text preset/rotation controls use explicit vertical layouts; invalid-value messages remain beside Generate. The UI helper scrolls through an empty trailing gutter rather than starting a gesture inside numeric text selection, retaining the same reachability, rendered-pixel, silhouette-change and recovery assertions.
+
+The new geometry regression checks actual section-envelope and paired-limb symmetry, not incidental reflection pairing of subdivided vertex samples: 212 pinned-source triangles lack reflected counterparts because of triangulation choices, despite exactly mirrored original vertex positions. Numerical evidence is retained in `source-topology-evidence.json`; no original test was changed for that correction.
+
+No product failure remains observed in the verified demo paths. Hardware LiDAR validation, individualized anatomical reconstruction and physical garment-fit validation remain outside this demonstration.
+
+### M1 final verified launch
+
+After the successful full gate, the exact simplest command completed successfully:
+
+```bash
+Scripts/launch_friday_demo.sh
+```
+
+It generated the project, built current unsigned Debug, installed FitCheck and launched the Friday showcase on **iPhone 17 FitCheck Main Demo / iOS 26.5** (`66353AE4-9E8A-4854-B729-53BA83B99BB4`), then opened the graphical Simulator. Xcode 26.5 (17F42) and XcodeGen 2.46.0 were used; no device signing, credentials or simulator erasure was involved.
+
+The final live surface was captured and inspected at `/Users/anshbalusa/fitcheck-m1-artifacts/final-running-showcase.png`: the human wears the Navy sample shirt, and **Create avatar** is clearly visible. The app is left open there. The stale prebuilt rejection is separately recorded in `stale-demo-rejection.json`; an old fixed-human app was not accepted as the current measurement demo.
+
