@@ -42,3 +42,7 @@ build-*/
 FitCheck.xcodeproj/
 On You.xcodeproj/
 DerivedData/
+
+# Python model-conversion cache
+__pycache__/
+*.pyc
