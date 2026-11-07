@@ -23,7 +23,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>On You uses the camera for body capture and clothing measurements.</string>
+	<string>On You captures photos and LiDAR depth to reconstruct your body, face, and appearance as a 3D avatar on this iPhone.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

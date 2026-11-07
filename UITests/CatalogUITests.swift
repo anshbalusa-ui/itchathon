@@ -9,7 +9,7 @@ final class CatalogUITests: XCTestCase {
         #if DEBUG
         XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 5))
         #else
-        XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
         #endif
         XCTAssertFalse(app.buttons["catalog.product.sample-studio.everyday-tee"].exists)
         app.terminate()
@@ -19,7 +19,7 @@ final class CatalogUITests: XCTestCase {
         XCTAssertTrue(app.buttons["catalog.product.sample-studio.everyday-tee"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["My Body"].exists)
         #else
-        XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["catalog.product.sample-studio.everyday-tee"].exists)
         #endif
     }

@@ -2,13 +2,19 @@ import SwiftUI
 
 struct OnYouRootView: View {
   @State private var store = OnYouStore()
+  @State private var scans = AvatarScanStore()
   @State private var selectedTab = OnYouTab.body
 
   var body: some View {
     TabView(selection: $selectedTab) {
       Tab("Body", systemImage: "figure.stand", value: .body) {
         NavigationStack {
-          YourBodyView(store: store) { selectedTab = .measurements }
+          YourBodyView(store: store, scans: scans) { selectedTab = .scan }
+        }
+      }
+      Tab("Scan", systemImage: "camera", value: .scan) {
+        NavigationStack {
+          BodyScanHomeView(store: scans, referenceHeight: store.current?.height) { selectedTab = .body }
         }
       }
       Tab("Measurements", systemImage: "ruler", value: .measurements) {
@@ -21,14 +27,14 @@ struct OnYouRootView: View {
       }
     }
     .tint(.blue)
-    .alert("Measurements", isPresented: Binding(get: { store.storageError != nil }, set: { if !$0 { store.storageError = nil } })) {
-      Button("OK", role: .cancel) { store.storageError = nil }
+    .alert("Saved data", isPresented: Binding(get: { store.storageError != nil || scans.error != nil }, set: { if !$0 { store.storageError = nil; scans.error = nil } })) {
+      Button("OK", role: .cancel) { store.storageError = nil; scans.error = nil }
     } message: {
-      Text(store.storageError ?? "")
+      Text(store.storageError ?? scans.error ?? "")
     }
   }
 }
 
 private enum OnYouTab: Hashable {
-  case body, measurements, history
+  case body, scan, measurements, history
 }

@@ -263,7 +263,7 @@ final class AvatarGeometryUITests: NativeMeshUITestCase {
             app.terminate()
             app.launchArguments = flags
             app.launch()
-            XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["internal.open-geometry"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["geometry.scene"].exists)
             XCTAssertFalse(app.buttons["geometry.fixture.surfaceA"].exists)
@@ -278,7 +278,7 @@ final class AvatarGeometryUITests: NativeMeshUITestCase {
             app.launchArguments = [flag, "-fitcheck-synthetic-artifact-test-namespace", UUID().uuidString,
                                    "-fitcheck-synthetic-artifact-test-seed", "corrupt"]
             app.launch()
-            XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["geometry.artifact.save"].exists)
             XCTAssertFalse(app.buttons["geometry.artifact.load"].exists)
             XCTAssertFalse(app.buttons["geometry.artifact.delete"].exists)

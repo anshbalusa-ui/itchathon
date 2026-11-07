@@ -16,7 +16,7 @@ final class IntegrationUITests: XCTestCase {
             app.terminate()
             app.launchArguments = flags
             app.launch()
-            XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.descendants(matching: .any)["internal-development-hub"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["avatar-pilot-root"].exists)
             XCTAssertFalse(app.buttons["catalog.product.sample-studio.everyday-tee"].exists)

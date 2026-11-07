@@ -15,7 +15,7 @@ struct BodyMeasurementsView: View {
   var body: some View {
     Form {
       Section {
-        BodySceneView(measurements: parsed ?? store.current ?? .example, angle: 0, reset: 0)
+        BodySceneView(measurements: parsed ?? store.current ?? .example)
           .frame(height: 220)
           .listRowInsets(EdgeInsets())
           .accessibilityHidden(true)
@@ -61,6 +61,7 @@ struct BodyMeasurementsView: View {
       }
       Section {
         NavigationLink { MeasurementGuideView() } label: { Label("How to measure", systemImage: "ruler") }
+        NavigationLink("About On You") { OnYouAboutView() }
       }
       Section {
         Button(store.current == nil ? "Create my body" : "Save measurements") {

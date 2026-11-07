@@ -43,7 +43,7 @@ private struct BodySnapshotView: View {
   var body: some View {
     List {
       Section {
-        BodySceneView(measurements: snapshot.measurements, angle: 0, reset: 0)
+        BodySceneView(measurements: snapshot.measurements)
           .frame(height: 300)
           .listRowInsets(EdgeInsets())
       }

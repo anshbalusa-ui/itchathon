@@ -295,7 +295,7 @@ final class FridayDemoUITests: NativeMeshUITestCase {
             app.terminate()
             app.launchArguments = flags
             app.launch()
-            XCTAssertTrue(app.navigationBars["On You"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["internal.open-demo"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["demo.scene"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["demo.avatar.scene"].exists)

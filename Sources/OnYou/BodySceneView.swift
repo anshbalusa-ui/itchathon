@@ -3,8 +3,7 @@ import SwiftUI
 
 struct BodySceneView: UIViewRepresentable {
   var measurements: BodyMeasurements
-  var angle: Float
-  var reset: Int
+  var scan: ScannedBodySource? = nil
   var wireframe: Bool = false
 
   func makeCoordinator() -> Coordinator { Coordinator() }
@@ -25,29 +24,31 @@ struct BodySceneView: UIViewRepresentable {
     view.pointOfView = context.coordinator.camera
     view.isAccessibilityElement = true
     view.accessibilityLabel = "Body model"
-    view.accessibilityHint = "Drag to rotate. Pinch to zoom. View controls are below the model."
+    view.accessibilityHint = "Drag to rotate. Pinch to zoom."
     view.accessibilityIdentifier = "body.scene"
     return view
   }
 
   func updateUIView(_ view: SCNView, context: Context) {
     let c = context.coordinator
-    if c.measurements != measurements {
+    let height = scan?.referenceHeightCM ?? measurements.height
+    if let scan {
+      if c.loadedScan != scan {
+        c.updateScan(scan)
+        view.pointOfView = c.camera
+      }
+    } else if c.measurements != measurements || c.loadedScan != nil {
       c.update(measurements)
-      view.defaultCameraController.target = SCNVector3(0, Float(measurements.height / 100) * 0.51, 0.035)
-    }
-    c.body.geometry?.firstMaterial?.fillMode = wireframe ? .lines : .fill
-    if c.reset != reset || c.angle != angle {
-      c.reset = reset
-      c.angle = angle
-      c.positionCamera(angle: angle, height: Float(measurements.height / 100))
       view.pointOfView = c.camera
     }
-    view.accessibilityValue = "Height \(measurements.height.formatted()) centimeters, chest \(measurements.chest.formatted()), waist \(measurements.waist.formatted()), hips \(measurements.hips.formatted())"
+    view.defaultCameraController.target = SCNVector3(0, Float(height / 100) * 0.51, 0.035)
+    c.body.geometry?.firstMaterial?.fillMode = wireframe ? .lines : .fill
+    view.accessibilityValue = scan != nil ? "Captured textured avatar. Height calibrated to \(height.formatted()) centimeters."
+      : "Height \(measurements.height.formatted()) centimeters, chest \(measurements.chest.formatted()), waist \(measurements.waist.formatted()), hips \(measurements.hips.formatted())"
     view.accessibilityCustomActions = [
       UIAccessibilityCustomAction(name: "Rotate left") { _ in c.turn(view, by: -.pi / 6); return true },
       UIAccessibilityCustomAction(name: "Rotate right") { _ in c.turn(view, by: .pi / 6); return true },
-      UIAccessibilityCustomAction(name: "Reset view") { _ in c.positionCamera(angle: 0, height: Float(measurements.height / 100)); view.pointOfView = c.camera; return true }
+      UIAccessibilityCustomAction(name: "Reset view") { _ in c.positionCamera(angle: 0, height: Float(height / 100)); view.pointOfView = c.camera; return true }
     ]
     if c.failure != nil {
       view.accessibilityValue = c.failure
@@ -59,9 +60,10 @@ struct BodySceneView: UIViewRepresentable {
     var body = SCNNode()
     var shorts = SCNNode()
     var camera = SCNNode()
+    var loadedScan: ScannedBodySource?
+    var scannedNode: SCNNode?
     var measurements: BodyMeasurements?
     var angle: Float = 0
-    var reset = -1
     var failure: String?
     private var assets: HumanShowcaseMeshes?
     private var kernel: BodyShapeKernel?
@@ -131,12 +133,42 @@ struct BodySceneView: UIViewRepresentable {
     func update(_ values: BodyMeasurements) {
       guard let assets, let kernel else { return }
       do {
+        scannedNode?.removeFromParentNode()
+        scannedNode = nil
+        loadedScan = nil
+        body.isHidden = false
+        shorts.isHidden = false
+        failure = nil
         body.geometry = geometry(try kernel.shape(assets.body, to: values), color: UIColor(red: 0.66, green: 0.57, blue: 0.48, alpha: 1))
         shorts.geometry = geometry(try kernel.shape(assets.shorts, to: values), color: UIColor(red: 0.22, green: 0.27, blue: 0.29, alpha: 1))
         measurements = values
         positionCamera(angle: angle, height: Float(values.height / 100))
       } catch {
         failure = "The body model couldn’t be updated. Check your measurements."
+      }
+    }
+
+    func updateScan(_ source: ScannedBodySource) {
+      scannedNode?.removeFromParentNode()
+      scannedNode = nil
+      body.isHidden = true
+      shorts.isHidden = true
+      loadedScan = source
+      do {
+        let result = try ScannedAvatarGeometry.load(url: source.url, referenceHeightCM: source.referenceHeightCM)
+        scannedNode = result.node
+        scene.rootNode.addChildNode(result.node)
+        failure = nil
+        positionCamera(angle: 0, height: Float(source.referenceHeightCM / 100))
+      } catch {
+        failure = "The captured avatar couldn’t be opened. Retake or delete the scan from the Scan tab."
+        let text = SCNText(string: "Scan unavailable", extrusionDepth: 0)
+        text.font = .systemFont(ofSize: 0.07)
+        text.firstMaterial?.diffuse.contents = UIColor.secondaryLabel
+        let node = SCNNode(geometry: text)
+        node.position = SCNVector3(-0.32, 0.9, 0)
+        scannedNode = node
+        scene.rootNode.addChildNode(node)
       }
     }
 
@@ -148,7 +180,7 @@ struct BodySceneView: UIViewRepresentable {
 
     func turn(_ view: SCNView, by delta: Float) {
       angle += delta
-      positionCamera(angle: angle, height: Float((measurements?.height ?? 175) / 100))
+      positionCamera(angle: angle, height: Float((loadedScan?.referenceHeightCM ?? measurements?.height ?? 175) / 100))
       view.pointOfView = camera
     }
 
@@ -165,5 +197,20 @@ struct BodySceneView: UIViewRepresentable {
       geometry.materials = [material]
       return geometry
     }
+  }
+}
+
+struct ScannedBodySource: Equatable {
+  var url: URL
+  var referenceHeightCM: Double
+}
+
+struct ScannedAvatarPreview: View {
+  var url: URL
+  var referenceHeightCM: Double
+
+  var body: some View {
+    BodySceneView(measurements: .example, scan: ScannedBodySource(url: url, referenceHeightCM: referenceHeightCM))
+      .background(Color(uiColor: .secondarySystemGroupedBackground))
   }
 }
