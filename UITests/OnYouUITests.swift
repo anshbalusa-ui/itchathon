@@ -11,13 +11,13 @@ final class OnYouUITests: XCTestCase {
     XCTAssertFalse(app.buttons["Full screen"].exists)
     XCTAssertFalse(app.buttons["Edit measurements"].exists)
     XCTAssertFalse(app.segmentedControls.buttons["Front"].exists)
-    app.tabBars.buttons["Scan"].tap()
+    XCTAssertFalse(app.tabBars.buttons["Scan"].exists)
     app.buttons["scan.open"].tap()
     XCTAssertTrue(app.navigationBars["Scan your body"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.textFields["scan.height"].exists)
     XCTAssertTrue(app.staticTexts["Automatic scale"].exists)
     app.navigationBars["Scan your body"].buttons["Cancel"].tap()
-    XCTAssertTrue(app.navigationBars["Scan"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
   }
 
   @MainActor
@@ -26,6 +26,7 @@ final class OnYouUITests: XCTestCase {
     app.launch()
     defer { app.terminate() }
     app.tabBars.buttons["Closet"].tap()
+    XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "Add clothes")).count, 1)
     app.buttons["closet.add.toolbar"].tap()
     XCTAssertTrue(app.navigationBars["Add clothes"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.buttons["garment.photo"].exists)

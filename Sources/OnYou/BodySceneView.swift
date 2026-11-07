@@ -161,7 +161,7 @@ struct BodySceneView: UIViewRepresentable {
         failure = nil
         positionCamera(angle: 0, height: Float(source.referenceHeightCM / 100))
       } catch {
-        failure = "The captured avatar couldn’t be opened. Retake or delete the scan from the Scan tab."
+        failure = "The captured avatar couldn’t be opened. Retake or delete the scan from the Body tab."
         let text = SCNText(string: "Scan unavailable", extrusionDepth: 0)
         text.font = .systemFont(ofSize: 0.07)
         text.firstMaterial?.diffuse.contents = UIColor.secondaryLabel

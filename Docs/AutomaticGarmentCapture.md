@@ -16,6 +16,8 @@ Imported product photos and screenshots are saved without dimensions. A product 
 
 ## Body capture
 
+Body → Scan your body is the sole body-capture entry point. Closet uses a single toolbar Add action.
+
 Body reconstruction still uses Object Capture with a helper walking around a stationary person. Required height entry has been removed. Reconstruction checks that sufficient captured HEIC samples contain depth before accepting automatic scale. New records preserve native reconstructed scale; legacy height-calibrated records remain readable. Scans capture visible clothing and skin, not hidden anatomy. This is not yet a solo-scan workflow.
 
 ## Verification and limits

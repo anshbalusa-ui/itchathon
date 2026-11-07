@@ -11,10 +11,6 @@ struct ClosetView: View {
           Label("Your closet", systemImage: "tshirt")
         } description: {
           Text("Scan clothes you own or add a product photo. Start with a shirt whose fit you love.")
-        } actions: {
-          Button("Add clothes", systemImage: "plus") { adding = true }
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier("closet.add")
         }
       } else {
         List {

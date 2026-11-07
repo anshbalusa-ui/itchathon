@@ -3,7 +3,8 @@ import SwiftUI
 struct YourBodyView: View {
   var store: OnYouStore
   var scans: AvatarScanStore
-  var showScan: () -> Void
+  @State private var showingCapture = false
+  @State private var confirmingDelete = false
   @AppStorage("on-you.wireframe") private var wireframe = false
 
   var body: some View {
@@ -18,7 +19,7 @@ struct YourBodyView: View {
         }
         .padding()
       } else if scans.hasUnreadableScan {
-        ContentUnavailableView("Scan unavailable", systemImage: "camera", description: Text("Your saved scan couldn’t be loaded. Open Scan to retry or start again."))
+        ContentUnavailableView("Scan unavailable", systemImage: "camera", description: Text("Your saved scan couldn’t be loaded. Start a new scan to replace it."))
       } else {
         BodySceneView(measurements: store.current ?? .example, wireframe: wireframe)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -29,12 +30,28 @@ struct YourBodyView: View {
         }
         .padding()
       }
-      Button(scans.asset == nil ? "Scan your body" : "New scan", systemImage: "camera", action: showScan)
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .padding(.bottom, 20)
+      HStack(spacing: 12) {
+        Button(scans.asset == nil ? "Scan your body" : "New scan", systemImage: "camera") { showingCapture = true }
+          .buttonStyle(.borderedProminent)
+          .accessibilityIdentifier("scan.open")
+        if scans.asset != nil || scans.hasUnreadableScan {
+          Button("Delete scan", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.bordered)
+        }
+      }
+      .controlSize(.large)
+      .padding(.bottom, 20)
     }
     .background(Color(uiColor: .secondarySystemGroupedBackground))
     .toolbar(.hidden, for: .navigationBar)
+    .sheet(isPresented: $showingCapture) {
+      BodyScanFlowView(store: scans)
+    }
+    .confirmationDialog("Delete your saved scan?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+      Button("Delete scan", role: .destructive) { scans.delete() }
+    } message: {
+      Text("This removes the captured avatar from this iPhone. Your closet is kept.")
+    }
   }
 }

@@ -4,7 +4,6 @@ import SwiftUI
 
 struct BodyScanFlowView: View {
   var store: AvatarScanStore
-  var onSaved: () -> Void
   @State private var model = BodyCaptureModel()
   @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
@@ -169,7 +168,7 @@ struct BodyScanFlowView: View {
           Text("This captures the visible surface, including clothing. It does not measure the body hidden underneath.")
             .foregroundStyle(.secondary)
           Button("Use this avatar") {
-            if model.save(to: store) { dismiss(); onSaved() }
+            if model.save(to: store) { dismiss() }
           }
           Button("Retake scan", role: .destructive) { model.cancel() }
         }

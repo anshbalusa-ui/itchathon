@@ -10,12 +10,7 @@ struct OnYouRootView: View {
     TabView(selection: $selectedTab) {
       Tab("Body", systemImage: "figure.stand", value: .body) {
         NavigationStack {
-          YourBodyView(store: store, scans: scans) { selectedTab = .scan }
-        }
-      }
-      Tab("Scan", systemImage: "camera", value: .scan) {
-        NavigationStack {
-          BodyScanHomeView(store: scans) { selectedTab = .body }
+          YourBodyView(store: store, scans: scans)
         }
       }
       Tab("Closet", systemImage: "tshirt", value: .closet) {
@@ -35,5 +30,5 @@ struct OnYouRootView: View {
 }
 
 private enum OnYouTab: Hashable {
-  case body, scan, closet, history
+  case body, closet, history
 }
