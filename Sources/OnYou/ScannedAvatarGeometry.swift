@@ -4,7 +4,7 @@ import ModelIO
 import simd
 
 enum ScannedAvatarGeometry {
-  static func load(url: URL, referenceHeightCM: Double) throws -> (node: SCNNode, calibration: AvatarScanCalibration) {
+  static func load(url: URL, referenceHeightCM: Double? = nil) throws -> (node: SCNNode, calibration: AvatarScanCalibration) {
     let scene = try SCNScene(url: url, options: [.checkConsistency: true, .convertToYUp: true, .convertUnitsToMeters: 1.0])
     let root = scene.rootNode.clone()
     var hasTexture = false
@@ -29,7 +29,7 @@ enum ScannedAvatarGeometry {
     let bounds = root.boundingBox
     let minimum = SIMD3(bounds.min.x, bounds.min.y, bounds.min.z)
     let maximum = SIMD3(bounds.max.x, bounds.max.y, bounds.max.z)
-    let calibration = AvatarScanCalibration(minimum: minimum, maximum: maximum, referenceHeightCM: referenceHeightCM)
+    let calibration = AvatarScanCalibration(minimum: minimum, maximum: maximum, referenceHeightCM: referenceHeightCM ?? Double(maximum.y - minimum.y) * 100, usesDepthScale: referenceHeightCM == nil)
     try calibration.validate()
     let center = (minimum + maximum) / 2
     root.position = SCNVector3(-center.x * calibration.scale, -minimum.y * calibration.scale, -center.z * calibration.scale)

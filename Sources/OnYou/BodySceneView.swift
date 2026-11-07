@@ -43,7 +43,7 @@ struct BodySceneView: UIViewRepresentable {
     }
     view.defaultCameraController.target = SCNVector3(0, Float(height / 100) * 0.51, 0.035)
     c.body.geometry?.firstMaterial?.fillMode = wireframe ? .lines : .fill
-    view.accessibilityValue = scan != nil ? "Captured textured avatar. Height calibrated to \(height.formatted()) centimeters."
+    view.accessibilityValue = scan != nil ? "Captured textured avatar. Drag to rotate."
       : "Height \(measurements.height.formatted()) centimeters, chest \(measurements.chest.formatted()), waist \(measurements.waist.formatted()), hips \(measurements.hips.formatted())"
     view.accessibilityCustomActions = [
       UIAccessibilityCustomAction(name: "Rotate left") { _ in c.turn(view, by: -.pi / 6); return true },

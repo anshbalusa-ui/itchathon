@@ -13,7 +13,7 @@ struct YourBodyView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         VStack(spacing: 6) {
           Text("Your scan").font(.headline)
-          Text("\(asset.record.referenceHeightCM.formatted()) cm · \(asset.record.date.formatted(date: .abbreviated, time: .omitted))")
+          Text("Drag to rotate. Pinch to look closer.")
             .font(.subheadline).foregroundStyle(.secondary)
         }
         .padding()

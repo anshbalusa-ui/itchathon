@@ -4,10 +4,8 @@ import SwiftUI
 
 struct BodyScanFlowView: View {
   var store: AvatarScanStore
-  var initialHeight: Double?
   var onSaved: () -> Void
   @State private var model = BodyCaptureModel()
-  @State private var height = ""
   @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.openURL) private var openURL
@@ -34,7 +32,6 @@ struct BodyScanFlowView: View {
       }
     }
     .interactiveDismissDisabled(model.phase != .setup)
-    .onAppear { if let initialHeight { height = initialHeight.formatted(.number.grouping(.never)) } }
     .onChange(of: scenePhase) { _, phase in if phase == .background { model.suspend() } }
     .onDisappear { model.cancel() }
   }
@@ -58,33 +55,18 @@ struct BodyScanFlowView: View {
         Text("Use bright, even light. Avoid mirrors, direct sunlight, and loose clothing. Tie long hair away from your face.")
         Text("Frame your whole body, including your feet. Complete one full circle at chest height, then another at head height. Keep the same pose and expression.")
       }
-      Section {
-        HStack {
-          Text("Measured height")
-          TextField("Required", text: $height)
-            .keyboardType(.decimalPad)
-            .multilineTextAlignment(.trailing)
-            .accessibilityLabel("Measured height in centimeters")
-            .accessibilityIdentifier("scan.height")
-          Text("cm").foregroundStyle(.secondary)
-        }
-      } header: {
-        Text("Height reference")
-      } footer: {
-        Text("Measure barefoot. This sets the model’s scale. A captured height more than 10% away from this reference requires a retake.")
+      Section("Automatic scale") {
+        Text("LiDAR depth sets the avatar’s real-world scale. No measurements or height entry needed.")
       }
       Section {
         if BodyCaptureModel.isSupported {
           Button("Continue to camera") {
-            guard let value = parsedHeight else { return }
-            model.referenceHeightCM = value
             Task { await model.start() }
           }
-          .disabled(parsedHeight == nil)
           .accessibilityIdentifier("scan.start")
         } else {
           Label("LiDAR capture unavailable", systemImage: "camera")
-          Text("Open On You on a supported LiDAR iPhone to capture a 3D body. The simulator can display models but has no LiDAR.")
+          Text("Open On You on a supported LiDAR iPhone to capture your body. The simulator can display models but has no LiDAR.")
             .foregroundStyle(.secondary)
         }
       } footer: {
@@ -92,12 +74,6 @@ struct BodyScanFlowView: View {
       }
     }
     .scrollDismissesKeyboard(.interactively)
-  }
-
-  private var parsedHeight: Double? {
-    let raw = height.replacingOccurrences(of: Locale.current.decimalSeparator ?? ".", with: ".")
-    guard let value = Double(raw), BodyMeasurementField.height.range.contains(value) else { return nil }
-    return value
   }
 
   private func captureView(_ session: ObjectCaptureSession) -> some View {
@@ -114,9 +90,9 @@ struct BodyScanFlowView: View {
         VStack(spacing: 12) {
           if session.state == .capturing {
             HStack {
-              Text("\(session.numberOfShotsTaken) images")
+              Text("Capturing detail")
               Spacer()
-              Text("\(min(2, model.completedPasses)) of 2 passes")
+              Text(model.completedPasses == 0 ? "Body pass" : "Detail pass")
             }
             .font(.subheadline).monospacedDigit()
           }
@@ -161,7 +137,7 @@ struct BodyScanFlowView: View {
     if feedback.contains(.objectTooClose) { return "Step back to include the whole body." }
     if feedback.contains(.objectTooFar) { return "Move closer while keeping head and feet visible." }
     if session.cameraTracking != .normal { return "Move slowly while camera tracking settles." }
-    if model.completedPasses >= 2 && session.numberOfShotsTaken < 60 { return "Capture at least 60 images. Continue slowly around the person." }
+    if model.completedPasses >= 2 && session.numberOfShotsTaken < 60 { return "Capture more detail. Continue slowly around the person." }
     return model.completedPasses == 0 ? "Walk slowly around the person at chest height." : "Complete another circle at head height. Keep the face in focus."
   }
 
@@ -179,19 +155,18 @@ struct BodyScanFlowView: View {
     List {
       if let url = model.modelURL, let calibration = model.calibration {
         Section {
-          ScannedAvatarPreview(url: url, referenceHeightCM: model.referenceHeightCM)
+          ScannedAvatarPreview(url: url, referenceHeightCM: calibration.referenceHeightCM)
             .frame(height: 380)
             .listRowInsets(EdgeInsets())
         }
-        Section("Scale check") {
-          LabeledContent("Reference height", value: "\(model.referenceHeightCM.formatted()) cm")
-          LabeledContent("Captured height", value: "\((calibration.size.y * 100).formatted(.number.precision(.fractionLength(1)))) cm")
-          LabeledContent("Scale adjustment", value: "\((abs(calibration.scale - 1) * 100).formatted(.number.precision(.fractionLength(1))))%")
-          LabeledContent("Captured images", value: model.imageCount.formatted())
+        Section {
+          Label("Scaled from captured depth", systemImage: "checkmark")
+          Text("No height or measurements were entered. Depth establishes scale; capture quality still affects the surface.")
+            .foregroundStyle(.secondary)
         }
         Section {
           Text("Drag to inspect every side, especially the face, hands, and gaps around the arms. Retake if anything is stretched, missing, or merged with the room.")
-          Text("Height is calibrated to your reference. Other dimensions are unverified until compared with a tape measure.")
+          Text("This captures the visible surface, including clothing. It does not measure the body hidden underneath.")
             .foregroundStyle(.secondary)
           Button("Use this avatar") {
             if model.save(to: store) { dismiss(); onSaved() }

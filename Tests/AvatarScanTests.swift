@@ -17,6 +17,15 @@ final class AvatarScanTests: XCTestCase {
     XCTAssertThrowsError(try wide.validate())
   }
 
+  func testDepthScaleDoesNotRequireOrChangeHeight() throws {
+    let calibration = AvatarScanCalibration(minimum: SIMD3(-0.3, 0, -0.2), maximum: SIMD3(0.3, 1.82, 0.2), referenceHeightCM: 182, usesDepthScale: true)
+    XCTAssertNoThrow(try calibration.validate())
+    XCTAssertEqual(calibration.scale, 1, accuracy: 0.0001)
+    var invalid = calibration
+    invalid.referenceHeightCM = 170
+    XCTAssertThrowsError(try invalid.validate())
+  }
+
   @MainActor
   func testCoverageRequiresBothPassesAndEnoughImages() {
     XCTAssertFalse(BodyCaptureModel.hasCoverage(images: 59, passes: 2))
@@ -53,12 +62,19 @@ final class AvatarScanTests: XCTestCase {
     XCTAssertTrue(scene.write(to: input, options: nil, delegate: nil, progressHandler: nil))
     let loaded = try ScannedAvatarGeometry.load(url: input, referenceHeightCM: 180)
     XCTAssertEqual(loaded.calibration.size.y, 1.8, accuracy: 0.001)
+    let automatic = try ScannedAvatarGeometry.load(url: input)
+    XCTAssertTrue(automatic.calibration.usesDepthScale)
+    XCTAssertEqual(automatic.calibration.scale, 1, accuracy: 0.0001)
     let repository = root.appendingPathComponent("Stored")
     let store = AvatarScanStore(directory: repository)
     try store.save(model: input, calibration: loaded.calibration, imageCount: 80, completedPasses: 2)
     let saved = try XCTUnwrap(store.asset)
     XCTAssertTrue(saved.record.isValid)
     XCTAssertEqual(AvatarScanStore(directory: repository).asset, saved)
+    let automaticStore = AvatarScanStore(directory: root.appendingPathComponent("Automatic"))
+    try automaticStore.save(model: input, calibration: automatic.calibration, imageCount: 80, completedPasses: 2)
+    XCTAssertEqual(automaticStore.asset?.record.usesDepthScale, true)
+    XCTAssertEqual(automaticStore.asset?.record.scale ?? 0, 1, accuracy: 0.0001)
     XCTAssertThrowsError(try store.save(model: input, calibration: loaded.calibration, imageCount: 10, completedPasses: 1))
     XCTAssertEqual(store.asset, saved)
     XCTAssertTrue(FileManager.default.fileExists(atPath: saved.url.path))

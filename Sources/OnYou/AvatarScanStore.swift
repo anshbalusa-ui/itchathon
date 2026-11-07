@@ -34,7 +34,7 @@ final class AvatarScanStore {
 
   func save(model: URL, calibration: AvatarScanCalibration, imageCount: Int, completedPasses: Int) throws {
     try calibration.validate()
-    let verified = try ScannedAvatarGeometry.load(url: model, referenceHeightCM: calibration.referenceHeightCM)
+    let verified = try ScannedAvatarGeometry.load(url: model, referenceHeightCM: calibration.usesDepthScale ? nil : calibration.referenceHeightCM)
     guard verified.calibration == calibration else { throw AvatarScanError.invalidModel }
     let id = UUID()
     let directory = root.appendingPathComponent(id.uuidString, isDirectory: true)
@@ -45,7 +45,7 @@ final class AvatarScanStore {
       try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: destination.path)
       let record = AvatarScanRecord(id: id, date: Date(), referenceHeightCM: calibration.referenceHeightCM,
                                     capturedHeightM: calibration.size.y, widthM: calibration.size.x, depthM: calibration.size.z,
-                                    imageCount: imageCount, completedPasses: completedPasses, sha256: try Self.digest(destination))
+                                    imageCount: imageCount, completedPasses: completedPasses, sha256: try Self.digest(destination), usesDepthScale: calibration.usesDepthScale)
       guard record.isValid else { throw AvatarScanError.insufficientCoverage }
       let data = try JSONEncoder().encode(record)
       try data.write(to: manifest, options: [.atomic, .completeFileProtection])

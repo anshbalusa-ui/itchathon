@@ -1,0 +1,6 @@
+GarmentIQ-Shirt.jpg is the upstream GarmentIQ tutorial fixture cloth_2.jpg:
+https://raw.githubusercontent.com/lygitdata/GarmentIQ/gh-pages/asset/img/cloth_2.jpg
+Used solely for model-conversion/inference regression testing, not shipped in the app.
+GarmentIQ authors: Li Yuan, Xinrui Zhai, and Fangzhou Ma.
+Repository and MIT license: https://github.com/lygitdata/GarmentIQ
+See Vendor/GarmentIQ/LICENSE and NOTICE.md.

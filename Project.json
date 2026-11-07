@@ -28,7 +28,7 @@
             "UIInterfaceOrientationLandscapeLeft",
             "UIInterfaceOrientationLandscapeRight"
           ],
-          "NSCameraUsageDescription": "On You captures photos and LiDAR depth to reconstruct your body, face, and appearance as a 3D avatar on this iPhone."
+          "NSCameraUsageDescription": "On You uses photos and LiDAR depth to capture your avatar and estimate garment dimensions on this iPhone."
         }
       },
       "platform": "iOS",

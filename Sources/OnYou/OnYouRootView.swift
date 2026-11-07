@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnYouRootView: View {
   @State private var store = OnYouStore()
+  @State private var closet = ClosetStore()
   @State private var scans = AvatarScanStore()
   @State private var selectedTab = OnYouTab.body
 
@@ -14,13 +15,11 @@ struct OnYouRootView: View {
       }
       Tab("Scan", systemImage: "camera", value: .scan) {
         NavigationStack {
-          BodyScanHomeView(store: scans, referenceHeight: store.current?.height) { selectedTab = .body }
+          BodyScanHomeView(store: scans) { selectedTab = .body }
         }
       }
-      Tab("Measurements", systemImage: "ruler", value: .measurements) {
-        NavigationStack {
-          BodyMeasurementsView(store: store) { selectedTab = .body }
-        }
+      Tab("Closet", systemImage: "tshirt", value: .closet) {
+        NavigationStack { ClosetView(store: closet) }
       }
       Tab("History", systemImage: "clock", value: .history) {
         NavigationStack { BodyHistoryView(store: store) { selectedTab = .body } }
@@ -36,5 +35,5 @@ struct OnYouRootView: View {
 }
 
 private enum OnYouTab: Hashable {
-  case body, scan, measurements, history
+  case body, scan, closet, history
 }

@@ -18,7 +18,6 @@ final class BodyCaptureModel {
   private(set) var modelURL: URL?
   private(set) var imageCount = 0
   private(set) var trackingInterrupted = false
-  var referenceHeightCM: Double = 175
   var stage = "Aligning images"
   private var work: URL?
   private var reconstruction: PhotogrammetrySession?
@@ -39,9 +38,6 @@ final class BodyCaptureModel {
 
   func start() async {
     guard Self.isSupported else { phase = .failed(AvatarScanError.unsupported.localizedDescription); return }
-    guard BodyMeasurementField.height.range.contains(referenceHeightCM) else {
-      phase = .failed("Enter your measured height between 120 and 220 cm."); return
-    }
     cancel()
     phase = .preparing
     let token = generation
@@ -157,6 +153,19 @@ final class BodyCaptureModel {
     task = Task { [weak self] in
       guard let self else { return }
       do {
+        // Metric scale must come from captured depth, never a guessed height.
+        stage = "Checking captured depth"
+        let images = work.appendingPathComponent("Images")
+        let files = try FileManager.default.contentsOfDirectory(at: images, includingPropertiesForKeys: nil)
+          .filter { ["heic", "heif"].contains($0.pathExtension.lowercased()) }
+        var depthSamples = 0
+        for file in files {
+          try Task.checkCancellation()
+          guard generation == token else { return }
+          let sample = try await PhotogrammetrySample(contentsOf: file)
+          if sample.depthDataMap != nil { depthSamples += 1 }
+        }
+        guard depthSamples >= max(20, imageCount / 2) else { throw AvatarScanError.missingDepth }
         var configuration = PhotogrammetrySession.Configuration()
         configuration.checkpointDirectory = work.appendingPathComponent("Checkpoints")
         configuration.isObjectMaskingEnabled = true
@@ -187,7 +196,7 @@ final class BodyCaptureModel {
               throw AvatarScanError.insufficientCoverage
             }
             _ = try AvatarScanStore.digest(destination)
-            let result = try ScannedAvatarGeometry.load(url: destination, referenceHeightCM: referenceHeightCM)
+            let result = try ScannedAvatarGeometry.load(url: destination)
             calibration = result.calibration
             modelURL = destination
             reconstruction = nil

@@ -17,10 +17,14 @@ struct OnYouAboutView: View {
         Link("MakeHuman · CC0 body mesh", destination: URL(string: "https://github.com/makehumancommunity/makehuman")!)
       }
       Section("Scanned avatars") {
-        Text("Object Capture reconstructs visible geometry and photo texture on your iPhone. Measured height calibrates the scale. Movement, hair, and clothing affect the reconstructed surface.")
+        Text("Object Capture reconstructs visible geometry and photo texture on your iPhone. Captured depth establishes scale automatically. Movement, hair, and clothing affect the reconstructed surface.")
       }
       Section("Your data") {
-        Text("Measurements, history, and saved scans stay on this iPhone. Raw scan photos are removed after reconstruction. No account or network connection is needed.")
+        Text("Measurements, history, garment photos, and saved scans stay on this iPhone. Raw scan photos are removed after reconstruction. No account or network connection is needed.")
+      }
+      Section("Garment scanning") {
+        Text("GarmentIQ’s open-source landmark model runs on this iPhone. Camera depth supplies scale. Captures describe estimated dimensions, not fabric stretch or drape.")
+        Link("GarmentIQ · MIT license", destination: URL(string: "https://github.com/lygitdata/GarmentIQ")!)
       }
       Section {
         NavigationLink { MeasurementGuideView() } label: { Label("How to measure", systemImage: "ruler") }
