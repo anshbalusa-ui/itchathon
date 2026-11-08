@@ -15,8 +15,10 @@ final class OnYouUITests: XCTestCase {
     app.buttons["scan.open"].tap()
     XCTAssertTrue(app.navigationBars["Scan your body"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.textFields["scan.height"].exists)
-    XCTAssertTrue(app.staticTexts["Automatic scale"].exists)
-    app.navigationBars["Scan your body"].buttons["Cancel"].tap()
+    XCTAssertTrue(app.otherElements["scan.journey"].exists)
+    XCTAssertFalse(app.tabBars.firstMatch.isHittable)
+    XCTAssertTrue(app.buttons["scan.start"].exists)
+    app.buttons["scan.close"].tap()
     XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
   }
 

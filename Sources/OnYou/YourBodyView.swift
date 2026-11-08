@@ -45,7 +45,7 @@ struct YourBodyView: View {
     }
     .background(Color(uiColor: .secondarySystemGroupedBackground))
     .toolbar(.hidden, for: .navigationBar)
-    .sheet(isPresented: $showingCapture) {
+    .fullScreenCover(isPresented: $showingCapture) {
       BodyScanFlowView(store: scans)
     }
     .confirmationDialog("Delete your saved scan?", isPresented: $confirmingDelete, titleVisibility: .visible) {

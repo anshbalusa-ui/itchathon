@@ -16,7 +16,9 @@ Imported product photos and screenshots are saved without dimensions. A product 
 
 ## Body capture
 
-Body → Scan your body is the sole body-capture entry point. Closet uses a single toolbar Add action.
+Body → Scan your body is the sole body-capture entry point. Closet uses a single toolbar Add action. The body flow now opens full screen. Camera controls sit outside the live preview so they do not cover the person or Apple's capture animation. A persistent stage path distinguishes framing, the body circle, detail capture, and building. Photo-detail progress reflects the actual captured-image threshold; circle completion still comes from Object Capture's coverage signal, not a timer. Actions show pending states, failed selection explains how to include the floor, and leaving an active capture requires discard confirmation.
+
+During reconstruction, progress and estimated time come from Apple's reconstruction outputs. The app shows an indeterminate state until progress is available and never fabricates a capture countdown. Elapsed capture time follows the actual capture start. The interface has rendered checks at standard and accessibility text sizes; those render fixtures do not exercise real camera capture.
 
 Body reconstruction still uses Object Capture with a helper walking around a stationary person. Required height entry has been removed. Reconstruction checks that sufficient captured HEIC samples contain depth before accepting automatic scale. New records preserve native reconstructed scale; legacy height-calibrated records remain readable. Scans capture visible clothing and skin, not hidden anatomy. This is not yet a solo-scan workflow.
 
