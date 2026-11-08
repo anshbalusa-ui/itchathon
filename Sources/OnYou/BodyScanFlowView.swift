@@ -7,6 +7,7 @@ struct BodyScanFlowView: View {
   @State private var model = BodyCaptureModel()
   @State private var confirmingDiscard = false
   @State private var confirmingRetake = false
+  @State private var previousIdleTimerSetting: Bool?
   @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
 
@@ -37,7 +38,17 @@ struct BodyScanFlowView: View {
     }
     .interactiveDismissDisabled()
     .onChange(of: scenePhase) { _, phase in if phase == .background { model.suspend() } }
-    .onDisappear { model.cancel() }
+    .onAppear {
+      previousIdleTimerSetting = UIApplication.shared.isIdleTimerDisabled
+      updateIdleTimer()
+    }
+    .onChange(of: model.phase) { _, _ in updateIdleTimer() }
+    .onDisappear {
+      model.cancel()
+      if let previousIdleTimerSetting { UIApplication.shared.isIdleTimerDisabled = previousIdleTimerSetting }
+      previousIdleTimerSetting = nil
+    }
+    .onChange(of: confirmingDiscard) { _, visible in model.setCapturePromptVisible(visible) }
     .confirmationDialog("Discard this scan?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
       Button("Discard scan", role: .destructive) { model.cancel(); dismiss() }
       Button("Keep going", role: .cancel) {}
@@ -138,8 +149,8 @@ struct BodyScanFlowView: View {
     .onChange(of: session.state, initial: true) { _, state in
       if model.capture === session { model.stateChanged(state) }
     }
-    .onChange(of: session.userCompletedScanPass, initial: true) { _, complete in
-      if model.capture === session { model.passCompleted(complete) }
+    .onChange(of: session.userCompletedScanPass, initial: true) { _, _ in
+      if model.capture === session { model.captureProgressChanged() }
     }
     .onChange(of: session.numberOfShotsTaken) { _, _ in
       if model.capture === session { model.captureProgressChanged() }
@@ -250,5 +261,11 @@ struct BodyScanFlowView: View {
     case .setup, .preparing, .failed: model.cancel(); dismiss()
     default: confirmingDiscard = true
     }
+  }
+
+  private func updateIdleTimer() {
+    guard let previousIdleTimerSetting else { return }
+    let working = model.phase == .preparing || model.phase == .capturing || model.phase == .reconstructing
+    UIApplication.shared.isIdleTimerDisabled = working || previousIdleTimerSetting
   }
 }

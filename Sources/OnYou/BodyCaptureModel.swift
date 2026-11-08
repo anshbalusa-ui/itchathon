@@ -67,7 +67,8 @@ final class BodyCaptureModel {
     return BodyScanCameraStatus(mode: mode, completedPasses: completedPasses,
                                shots: capture.numberOfShotsTaken, passComplete: capture.userCompletedScanPass,
                                trackingNormal: capture.cameraTracking == .normal, issue: issue,
-                               selectionHint: selectionHint, pendingAction: pendingAction)
+                               selectionHint: selectionHint, pendingAction: pendingAction,
+                               maximumShots: capture.maximumNumberOfInputImages)
   }
 
   func performCameraAction() {
@@ -86,6 +87,7 @@ final class BodyCaptureModel {
       capture.startCapturing()
     case .nextPass: nextPass()
     case .buildAvatar: finish()
+    case .retakeScan: cancel()
     }
   }
 
@@ -97,7 +99,7 @@ final class BodyCaptureModel {
 
   func clearSaveError() { saveError = nil }
 
-  static func hasCoverage(images: Int, passes: Int) -> Bool { images >= 60 && passes >= 2 }
+  static func hasCoverage(images: Int, passes: Int) -> Bool { AvatarScanInput.hasCoverage(images: images, passes: passes) }
 
   func start() async {
     guard Self.isSupported else { phase = .failed(AvatarScanError.unsupported.localizedDescription); return }
@@ -163,21 +165,18 @@ final class BodyCaptureModel {
     }
   }
 
-  func passCompleted(_ completed: Bool) {
-    guard phase == .capturing else { return }
-    if !completed {
-      if pendingAction == .nextPass { pendingAction = nil }
-      return
-    }
-    guard !recordedCurrentPass else { return }
-    recordedCurrentPass = true
-    completedPasses += 1
-    captureProgressChanged()
-  }
-
   func captureProgressChanged() {
-    guard phase == .capturing, let capture, capture.state == .capturing,
-          cameraStatus.awaitsNextStep, !capture.isPaused else { return }
+    guard phase == .capturing, let capture, capture.state == .capturing else { return }
+    // Reconcile current SDK values; SwiftUI may deliver the photo and ring observers in either order.
+    if capture.userCompletedScanPass && !recordedCurrentPass {
+      recordedCurrentPass = true
+      completedPasses += 1
+    } else if !capture.userCompletedScanPass && pendingAction == .nextPass {
+      recordedCurrentPass = false
+      pendingAction = nil
+    }
+    guard pendingAction != .nextPass, cameraStatus.awaitsNextStep,
+          !cameraStatus.exhaustedCaptureCapacity, !capture.isPaused else { return }
     // Stop taking extra photos while the person reads the next-step guidance.
     capture.pause()
     Self.logger.info("Capture paused at checkpoint; photos: \(capture.numberOfShotsTaken); passes: \(self.completedPasses)")
@@ -186,10 +185,16 @@ final class BodyCaptureModel {
   func nextPass() {
     guard let capture, capture.state == .capturing, capture.userCompletedScanPass else { return }
     pendingAction = .nextPass
-    recordedCurrentPass = false
     selectionHint = nil
     capture.beginNewScanPass()
     capture.resume()
+    captureProgressChanged()
+  }
+
+  func setCapturePromptVisible(_ visible: Bool) {
+    guard phase == .capturing, let capture, capture.state == .capturing else { return }
+    if visible { capture.pause() }
+    else if !cameraStatus.awaitsNextStep { capture.resume() }
   }
 
   func finish() {
@@ -260,15 +265,18 @@ final class BodyCaptureModel {
         stage = "Checking your capture"
         let images = work.appendingPathComponent("Images")
         let files = try FileManager.default.contentsOfDirectory(at: images, includingPropertiesForKeys: nil)
-          .filter { ["heic", "heif"].contains($0.pathExtension.lowercased()) }
-        var depthSamples = 0
+          .filter { ["heic", "heif"].contains($0.pathExtension.lowercased()) }.map(\.standardizedFileURL)
+        var depthImages = Set<URL>()
         for file in files {
           try Task.checkCancellation()
           guard generation == token else { return }
           let sample = try await PhotogrammetrySample(contentsOf: file)
-          if sample.depthDataMap != nil { depthSamples += 1 }
+          try Task.checkCancellation()
+          guard generation == token else { return }
+          if AvatarScanInput.containsFiniteDepth(sample.depthDataMap) { depthImages.insert(file) }
         }
-        guard depthSamples >= max(20, imageCount / 2) else { throw AvatarScanError.missingDepth }
+        let input = AvatarScanInput(imageURLs: Set(files), depthImageURLs: depthImages)
+        imageCount = try input.validate(passes: completedPasses)
         var configuration = PhotogrammetrySession.Configuration()
         configuration.checkpointDirectory = work.appendingPathComponent("Checkpoints")
         configuration.isObjectMaskingEnabled = true
@@ -277,33 +285,40 @@ final class BodyCaptureModel {
         let session = try PhotogrammetrySession(input: work.appendingPathComponent("Images"), configuration: configuration)
         reconstruction = session
         let destination = work.appendingPathComponent("avatar.usdz")
-        try session.process(requests: [.modelFile(url: destination, detail: .reduced)])
+        let modelRequest = PhotogrammetrySession.Request.modelFile(url: destination, detail: .reduced)
+        try session.process(requests: [modelRequest, .poses])
         var rejected = Set<Int>()
         var producedFile = false
+        var usedPoses: PhotogrammetrySession.Poses?
         for try await output in session.outputs {
           try Task.checkCancellation()
           guard generation == token else { return }
           switch output {
-          case .requestProgress(_, let fraction):
+          case .requestProgress(let request, let fraction) where request == modelRequest:
             if fraction.isFinite {
               hasBuildProgress = true
               progress = max(progress, min(0.99, max(0, fraction)))
             }
-          case .requestProgressInfo(_, let info):
+          case .requestProgressInfo(let request, let info) where request == modelRequest:
             if let value = info.processingStage { stage = title(value) }
             if let seconds = info.estimatedRemainingTime, seconds.isFinite, seconds > 0 {
               estimatedRemainingTime = seconds
             } else { estimatedRemainingTime = nil }
           case .requestComplete(_, .modelFile(let url)):
-            producedFile = url.standardizedFileURL == destination.standardizedFileURL
+            producedFile = url.resolvingSymlinksInPath().standardizedFileURL
+              == destination.resolvingSymlinksInPath().standardizedFileURL
+          case .requestComplete(_, .poses(let poses)): usedPoses = poses
           case .invalidSample(let id, _), .skippedSample(let id): rejected.insert(id)
           case .stitchingIncomplete: throw AvatarScanError.insufficientCoverage
           case .requestError(_, let error): throw error
           case .processingCancelled: throw CancellationError()
           case .processingComplete:
-            guard producedFile, Self.hasCoverage(images: imageCount - rejected.count, passes: completedPasses) else {
+            guard producedFile, let usedPoses else {
               throw AvatarScanError.insufficientCoverage
             }
+            imageCount = try input.validate(usedSampleIDs: Set(usedPoses.posesBySample.keys),
+                                            urlsBySample: usedPoses.urlsBySample, rejectedIDs: rejected,
+                                            passes: completedPasses)
             stage = "Checking your avatar"
             estimatedRemainingTime = nil
             _ = try AvatarScanStore.digest(destination)

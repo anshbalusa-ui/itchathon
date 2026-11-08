@@ -3,6 +3,23 @@ import XCTest
 @testable import FitCheck
 
 final class BodyScanUXTests: XCTestCase {
+  func testPhotoLimitOffersRecoveryAndCanStillAcceptAFinalCompletedPass() {
+    var status = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200,
+                                     trackingNormal: false, issue: "Move closer.", maximumShots: 200)
+    XCTAssertTrue(status.exhaustedCaptureCapacity)
+    XCTAssertEqual(status.action, .retakeScan)
+    XCTAssertTrue(status.actionEnabled)
+    XCTAssertTrue(status.instruction.contains("photo limit"))
+    // A late pass-completion update must still be allowed to make this capture usable.
+    status.completedPasses = 2
+    status.passComplete = true
+    XCTAssertFalse(status.exhaustedCaptureCapacity)
+    XCTAssertEqual(status.action, .buildAvatar)
+    XCTAssertTrue(status.actionEnabled)
+    status.maximumShots = nil
+    XCTAssertFalse(status.exhaustedCaptureCapacity)
+  }
+
   func testCameraActionsFollowActualCoverageAndExplainBlockedStates() {
     var status = BodyScanCameraStatus(mode: .framing)
     XCTAssertEqual(status.action, .findPerson)
@@ -101,6 +118,8 @@ final class BodyScanUXTests: XCTestCase {
       ("capture-finding", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .framing, pendingAction: .findPerson)),
       ("capture-paused", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.")),
       ("capture-paused-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.")),
+      ("capture-limit", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200, maximumShots: 200)),
+      ("capture-limit-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200, maximumShots: 200)),
       ("capture-ready", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 2, shots: 60, passComplete: true))
     ] {
       let root = BodyScanCameraView(status: status, startedAt: Date().addingTimeInterval(-75), close: {}, performAction: {}) {

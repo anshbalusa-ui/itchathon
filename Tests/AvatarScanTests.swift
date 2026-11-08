@@ -32,7 +32,7 @@ final class AvatarScanTests: XCTestCase {
     XCTAssertFalse(BodyCaptureModel.hasCoverage(images: 100, passes: 1))
     XCTAssertTrue(BodyCaptureModel.hasCoverage(images: 60, passes: 2))
     let model = BodyCaptureModel()
-    model.passCompleted(true)
+    model.captureProgressChanged()
     XCTAssertEqual(model.completedPasses, 0)
     model.cancel()
     XCTAssertEqual(model.phase, .setup)

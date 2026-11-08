@@ -21,7 +21,7 @@ struct AvatarScanRecord: Codable, Identifiable, Equatable {
       && [capturedHeightM, widthM, depthM].allSatisfy { $0.isFinite && $0 > 0 }
       && (usesDepthScale != true || abs(scale - 1) < 0.0001)
       && (0.9...1.1).contains(scale) && widthM * scale < 2 && depthM * scale < 1.2
-      && imageCount >= 60 && completedPasses >= 2
+      && AvatarScanInput.hasCoverage(images: imageCount, passes: completedPasses)
       && sha256.count == 64 && sha256.allSatisfy { $0.isHexDigit && !$0.isUppercase }
   }
 }

@@ -24,7 +24,7 @@ struct ClosetGarmentDetailView: View {
             ForEach(dimensions.comparison(to: base), id: \.0) { title, value in
               LabeledContent(title, value: value)
             }
-            NavigationLink("Compare outlines") {
+            NavigationLink("Compare photos") {
               GarmentComparisonView(garment: current, reference: reference, store: store)
             }
           }
@@ -76,8 +76,8 @@ private struct GarmentComparisonView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) {
-        Text("Compare the shape").font(.title2.bold())
-        Text("Both captures share a scale. Look at the body width, length, and sleeve reach.")
+        Text("Compare photos").font(.title2.bold())
+        Text("Photos are resized using estimated dimensions. Cropping and camera angle can change how they line up.")
           .foregroundStyle(.secondary)
         if let a = garment.dimensions, let b = reference.dimensions {
           GeometryReader { geometry in
