@@ -14,7 +14,7 @@ struct OnYouRootView: View {
         }
       }
       Tab("Closet", systemImage: "tshirt", value: .closet) {
-        NavigationStack { ClosetView(store: closet) }
+        NavigationStack { ClosetView(store: closet, scans: scans) }
       }
       Tab("History", systemImage: "clock", value: .history) {
         NavigationStack { BodyHistoryView(store: store) { selectedTab = .body } }

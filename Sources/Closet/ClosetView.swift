@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ClosetView: View {
   var store: ClosetStore
+  var scans: AvatarScanStore
   @State private var adding = false
 
   var body: some View {
@@ -40,7 +41,7 @@ struct ClosetView: View {
 
   private func row(_ garment: ClosetGarment) -> some View {
     NavigationLink {
-      ClosetGarmentDetailView(garment: garment, store: store)
+      ClosetGarmentDetailView(garment: garment, store: store, scans: scans)
     } label: {
       HStack(spacing: 16) {
         GarmentPhotoView(url: store.imageURL(for: garment))

@@ -3,6 +3,7 @@ import SwiftUI
 struct ClosetGarmentDetailView: View {
   var garment: ClosetGarment
   var store: ClosetStore
+  var scans: AvatarScanStore
   @Environment(\.dismiss) private var dismiss
   @State private var deleting = false
   @State private var scanning = false
@@ -42,6 +43,14 @@ struct ClosetGarmentDetailView: View {
         }
       }
       Section {
+        if current.dimensions != nil, let asset = scans.asset {
+          NavigationLink {
+            TryOnView(avatar: asset, garment: current, photoURL: store.imageURL(for: current))
+          } label: { Label("Try on", systemImage: "tshirt") }
+        } else if current.dimensions != nil {
+          Label("Scan your body to try this on", systemImage: "figure.stand")
+            .foregroundStyle(.secondary)
+        }
         Button(current.dimensions == nil ? "Scan to compare fit" : "Retake shirt scan", systemImage: "camera") { scanning = true }
       }
       if let url = current.productURL { Section { Link("View product", destination: url) } }

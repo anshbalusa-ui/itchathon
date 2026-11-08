@@ -5,6 +5,8 @@ struct BodySceneView: UIViewRepresentable {
   var measurements: BodyMeasurements
   var scan: ScannedBodySource? = nil
   var wireframe: Bool = false
+  var tryOn: TryOnResult? = nil
+  var showingGarment = true
 
   func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -41,6 +43,7 @@ struct BodySceneView: UIViewRepresentable {
       c.update(measurements)
       view.pointOfView = c.camera
     }
+    c.updateTryOn(tryOn, showing: showingGarment)
     view.defaultCameraController.target = SCNVector3(0, Float(height / 100) * 0.51, 0.035)
     c.body.geometry?.firstMaterial?.fillMode = wireframe ? .lines : .fill
     view.accessibilityValue = scan != nil ? "Captured textured avatar. Drag to rotate."
@@ -64,6 +67,9 @@ struct BodySceneView: UIViewRepresentable {
     var scannedNode: SCNNode?
     var measurements: BodyMeasurements?
     var angle: Float = 0
+    var loadedTryOnID: UUID?
+    var garmentVisible = true
+    var garmentNode: SCNNode?
     var failure: String?
     private var assets: HumanShowcaseMeshes?
     private var kernel: BodyShapeKernel?
@@ -170,6 +176,41 @@ struct BodySceneView: UIViewRepresentable {
         scannedNode = node
         scene.rootNode.addChildNode(node)
       }
+    }
+
+    func updateTryOn(_ result: TryOnResult?, showing: Bool) {
+      if loadedTryOnID != result?.id || garmentVisible != showing {
+        garmentNode?.removeFromParentNode()
+        garmentNode = nil
+        loadedTryOnID = result?.id
+        garmentVisible = showing
+        scannedNode?.eulerAngles.y = result?.bodyYaw ?? 0
+        if showing, let result, let node = Self.garmentNode(for: result) {
+          garmentNode = node
+          scene.rootNode.addChildNode(node)
+        }
+      }
+    }
+
+    private static func garmentNode(for result: TryOnResult) -> SCNNode? {
+      let mesh = result.shape.mesh
+      guard mesh.positions.count < 65535, mesh.positions.count == mesh.textureCoordinates.count,
+            !mesh.front.isEmpty, !mesh.back.isEmpty else { return nil }
+      let vertices = mesh.positions.map { SCNVector3($0.x, $0.y, $0.z) }
+      let coords = mesh.textureCoordinates.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+      let geometry = SCNGeometry(sources: [.init(vertices: vertices), .init(textureCoordinates: coords)],
+                                 elements: [.init(indices: mesh.front.map { UInt16($0) }, primitiveType: .triangles),
+                                            .init(indices: mesh.back.map { UInt16($0) }, primitiveType: .triangles)])
+      let front = SCNMaterial()
+      front.lightingModel = .constant
+      front.diffuse.contents = UIImage(contentsOfFile: result.photoURL.path)
+      front.isDoubleSided = true
+      let back = SCNMaterial()
+      back.lightingModel = .constant
+      back.diffuse.contents = UIColor(red: CGFloat(result.backColor.x), green: CGFloat(result.backColor.y), blue: CGFloat(result.backColor.z), alpha: 1)
+      back.isDoubleSided = true
+      geometry.materials = [front, back]
+      return SCNNode(geometry: geometry)
     }
 
     func positionCamera(angle: Float, height: Float) {
