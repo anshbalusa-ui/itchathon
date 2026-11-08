@@ -135,11 +135,19 @@ struct BodyScanFlowView: View {
       // Keep Apple's live camera, coverage ring, and capture animations intact.
       ObjectCaptureView(session: session)
     }
-    .onChange(of: session.state) { _, state in
+    .onChange(of: session.state, initial: true) { _, state in
       if model.capture === session { model.stateChanged(state) }
     }
-    .onChange(of: session.userCompletedScanPass) { _, complete in
+    .onChange(of: session.userCompletedScanPass, initial: true) { _, complete in
       if model.capture === session { model.passCompleted(complete) }
+    }
+    .onChange(of: session.numberOfShotsTaken) { _, _ in
+      if model.capture === session { model.captureProgressChanged() }
+    }
+    .onChange(of: model.cameraStatus.awaitsNextStep) { _, waiting in
+      if waiting {
+        AccessibilityNotification.Announcement("\(model.cameraStatus.title). \(model.cameraStatus.instruction)").post()
+      }
     }
     .task(id: model.pendingAction) {
       guard let action = model.pendingAction else { return }

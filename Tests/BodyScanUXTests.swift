@@ -16,7 +16,7 @@ final class BodyScanUXTests: XCTestCase {
 
     status = BodyScanCameraStatus(mode: .capturing, shots: 30)
     XCTAssertNil(status.action)
-    XCTAssertEqual(status.photoProgress, 0.5)
+    XCTAssertFalse(status.awaitsNextStep)
     status.completedPasses = 1
     status.passComplete = true
     XCTAssertEqual(status.action, .nextPass)
@@ -26,19 +26,61 @@ final class BodyScanUXTests: XCTestCase {
     status.shots = 60
     XCTAssertEqual(status.action, .buildAvatar)
     status.issue = "Move more slowly."
-    XCTAssertFalse(status.actionEnabled)
-    XCTAssertEqual(status.instruction, "Move more slowly.")
+    XCTAssertTrue(status.actionEnabled)
+    XCTAssertTrue(status.instruction.contains("Stop walking"))
     status.issue = nil
     status.trackingNormal = false
-    XCTAssertFalse(status.actionEnabled)
-    status = BodyScanCameraStatus(mode: .finishing)
+    XCTAssertTrue(status.actionEnabled)
+    status = BodyScanCameraStatus(mode: .finishing, issue: "Capture is paused.")
     XCTAssertNil(status.action)
     XCTAssertEqual(status.step, .build)
+    XCTAssertTrue(status.instruction.contains("being saved"))
+  }
+
+  func testCompletedCircleRemainsActionableDespiteLiveCameraWarnings() {
+    for issue in ["Move a little closer.", "Slow down.", "Capture is paused."] {
+      var status = BodyScanCameraStatus(mode: .capturing, completedPasses: 1,
+                                       shots: 30, passComplete: true,
+                                       trackingNormal: false, issue: issue)
+      XCTAssertEqual(status.action, .nextPass)
+      XCTAssertTrue(status.actionEnabled)
+      XCTAssertTrue(status.instruction.contains("Stop walking"))
+      XCTAssertNotEqual(status.instruction, issue)
+      status.completedPasses = 2
+      status.shots = 60
+      XCTAssertEqual(status.action, .buildAvatar)
+      XCTAssertTrue(status.actionEnabled)
+      status.pendingAction = .buildAvatar
+      XCTAssertFalse(status.actionEnabled)
+    }
+  }
+
+  func testWarningsStillBlockFramingAndStartingCapture() {
+    for mode in [BodyScanCameraStatus.Mode.framing, .selecting] {
+      let status = BodyScanCameraStatus(mode: mode, issue: "Find brighter light.")
+      XCTAssertFalse(status.actionEnabled)
+      XCTAssertEqual(status.instruction, "Find brighter light.")
+    }
   }
 
   func testProgressAndTimingDoNotInventCompletionOrTime() {
-    XCTAssertEqual(BodyScanCameraStatus(mode: .capturing, shots: -1).photoProgress, 0)
-    XCTAssertEqual(BodyScanCameraStatus(mode: .capturing, shots: 500).photoProgress, 1)
+    let photosOnly = BodyScanCameraStatus(mode: .capturing, shots: 500)
+    XCTAssertFalse(photosOnly.awaitsNextStep)
+    XCTAssertNil(photosOnly.action)
+    XCTAssertEqual(photosOnly.progressTitle, "Body circle in progress")
+    var detail = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 60)
+    XCTAssertNil(detail.action)
+    XCTAssertTrue(detail.progressDetail.contains("Finish the detail ring"))
+    detail.completedPasses = 2
+    detail.shots = 59
+    detail.passComplete = true
+    XCTAssertEqual(detail.action, .nextPass)
+    XCTAssertEqual(detail.progressTitle, "More photo detail needed")
+    detail.passComplete = false
+    detail.shots = 60
+    XCTAssertTrue(detail.awaitsNextStep)
+    XCTAssertEqual(detail.action, .buildAvatar)
+    XCTAssertEqual(detail.title, "Your capture is ready")
     for value: Double? in [nil, .nan, .infinity, -1, 0] {
       XCTAssertEqual(BodyScanTiming.remaining(value), "Estimating time remaining…")
     }
@@ -57,6 +99,8 @@ final class BodyScanUXTests: XCTestCase {
       ("capture-standard", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43)),
       ("capture-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43)),
       ("capture-finding", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .framing, pendingAction: .findPerson)),
+      ("capture-paused", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.")),
+      ("capture-paused-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.")),
       ("capture-ready", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 2, shots: 60, passComplete: true))
     ] {
       let root = BodyScanCameraView(status: status, startedAt: Date().addingTimeInterval(-75), close: {}, performAction: {}) {

@@ -29,13 +29,23 @@ struct BodyScanCameraStatus: Equatable {
     case .finishing: return "Saving your capture"
     case .capturing:
       if passComplete && completedPasses == 1 { return "Body circle complete" }
-      if passComplete && completedPasses >= 2 && shots >= 60 { return "Your capture is ready" }
+      if completedPasses >= 2 && shots >= 60 { return "Your capture is ready" }
+      if passComplete && completedPasses >= 2 { return "Detail circle complete" }
       return completedPasses == 0 ? "Walk a slow circle" : "Capture the face and details"
     }
   }
 
   var instruction: String {
-    if let issue { return issue }
+    if awaitsNextStep {
+      if completedPasses < 2 {
+        return "Stop walking. Capture is paused. Raise the iPhone near eye level, then tap Continue to details. Hold the same pose."
+      }
+      if shots < 60 {
+        return "Stop walking. This circle is complete, but we need more photos before building. Tap Capture more detail to start a fresh ring."
+      }
+      return "Stop walking. Capture is paused. Tap Build my avatar, then relax your pose."
+    }
+    if let issue, mode != .finishing { return issue }
     if let selectionHint { return selectionHint }
     switch mode {
     case .initializing: return "Hold the iPhone steady while the camera gets ready."
@@ -43,13 +53,10 @@ struct BodyScanCameraStatus: Equatable {
     case .selecting: return "Fit the box from head to feet, with their hands inside."
     case .finishing: return "Your photos are being saved before we build the avatar. Keep On You open."
     case .capturing:
-      if passComplete && completedPasses == 1 { return "Great. Raise the iPhone near eye level for the detail circle. Keep the same pose."
-      }
       if completedPasses >= 2 && shots < 60 { return "We need a little more detail. Continue around the person with their whole body in view." }
-      if passComplete && completedPasses >= 2 { return "You can build your avatar now. There’s no need to keep circling." }
       return completedPasses == 0
-        ? "Keep the person still. Follow the ring around them at chest height."
-        : "Circle slowly near eye level. Keep the whole person in view."
+        ? "Keep the person still. Follow the ring at chest height. We’ll pause when the circle is complete."
+        : "Circle slowly near eye level. Keep the whole person in view. We’ll pause when the detail ring is complete."
     }
   }
 
@@ -85,8 +92,28 @@ struct BodyScanCameraStatus: Equatable {
     }
   }
 
-  var actionEnabled: Bool { pendingAction == nil && trackingNormal && issue == nil }
-  var photoProgress: Double { min(1, max(0, Double(shots) / 60)) }
+  var awaitsNextStep: Bool {
+    mode == .capturing && (passComplete || (completedPasses >= 2 && shots >= 60))
+  }
+
+  var actionEnabled: Bool {
+    guard pendingAction == nil else { return false }
+    // Completed capture transitions use saved evidence, not live framing feedback.
+    if action == .nextPass || action == .buildAvatar { return true }
+    return trackingNormal && issue == nil
+  }
+
+  var progressTitle: String {
+    if completedPasses >= 2 && shots >= 60 { return "Capture complete" }
+    if awaitsNextStep { return completedPasses < 2 ? "Body complete · Details next" : "More photo detail needed" }
+    return completedPasses == 0 ? "Body circle in progress" : "Detail circle in progress"
+  }
+
+  var progressDetail: String {
+    if awaitsNextStep { return "Capture paused · Continue below" }
+    if completedPasses == 0 { return "Fill the camera ring. The detail circle comes next." }
+    return shots >= 60 ? "Enough photos. Finish the detail ring to continue." : "Fill the detail ring. Photos are captured automatically."
+  }
 }
 
 enum BodyScanStep: Int, CaseIterable, Identifiable {

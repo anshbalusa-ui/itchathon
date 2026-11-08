@@ -31,7 +31,7 @@ struct BodyScanCameraView<Camera: View>: View {
         .background(.ultraThinMaterial)
 
         camera()
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
           .clipped()
 
         VStack(spacing: 0) {
@@ -43,10 +43,11 @@ struct BodyScanCameraView<Camera: View>: View {
           }
           .frame(height: min(informationHeight, max(100, geometry.size.height * (typeSize.isAccessibilitySize ? 0.24 : 0.36))))
           .scrollBounceBehavior(.basedOnSize)
-          if status.mode == .capturing {
-            photoProgress.padding(.horizontal, 22).padding(.top, 10)
+          if status.mode == .capturing && !status.awaitsNextStep {
+            captureProgress.padding(.horizontal, 22).padding(.top, 10)
           }
           actionRow
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 18)
         }
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28))
@@ -69,30 +70,24 @@ struct BodyScanCameraView<Camera: View>: View {
           .accessibilityIdentifier("scan.camera.title")
         Text(status.instruction)
           .font(.callout)
-          .foregroundStyle(status.issue != nil ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+          .foregroundStyle(status.issue != nil && !status.awaitsNextStep ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
           .fixedSize(horizontal: false, vertical: true)
           .accessibilityIdentifier("scan.camera.guidance")
       }
     }
   }
 
-  private var photoProgress: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      ProgressView(value: status.photoProgress) {
-        Text("Photo detail").font(.subheadline.weight(.medium))
-      }
-      .accessibilityIdentifier("scan.photo-progress")
-      if typeSize.isAccessibilitySize {
-        elapsedLabel.fixedSize(horizontal: false, vertical: true)
-      } else {
-        HStack(alignment: .top) { detailLabel; Spacer(); elapsedLabel }
-      }
+  private var captureProgress: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text(status.progressTitle).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+        .fixedSize(horizontal: false, vertical: true)
+      Text(status.progressDetail).fixedSize(horizontal: false, vertical: true)
+      if !status.awaitsNextStep { elapsedLabel.fixedSize(horizontal: false, vertical: true) }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
     .font(.caption).foregroundStyle(.secondary)
-  }
-
-  private var detailLabel: some View {
-    Text(status.photoProgress >= 1 ? "Enough photo detail" : "Photos save automatically")
+    .accessibilityElement(children: .combine)
+    .accessibilityIdentifier("scan.capture-progress")
   }
 
   @ViewBuilder private var elapsedLabel: some View {

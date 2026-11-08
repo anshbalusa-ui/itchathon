@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Observation
+import OSLog
 import RealityKit
 import SwiftUI
 
@@ -24,6 +25,7 @@ final class BodyCaptureModel {
   private(set) var estimatedRemainingTime: TimeInterval?
   private(set) var hasBuildProgress = false
   private(set) var saveError: String?
+  private static let logger = Logger(subsystem: "app.onyou", category: "BodyCapture")
   private var recordedCurrentPass = false
   var stage = "Aligning images"
   private var work: URL?
@@ -35,10 +37,9 @@ final class BodyCaptureModel {
 
   var canFinish: Bool {
     guard let capture else { return false }
-    return Self.hasCoverage(images: capture.numberOfShotsTaken, passes: completedPasses)
-      && capture.cameraTracking == .normal && !capture.isPaused && !trackingInterrupted
-      && capture.feedback.isDisjoint(with: [.objectTooClose, .objectTooFar, .environmentTooDark,
-                                            .environmentLowLight, .movingTooFast, .outOfFieldOfView, .objectNotDetected])
+    return capture.state == .capturing
+      && Self.hasCoverage(images: capture.numberOfShotsTaken, passes: completedPasses)
+      && !trackingInterrupted
   }
 
   var cameraStatus: BodyScanCameraStatus {
@@ -53,7 +54,8 @@ final class BodyCaptureModel {
     }
     let feedback = capture.feedback
     let issue: String?
-    if capture.isPaused { issue = "Capture is paused. Keep On You in the foreground to continue." }
+    if mode == .finishing { issue = nil }
+    else if capture.isPaused { issue = "Capture is paused. Keep On You in the foreground to continue." }
     else if feedback.contains(.environmentTooDark) || feedback.contains(.environmentLowLight) { issue = "Find brighter, even light so we can see the person clearly." }
     else if feedback.contains(.movingTooFast) { issue = "Slow down. Keep the iPhone steady and the person still." }
     else if feedback.contains(.outOfFieldOfView) { issue = "Step back and bring the whole person into view." }
@@ -70,6 +72,7 @@ final class BodyCaptureModel {
 
   func performCameraAction() {
     guard let capture, cameraStatus.actionEnabled, let action = cameraStatus.action else { return }
+    Self.logger.info("Capture action: \(String(describing: action), privacy: .public)")
     selectionHint = nil
     switch action {
     case .findPerson:
@@ -128,7 +131,7 @@ final class BodyCaptureModel {
       try AvatarScanStore.prepareDirectory(checkpoints)
       var configuration = ObjectCaptureSession.Configuration()
       configuration.checkpointDirectory = checkpoints
-      configuration.isOverCaptureEnabled = true
+      configuration.isOverCaptureEnabled = false
       let session = ObjectCaptureSession()
       capture = session
       phase = .capturing
@@ -138,6 +141,7 @@ final class BodyCaptureModel {
 
   func stateChanged(_ state: ObjectCaptureSession.CaptureState) {
     guard phase == .capturing else { return }
+    Self.logger.info("Capture state: \(String(describing: self.cameraStatus.mode), privacy: .public); photos: \(self.capture?.numberOfShotsTaken ?? 0); passes: \(self.completedPasses)")
     selectionHint = nil
     switch state {
     case .detecting:
@@ -168,14 +172,24 @@ final class BodyCaptureModel {
     guard !recordedCurrentPass else { return }
     recordedCurrentPass = true
     completedPasses += 1
+    captureProgressChanged()
+  }
+
+  func captureProgressChanged() {
+    guard phase == .capturing, let capture, capture.state == .capturing,
+          cameraStatus.awaitsNextStep, !capture.isPaused else { return }
+    // Stop taking extra photos while the person reads the next-step guidance.
+    capture.pause()
+    Self.logger.info("Capture paused at checkpoint; photos: \(capture.numberOfShotsTaken); passes: \(self.completedPasses)")
   }
 
   func nextPass() {
-    guard let capture, capture.userCompletedScanPass else { return }
+    guard let capture, capture.state == .capturing, capture.userCompletedScanPass else { return }
     pendingAction = .nextPass
     recordedCurrentPass = false
     selectionHint = nil
     capture.beginNewScanPass()
+    capture.resume()
   }
 
   func finish() {
@@ -230,6 +244,7 @@ final class BodyCaptureModel {
   }
 
   private func fail(_ error: Error) {
+    Self.logger.error("Capture failed: \(error.localizedDescription, privacy: .private)")
     cancel()
     phase = .failed(error.localizedDescription)
   }
