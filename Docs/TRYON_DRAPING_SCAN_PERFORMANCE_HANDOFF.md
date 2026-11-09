@@ -2,13 +2,15 @@
 
 ## Review status
 
-The first complete fresh Debug/Release/device-SDK/privacy matrix passed, with all original current-main unit cases preserved. Final compact OS-dark and largest-text journeys also passed with unchanged pixel/touch assertions. The last native button-padding and bounded test-scroll changes are undergoing the final complete frozen-source repeat. Actual screenshots and a finalized, inspected 53-second recording are available; publication follows the final gate.
+**Complete for an illustrative collaborator demo.** The final frozen-source Debug/Release/device-SDK/privacy matrix passed, all original current-main unit identities are preserved, and final compact OS-dark/largest-text journeys passed without weakening assertions. Actual unedited screenshots and an inspected 53-second simulator recording are available. Draft PR #26 is published; the verified Debug app is open in Simulator. Physical capture, likeness and garment-fit validation remain unclaimed.
 
 ## Source of truth and branch audit
 
 - Repository: `anshbalusa-ui/itchathon`.
 - Starting verified `main`: `9b97ab387649a5da26ab01285c7957ae454b19c5` — **Wire try-on preview into closet and scene**.
 - Dedicated implementation branch: `fix/tryon-draping-scan-performance-20261107`.
+- Published implementation commit: `aefcb9fc09e8a5874015085a886fe1ca4b50bb84`.
+- New draft PR: [#26 — Repair native avatar try-on, illustrative draping and capture UX](https://github.com/anshbalusa-ui/itchathon/pull/26), targeting `main`. Published for teammate access before the recovered repeat finished; the final complete receipt below now passes. No merge was performed. Subsequent handoff-only receipts remain on this same repair branch.
 - Actual application: **On You**, module/target/scheme `FitCheck`, generated project `On You.xcodeproj`, specification `Project.json`.
 - Bundle identifier: `app.bitrig.new.0bab6520-e754-44f9-acd8-d1ecceeda6e3`; product/executable `On You.app` / `On You`.
 - PR #24 was already merged. PR #25 remains the separate open draft **M1: Smooth measurement-driven human avatar demo**, branch `feature/measurement-avatar-demo-m1`, observed head `21e5728afbd0d2c1cfe367437ab796905537ddcb`. Direct authenticated GitHub API refresh confirmed its head, base, draft/open state and unchanged update timestamp.
@@ -172,7 +174,7 @@ Milliseconds, cold builder unless stated. `Photo / pattern` separates exact PNG 
 
 Each pair produced real front, back, left, right and three-quarter garment frames. The exported 20 cold-frame PNGs are in `FinalPerformance2/attachments`; warm runs also exercise actual rendering and garment-hidden comparison.
 
-The final-contour full-suite app UI run observed first shirt pixels at a **12.37 s upper bound** and dismissal/reopening at **11.18 s**, including XCTest interaction, polling and screenshot overhead (`FinalDebugEvidence/44050688-7E3E-4913-B5EB-F926E97FF8CC.txt` and `26657EEF-DF0F-4AE3-B88A-53A5A0FFDE76.txt`). These UI observations are separate from offscreen timing. Dismissal clears the presentation-owned cache, so the 6.7–12.3 ms same-builder result is **not** promised for a closed/reopened screen. Initial mesh generation remains the dominant Debug cost.
+The final `FinalVerification4` app UI run observed first shirt pixels at a **19.77 s upper bound** and dismissal/reopening at **18.84 s**, including XCTest interaction, polling and screenshot overhead (`FinalPassingUIEvidence/58018399-3CA2-4A21-85E3-F19C0A8A920A.txt` and `C571B1E9-449B-42A5-B5F7-A117447B7C2B.txt`). These UI observations are separate from offscreen timing and show host/run variance, not phone latency. Dismissal clears the presentation-owned cache, so the 6.7–12.3 ms same-builder result is **not** promised for a closed/reopened screen. Initial mesh generation remains the dominant Debug cost.
 
 ### Identical workloads and resource observations
 
@@ -204,7 +206,7 @@ The native HEIC probe records `RealityFoundation.PhotogrammetrySample.InternalEr
 
 ## Complete verification receipt
 
-`FinalVerification2/verification-q39nyurl/verification.json` records `mode: fresh-local-builds-and-tests` for frozen source SHA-256 `62bab4fd59c02f9afe9f0df40f97ae313852f4ad0b8daebcd92e624c47c8e05e`.
+Final receipt: `FinalVerification4/verification-f6w46tyn/verification.json`, `mode: fresh-local-builds-and-tests`, frozen source SHA-256 `f068488ed13d24e875a60e58557593a8a409cb984aa17577da30a5c5a264e1ea`. This run includes the final compact button padding and bounded bidirectional XCTest scroll driver. The earlier complete `FinalVerification2` receipt is retained as historical evidence, not substituted for this final run.
 
 | Gate | Actual result |
 | --- | --- |
@@ -222,7 +224,7 @@ The exact identity comparison is `baseline-regression-preservation.json`, using 
 
 The corrected driver subsequently passed both compact cases. After the final native button-padding adjustment, `CompactFinal.xcresult` was interrupted without a finalized `Info.plist`; its original test-host log records the largest-AX case passing in 90.525 s, then a long native idle-wait gap during the normal journey. The cause was not established, and no aggregate pass is claimed for that bundle. Only the owned compact simulator was shut down and booted—no erasure or security change. **`CompactFinalRecovered.xcresult` then completed 2 passed / 0 failed / 0 skipped / 0 expected failures** on the final UI implementation. It checks real cloth pixels, every rotation/reset control, visibility/reopening, scan-introduction dismissal and largest-AX targets at least 44 points. `CompactVerificationReceipt.json` retains the evidence chain.
 
-The subsequent `FinalVerification3` repeat passed **all 387 current unit cases**, but `FitCheckUITests-Runner` failed to initialize: **“Timed out while loading Accessibility.”** No UI case initialized in that attempt, and later build/isolation gates were not reached. Its original result and diagnostics are retained in `FinalMatrixAccessibilityFailure.json` and `FinalMatrixAccessibilityDiagnostics`; it is not reported as a passing matrix or an app assertion failure. Recovery uses the fresh owned simulator above, preserving all tests, stores and security boundaries.
+The intervening `FinalVerification3` repeat passed **all 387 current unit cases**, but `FitCheckUITests-Runner` failed to initialize: **“Timed out while loading Accessibility.”** No UI case initialized in that attempt, and later build/isolation gates were not reached. Its original result and diagnostics remain in `FinalMatrixAccessibilityFailure.json` and `FinalMatrixAccessibilityDiagnostics`; it is not called a passing matrix or an app assertion failure. Fresh-simulator native UI preflight then passed, and **the unchanged complete `FinalVerification4` run passed every gate above**, preserving all tests, stores and security boundaries.
 
 ## Actual visual evidence and fallback
 
@@ -251,6 +253,8 @@ Camera-chrome PNGs render shipping SwiftUI in the actual iOS test host against a
 
 Backup video: **`onyou-tryon-demo-53s.mp4`**, independently reopened as 53.0 seconds, 1206×2622, 30 fps; actual extracted frames were inspected. Its unmodified simulator source is `raw-tryon-journey.mp4` (268.46 seconds). `video-provenance.json` and the video's `.metadata.json` list exact source ranges and hashes. The short version makes cuts to remove test setup/waits; retained segments remain 1× speed. It is not a navigation-latency or real-time performance claim, and no screenshot replaces the app's live geometry.
 
+The video was captured from the earlier fully passing build before the last compact button-padding refinement. Geometry and journey behavior are unchanged; the 19 refreshed primary PNGs come from the exact final `FinalVerification4` build, and the 14 compact PNGs cover the final padding and largest-text behavior. Their distinct source receipts remain explicit in the manifests.
+
 If graphical Simulator is unavailable, open that MP4 in the local video player and use the unedited PNGs as backup. On this host the native prebuilt helper also launched both with `--fixtures` and without opt-in arguments; the normal route showed **Example body**, no synthetic banner and no seeded closet.
 
 Meeting explanation: “On You loads a saved textured avatar and the actual shirt record into one interactive native 3D scene. This demo uses clearly labeled authored inputs through the real storage and Closet contracts. Drape and the rear appearance are illustrative, not verified fit; real-device capture and reconstruction validation remain pending.”
@@ -260,3 +264,9 @@ Meeting explanation: “On You loads a saved textured avatar and the actual shir
 The reviewed publication inventory contains 33 modified existing files and 25 new paths: actual project metadata/verifier, native launch/profiling/fixture helpers, capture/Closet/try-on integration, bounded geometry and scene preparation, focused regressions, authored fixture assets/provenance and this handoff. Visual evidence and native diagnostic scaffolds remain outside Git.
 
 No M1 measurement-avatar implementation, historical development view, Metal scene-session file or PR #25 branch was copied over or modified. The live post-implementation GitHub audit still showed `main` at `9b97ab387649a5da26ab01285c7957ae454b19c5` and PR #25 open/draft at `21e5728afbd0d2c1cfe367437ab796905537ddcb`, unchanged since `2026-11-06T22:08:11Z`. Only a new repair branch/draft PR is authorized for publication; no main or stacked-PR merge is part of this work.
+
+## Review verdict
+
+The saved-avatar → Closet → selected shirt → real native 3D try-on journey is implemented, rendered, visually inspected and freshly verified. Authored A/B bodies and Tide/Coral inputs are reproducible, isolated and explicitly synthetic. Rotation, reset, visibility, replacement, recovery and ownership transitions are exercised rather than inferred from titles.
+
+This is a reviewable illustrative prototype—not production capture validation, a personal-body accuracy result or a physical-fit engine. The native sample-initialization limit and original simulator infrastructure failures remain documented with their evidence. No further segment, main merge or PR #25 change is included.

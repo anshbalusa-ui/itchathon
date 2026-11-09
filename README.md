@@ -78,6 +78,8 @@ The current native verification entry reads **`Project.json`**, generates `On Yo
 
 It includes Debug unit/UI, unsigned iPhone-SDK compilation, normal Release, Release isolation and resource/privacy inspection. Test execution uses a noninteractive launcher; no debugger permission is required. `Scripts/benchmark_onyou.sh --help` describes the separate opt-in cold/warm native benchmark. Do not substitute results from PR #25 or the older standalone FitCheck project.
 
+Final repair verification: **424 Debug tests** (387 unit + 37 UI) and **20 Release isolation tests** (9 unit + 11 UI), zero failures/skips; fresh unsigned iPhone-SDK and normal Release builds plus resource/privacy inspections passed. Final compact OS-dark/maximum-accessibility journeys passed **2/2**. Exact receipts, preserved environmental failures, launch commands and visual evidence are in the [handoff](Docs/TRYON_DRAPING_SCAN_PERFORMANCE_HANDOFF.md). Repair review: [draft PR #26](https://github.com/anshbalusa-ui/itchathon/pull/26); no main merge.
+
 Historical teammate verification on November 6, 2026: nine unit tests and two UI tests passed on the iPhone 17 simulator. The UI tests cover clean viewer controls, scan preparation/cancellation, and manual entry/save/history. Bitrig builds passed for iOS Simulator Debug and physical-iPhone Release. Rendered screens were checked in the Bitrig iPhone preview. These results predate the try-on repair; a real person's capture/reconstruction and measurement accuracy remain untested.
 
 ## Upstream
