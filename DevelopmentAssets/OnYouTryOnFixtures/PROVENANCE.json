@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "synthetic": true,
+  "containsPersonalData": false,
+  "license": "CC0-1.0",
+  "source": {
+    "path": "DevelopmentAssets/HumanShowcase/human-showcase-v1.bin",
+    "sha256": "6977bd1aeba54c9f4ef82f9d7f9b8b996d030b2758e226b61dcb9fbccfe4f6e9",
+    "notice": "DevelopmentAssets/HumanShowcase/NOTICE.txt",
+    "vertices": 13380,
+    "triangles": 26756
+  },
+  "bodies": {
+    "a": {
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ],
+      "heightMeters": 1.8
+    },
+    "b": {
+      "scaleXYZ": [
+        1.13,
+        1.06,
+        1.1
+      ],
+      "heightMeters": 1.908
+    },
+    "unsupported": "Authored textured box with no observable standing limbs or toe orientation"
+  },
+  "shirts": {
+    "tide": {
+      "bodyWidthM": 0.52,
+      "lengthM": 0.72,
+      "sleeveSpanM": 0.92
+    },
+    "coral": {
+      "bodyWidthM": 0.58,
+      "lengthM": 0.8,
+      "sleeveSpanM": 1
+    },
+    "images": "Procedurally authored alpha-contoured shirts; not product photography, retailer inventory or real captures",
+    "landmarks": "25 explicitly authored ground-truth contour observations in Sources/Development/OnYouTryOnFixtures.swift; validated against actual image contour and bound to exact image SHA-256. Native recognition rejects these cartoon images; no optical-recognition success is claimed."
+  },
+  "admission": "Debug-only isolated AvatarScanStore/ClosetStore. 72-image/two-pass metadata is authored fixture metadata, NOT camera capture or reconstruction proof. Persistent personal stores are not accessed.",
+  "generator": "xcrun swift Scripts/generate_onyou_fixtures.swift NEW_EMPTY_DIRECTORY",
+  "regeneration": "Native SceneKit USDZ packaging may differ bytewise; pinned source geometry and declared scale are reproducible. No downloads, face images or camera are used.",
+  "sha256": {
+    "synthetic-avatar-a.usdz": "2b6896762d0d2ffc6e35fc64c6bb92e8b25566521b69b922f35c5e4474fd98d6",
+    "synthetic-avatar-b.usdz": "5a705619a92b551f88775fc0cf9906a71e46028dcc5059c84404284b6eec236e",
+    "unsupported-pose.usdz": "a4fb048b608543864737214832b81ce048ff97ca7c149f4ffcdea1f815839bc6",
+    "synthetic-shirt.png": "830dd7a012b33d9f8fe678c44612652b62813a7d2867bf44acb445e4fc41232c",
+    "synthetic-shirt-coral.png": "6517207a000a1a8218b6c562227860a47148927abeb32368f51fadfbdb134756"
+  }
+}

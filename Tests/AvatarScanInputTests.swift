@@ -85,4 +85,38 @@ final class AvatarScanInputTests: XCTestCase {
       }
     }
   }
+
+  func testDepthPreflightCountsEveryLoadAndStopsAtCancellation() async {
+    actor ReadCount {
+      private(set) var value = 0
+      func increment() { value += 1 }
+    }
+    let reads = ReadCount()
+    let files = (0..<3).map { URL(fileURLWithPath: "/capture/\($0).heic") }
+    do {
+      _ = try await AvatarScanInput.preflight(files: files) { _ in
+        await reads.increment()
+        throw CancellationError()
+      }
+      XCTFail("A cancelled sample load must stop preflight.")
+    } catch is CancellationError {
+    } catch {
+      XCTFail("Expected cancellation, got \(error).")
+    }
+    let readCount = await reads.value
+    XCTAssertEqual(readCount, 1)
+    let completeReads = ReadCount()
+    let fullFiles = (0..<60).map { URL(fileURLWithPath: "/capture/full-\($0).heic") }
+    do {
+      let input = try await AvatarScanInput.preflight(files: fullFiles) { _ in
+        await completeReads.increment()
+        return true
+      }
+      XCTAssertEqual(try input.validate(passes: 2), 60)
+    } catch {
+      XCTFail("Expected 60 accepted test inputs, got \(error).")
+    }
+    let completedCount = await completeReads.value
+    XCTAssertEqual(completedCount, 60)
+  }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct YourBodyView: View {
   var store: OnYouStore
   var scans: AvatarScanStore
+  var synthetic = false
   @State private var showingCapture = false
   @State private var confirmingDelete = false
   @AppStorage("on-you.wireframe") private var wireframe = false
@@ -13,7 +14,7 @@ struct YourBodyView: View {
         ScannedAvatarPreview(url: asset.url, referenceHeightCM: asset.record.referenceHeightCM)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         VStack(spacing: 6) {
-          Text("Your scan").font(.headline)
+          Text(synthetic ? "Synthetic avatar" : "Your scan").font(.headline)
           Text("Drag to rotate. Pinch to look closer.")
             .font(.subheadline).foregroundStyle(.secondary)
         }

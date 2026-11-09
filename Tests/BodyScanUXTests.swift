@@ -80,11 +80,55 @@ final class BodyScanUXTests: XCTestCase {
     }
   }
 
+  func testFeedbackPrecedenceAndDirectionalEvidenceAreConservative() {
+    let mode = BodyScanCameraStatus.Mode.capturing
+    XCTAssertEqual(BodyScanCameraStatus.guidance(for: [.environmentLowLight,.movingTooFast],mode: mode,capturePaused: false,trackingNormal: false),.lighting)
+    XCTAssertEqual(BodyScanCameraStatus.guidance(for: [.objectTooClose,.outOfFieldOfView],mode: mode,capturePaused: false,trackingNormal: true),.tooClose)
+    XCTAssertEqual(BodyScanCameraStatus.guidance(for: [.objectTooFar],mode: mode,capturePaused: false,trackingNormal: true),.tooFar)
+    XCTAssertEqual(BodyScanCameraStatus.guidance(for: [.outOfFieldOfView],mode: mode,capturePaused: false,trackingNormal: true),.framing)
+    XCTAssertEqual(BodyScanCameraStatus.guidance(for: [.outOfFieldOfView],mode: mode,capturePaused: false,trackingNormal: false),.tracking)
+    XCTAssertEqual(BodyScanCameraStatus.guidance(for: [],mode: mode,capturePaused: true,trackingNormal: true),.paused)
+  }
+
+  func testPassProgressExplainsBodyDetailTransitionsAndCapacityRecovery() {
+    let firstPass = BodyScanCameraStatus(mode: .capturing, completedPasses: 1,
+                                        shots: 31, passComplete: true)
+    XCTAssertEqual(firstPass.step, .detail)
+    XCTAssertEqual(firstPass.currentPass,1,"A paused completed body circle must not be counted as the active detail circle")
+    XCTAssertEqual(firstPass.action,.nextPass)
+    XCTAssertTrue(firstPass.actionEnabled)
+    let detailCapture = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 45)
+    XCTAssertEqual(detailCapture.step,.detail)
+    XCTAssertEqual(detailCapture.currentPass,2,"The second active circle must agree with the Detail stage")
+    XCTAssertFalse(detailCapture.awaitsNextStep)
+
+    let secondPass = BodyScanCameraStatus(mode: .capturing, completedPasses: 2,
+                                         shots: 58, passComplete: true)
+    XCTAssertEqual(secondPass.step, .detail)
+    XCTAssertEqual(secondPass.currentPass,2)
+    XCTAssertEqual(secondPass.action,.nextPass)
+    XCTAssertTrue(secondPass.actionEnabled)
+
+    let capacity = BodyScanCameraStatus(mode: .capturing, completedPasses: 1,
+                                        shots: 200, maximumShots: 200)
+    XCTAssertEqual(capacity.action, .retakeScan)
+  }
+
+  func testStageDiagnosticConversionUsesMonotonicDurationOnly() {
+    XCTAssertEqual(BodyScanTiming.seconds(for: .milliseconds(1_500)), 1.5, accuracy: 0.000_001)
+    XCTAssertEqual(BodyScanTiming.seconds(for: .seconds(-1)), 0)
+    XCTAssertNil(BodyScanTiming.buildProgress(current: 0, fraction: .nan))
+    XCTAssertNil(BodyScanTiming.buildProgress(current: 0, fraction: .infinity))
+    XCTAssertEqual(BodyScanTiming.buildProgress(current: 0, fraction: -1), 0)
+    XCTAssertEqual(BodyScanTiming.buildProgress(current: 0.42, fraction: 0.2), 0.42)
+    XCTAssertLessThan(BodyScanTiming.buildProgress(current: 0,fraction: 2)!,1)
+  }
+
   func testProgressAndTimingDoNotInventCompletionOrTime() {
     let photosOnly = BodyScanCameraStatus(mode: .capturing, shots: 500)
     XCTAssertFalse(photosOnly.awaitsNextStep)
     XCTAssertNil(photosOnly.action)
-    XCTAssertEqual(photosOnly.progressTitle, "Body circle in progress")
+    XCTAssertEqual(photosOnly.progressTitle, "Pass 1 of 2 · Body circle in progress")
     var detail = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 60)
     XCTAssertNil(detail.action)
     XCTAssertTrue(detail.progressDetail.contains("Finish the detail ring"))
@@ -113,11 +157,15 @@ final class BodyScanUXTests: XCTestCase {
     // Render the shipping camera chrome around a clearly synthetic, camera-free surface.
     // This checks layout; it does not pretend to capture a person in the simulator.
     for (name, size, typeSize, status) in [
+      ("capture-body", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, shots: 23)),
       ("capture-standard", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43)),
       ("capture-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43)),
       ("capture-finding", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .framing, pendingAction: .findPerson)),
       ("capture-paused", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.")),
       ("capture-paused-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.")),
+      ("capture-low-light", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, trackingNormal: false, issue: "Find brighter, even light so we can see the person clearly.")),
+      ("capture-out-of-view", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, issue: "Bring the whole person back into view, with their head and feet visible.")),
+      ("capture-tracking", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, trackingNormal: false, issue: "Slowly move the iPhone so it can find the floor and settle its tracking.")),
       ("capture-limit", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200, maximumShots: 200)),
       ("capture-limit-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200, maximumShots: 200)),
       ("capture-ready", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 2, shots: 60, passComplete: true))

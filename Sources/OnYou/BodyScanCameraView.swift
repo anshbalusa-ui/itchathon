@@ -70,7 +70,7 @@ struct BodyScanCameraView<Camera: View>: View {
           .accessibilityIdentifier("scan.camera.title")
         Text(status.instruction)
           .font(.callout)
-          .foregroundStyle(status.issue != nil && !status.awaitsNextStep ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+          .foregroundStyle(status.issue != nil && !status.awaitsNextStep ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
           .fixedSize(horizontal: false, vertical: true)
           .accessibilityIdentifier("scan.camera.guidance")
       }
@@ -81,7 +81,7 @@ struct BodyScanCameraView<Camera: View>: View {
     VStack(alignment: .leading, spacing: 6) {
       Text(status.progressTitle).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
         .fixedSize(horizontal: false, vertical: true)
-      Text(status.progressDetail).fixedSize(horizontal: false, vertical: true)
+      Text(status.progressDetail).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
       if !status.awaitsNextStep { elapsedLabel.fixedSize(horizontal: false, vertical: true) }
     }
     .frame(maxWidth: .infinity, alignment: .leading)

@@ -86,7 +86,7 @@ final class AvatarScanStore {
     try url.setResourceValues(values)
   }
 
-  static func digest(_ url: URL) throws -> String {
+  nonisolated static func digest(_ url: URL) throws -> String {
     let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
     guard values.isRegularFile == true, values.isSymbolicLink != true,
           let size = values.fileSize, (1...256_000_000).contains(size) else { throw AvatarScanError.invalidModel }

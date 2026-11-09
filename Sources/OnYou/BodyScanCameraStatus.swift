@@ -13,6 +13,44 @@ struct BodyScanCameraStatus: Equatable {
   var selectionHint: String?
   var pendingAction: Action?
   var maximumShots: Int?
+  enum Feedback: Hashable {
+    case environmentTooDark, environmentLowLight, movingTooFast
+    case outOfFieldOfView, objectTooClose, objectTooFar, objectNotDetected
+  }
+
+  enum Guidance: Equatable {
+    case lighting, movement, tooClose, tooFar, paused, selection, tracking, framing
+    var message: String {
+      switch self {
+      case .lighting: "Find brighter, even light so we can see the person clearly."
+      case .movement: "Slow down. Keep the iPhone steady and the person still."
+      case .tooClose: "Move back a little. Keep their head and feet visible."
+      case .tooFar: "Move a little closer without cutting off their head or feet."
+      case .paused: "Capture is paused. Keep On You in the foreground to continue."
+      case .selection: "Keep the person centered inside the selection box."
+      case .tracking: "Slowly move the iPhone so it can find the floor and settle its tracking."
+      case .framing: "Bring the whole person back into view, with their head and feet visible."
+      }
+    }
+  }
+
+  static func guidance(for feedback: Set<Feedback>, mode: Mode, capturePaused: Bool,
+                       trackingNormal: Bool) -> Guidance? {
+    if feedback.contains(.environmentTooDark) || feedback.contains(.environmentLowLight) { return .lighting }
+    if feedback.contains(.movingTooFast) { return .movement }
+    if feedback.contains(.objectTooClose) { return .tooClose }
+    if feedback.contains(.objectTooFar) { return .tooFar }
+    if capturePaused { return .paused }
+    if feedback.contains(.objectNotDetected) && mode != .framing { return .selection }
+    if !trackingNormal { return .tracking }
+    if feedback.contains(.outOfFieldOfView) { return .framing }
+    return nil
+  }
+
+
+  var currentPass: Int { completedPasses >= 2 ? 2 : max(1, completedPasses + (passComplete ? 0 : 1)) }
+  var passLabel: String { currentPass == 1 ? "Body circle" : "Detail circle" }
+
 
   var exhaustedCaptureCapacity: Bool {
     guard let maximumShots, maximumShots > 0 else { return false }
@@ -49,7 +87,7 @@ struct BodyScanCameraStatus: Equatable {
     }
     if awaitsNextStep {
       if completedPasses < 2 {
-        return "Stop walking. Capture is paused. Raise the iPhone near eye level, then tap Continue to details. Hold the same pose."
+        return "Stop walking. Capture is paused. Keep the same pose, then tap Continue to details."
       }
       if shots < 60 {
         return "Stop walking. This circle is complete, but we need more photos before building. Tap Capture more detail to start a fresh ring."
@@ -66,8 +104,8 @@ struct BodyScanCameraStatus: Equatable {
     case .capturing:
       if completedPasses >= 2 && shots < 60 { return "We need a little more detail. Continue around the person with their whole body in view." }
       return completedPasses == 0
-        ? "Keep the person still. Follow the ring at chest height. We’ll pause when the circle is complete."
-        : "Circle slowly near eye level. Keep the whole person in view. We’ll pause when the detail ring is complete."
+        ? "Keep the person still and follow the coverage ring for the body circle. We’ll pause when it’s complete."
+        : "Follow the coverage ring for the detail circle. Keep the whole person in view and their pose still. We’ll pause when it’s complete."
     }
   }
 
@@ -120,11 +158,17 @@ struct BodyScanCameraStatus: Equatable {
   var progressTitle: String {
     if completedPasses >= 2 && shots >= 60 { return "Capture complete" }
     if awaitsNextStep { return completedPasses < 2 ? "Body complete · Details next" : "More photo detail needed" }
-    return completedPasses == 0 ? "Body circle in progress" : "Detail circle in progress"
+    return "Pass \(currentPass) of 2 · \(passLabel) in progress"
   }
 
   var progressDetail: String {
-    if awaitsNextStep { return "Capture paused · Continue below" }
+    if awaitsNextStep {
+      return completedPasses < 2
+        ? "Pass 1 of 2 complete · Capture paused · Continue to details below."
+        : shots < 60
+          ? "Both circles complete · Capture paused · Continue around the person for more photos."
+          : "Both circles complete · Capture paused · Build your avatar below."
+    }
     if completedPasses == 0 { return "Fill the camera ring. The detail circle comes next." }
     return shots >= 60 ? "Enough photos. Finish the detail ring to continue." : "Fill the detail ring. Photos are captured automatically."
   }

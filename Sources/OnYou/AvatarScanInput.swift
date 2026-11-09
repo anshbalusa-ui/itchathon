@@ -1,7 +1,8 @@
 import CoreVideo
 import Foundation
+import RealityKit
 
-struct AvatarScanInput {
+struct AvatarScanInput: Sendable {
   private var imageURLs: Set<URL>
   private var depthImageURLs: Set<URL>
 
@@ -34,6 +35,32 @@ struct AvatarScanInput {
     return usedImages.count
   }
 
+
+  static func preflight(files: [URL]) async throws -> Self {
+    try await preflight(files: files) { file in
+      let sample = try await PhotogrammetrySample(contentsOf: file)
+      return containsFiniteDepth(sample.depthDataMap)
+    }
+  }
+
+  static func preflight(files: [URL],
+                        hasDepth: @escaping @Sendable (URL) async throws -> Bool) async throws -> Self {
+    let inspection = Task.detached(priority: .userInitiated) {
+      var depthImages = Set<URL>()
+      for file in files {
+        try Task.checkCancellation()
+        let containsDepth = try await hasDepth(file)
+        try Task.checkCancellation()
+        if containsDepth { depthImages.insert(file) }
+      }
+      return Self(imageURLs: Set(files), depthImageURLs: depthImages)
+    }
+    return try await withTaskCancellationHandler {
+      try await inspection.value
+    } onCancel: {
+      inspection.cancel()
+    }
+  }
   static func containsFiniteDepth(_ buffer: CVPixelBuffer?) -> Bool {
     guard let buffer,
           [kCVPixelFormatType_DepthFloat32, kCVPixelFormatType_DisparityFloat32].contains(CVPixelBufferGetPixelFormatType(buffer)),
