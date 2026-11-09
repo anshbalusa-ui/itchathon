@@ -4,20 +4,90 @@ import XCTest
 @testable import FitCheck
 
 final class ClosetTests: XCTestCase {
+  private enum ExpectedCaptureError {
+    case angle, depth, shape
+  }
+
+  private func assertCaptureError(_ error: Error, matches expected: ExpectedCaptureError, file: StaticString = #filePath, line: UInt = #line) {
+    guard let error = error as? GarmentCaptureError else {
+      XCTFail("Unexpected non-garment capture error: \(error)", file: file, line: line)
+      return
+    }
+    switch (expected, error) {
+    case (.angle, .angle), (.depth, .depth), (.shape, .shape): break
+    default: XCTFail("Unexpected garment capture rejection: \(error)", file: file, line: line)
+    }
+  }
+
   func testMetricProjectionUsesDepthAndRejectsInvalidRays() throws {
     let intrinsics = simd_float3x3(SIMD3(1000, 0, 0), SIMD3(0, 1000, 0), SIMD3(960, 720, 1))
     // A level camera looking down at a horizontal surface from a meter above it.
     let transform = simd_float4x4(SIMD4(1, 0, 0, 0), SIMD4(0, 0, -1, 0), SIMD4(0, 1, 0, 0), SIMD4(0, 1, 0, 1))
     let projection = GarmentPlaneProjection(intrinsics: intrinsics, cameraTransform: transform,
                                             imageSize: SIMD2(1920, 1440), planeHeight: 0)
-    let left = try projection.project(CGPoint(x: 0.3, y: 0.5))
-    let right = try projection.project(CGPoint(x: 0.7, y: 0.5))
+    let leftUV = try GarmentPlaneProjection.nativeCameraUV(fromPortrait: CGPoint(x: 0.3, y: 0.5))
+    let rightUV = try GarmentPlaneProjection.nativeCameraUV(fromPortrait: CGPoint(x: 0.7, y: 0.5))
+    let left = try projection.project(nativeUV: leftUV)
+    let right = try projection.project(nativeUV: rightUV)
     XCTAssertEqual(simd_distance(left, right), 0.576, accuracy: 0.0001)
-    XCTAssertThrowsError(try projection.project(CGPoint(x: .nan, y: 0.5)))
+    XCTAssertThrowsError(try GarmentPlaneProjection.nativeCameraUV(fromPortrait: CGPoint(x: .nan, y: 0.5)))
     var invalid = projection
     invalid.planeHeight = 2
-    XCTAssertThrowsError(try invalid.project(CGPoint(x: 0.5, y: 0.5)))
+    XCTAssertThrowsError(try invalid.project(nativeUV: CGPoint(x: 0.5, y: 0.5)))
   }
+  func testCaptureSchedulerBoundsWorkAndProtectsRestartedSessions() throws {
+    var scheduler = GarmentCaptureScheduler()
+    scheduler.start()
+    let first = try XCTUnwrap(scheduler.admit(timestamp: 1))
+    XCTAssertNil(scheduler.admit(timestamp: 2))
+    XCTAssertTrue(scheduler.owns(first))
+    XCTAssertTrue(scheduler.finish(first, analysisDuration: 0.42))
+    XCTAssertEqual(scheduler.lastAnalysisDuration, 0.42)
+    XCTAssertNil(scheduler.admit(timestamp: 1))
+    XCTAssertNil(scheduler.admit(timestamp: 1.699), "The existing minimum interval remains in force pending measured hardware evidence.")
+    let interrupted = try XCTUnwrap(scheduler.admit(timestamp: 1.71))
+
+    scheduler.stop()
+    XCTAssertFalse(scheduler.owns(interrupted))
+    XCTAssertNil(scheduler.admit(timestamp: 3))
+    scheduler.start()
+    let resumed = try XCTUnwrap(scheduler.admit(timestamp: 4))
+    XCTAssertFalse(scheduler.finish(interrupted, analysisDuration: 9))
+    XCTAssertTrue(scheduler.owns(resumed), "A stale completion must not release the resumed session's frame.")
+    XCTAssertTrue(scheduler.finish(resumed, analysisDuration: 0.81))
+    XCTAssertEqual(scheduler.lastAnalysisDuration, 0.81)
+    XCTAssertNil(scheduler.admit(timestamp: 4), "A duplicate frame timestamp must not count as a distinct sample.")
+    XCTAssertNil(scheduler.admit(timestamp: 4.699), "The original minimum interval remains in force.")
+    XCTAssertNotNil(scheduler.admit(timestamp: 4.71))
+  }
+  func testCaptureConsensusNeedsThreeAgreeingFramesAndResetsOnOutlier() {
+    let base = GarmentScanDimensions(bodyWidthM: 0.5, lengthM: 0.7, sleeveSpanM: 0.8)
+    var consensus = GarmentCaptureConsensus()
+    XCTAssertNil(consensus.add(base))
+    XCTAssertNil(consensus.add(base))
+    XCTAssertEqual(consensus.add(base), base)
+    XCTAssertEqual(consensus.count, 3)
+
+    var outlier = base
+    outlier.bodyWidthM = 0.6
+    XCTAssertNil(consensus.add(outlier))
+    XCTAssertEqual(consensus.count, 1)
+    XCTAssertNil(consensus.add(outlier))
+    XCTAssertEqual(consensus.add(outlier), outlier)
+    consensus.reset()
+    XCTAssertEqual(consensus.count, 0)
+    XCTAssertNil(consensus.add(base))
+  }
+
+  func testProjectionRejectsCameraRayParallelToMetricPlane() {
+    let intrinsics = simd_float3x3(SIMD3(1000, 0, 0), SIMD3(0, 1000, 0), SIMD3(960, 720, 1))
+    let projection = GarmentPlaneProjection(intrinsics: intrinsics, cameraTransform: matrix_identity_float4x4,
+                                            imageSize: SIMD2(1920, 1440), planeHeight: 0)
+    XCTAssertThrowsError(try projection.project(nativeUV: CGPoint(x: 0.5, y: 0.5))) { error in
+      assertCaptureError(error, matches: .angle)
+    }
+  }
+
 
   func testSilhouetteRejectsNonShirtsAndClippedCaptures() throws {
     let width = 192, height = 256
@@ -31,6 +101,54 @@ final class ClosetTests: XCTestCase {
     XCTAssertEqual(outline.widthRight.x - outline.widthLeft.x, 91.0 / 192, accuracy: 0.01)
     for y in 45..<70 { for x in 0..<20 { mask[y * width + x] = 255 } }
     XCTAssertThrowsError(try GarmentOutline.detect(mask: mask, width: width, height: height))
+  }
+
+  func testLandmarkValidationRejectsCollarBelowShoulders() {
+    let outline = GarmentOutline(widthLeft: .zero, widthRight: .zero, top: .zero, bottom: .zero,
+                                 sleeveLeft: .zero, sleeveRight: .zero,
+                                 bounds: CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8))
+    var points = [CGPoint](repeating: CGPoint(x: 0.5, y: 0.5), count: 25)
+    points[11] = CGPoint(x: 0.3, y: 0.3)
+    points[19] = CGPoint(x: 0.7, y: 0.3)
+    points[1] = CGPoint(x: 0.5, y: 0.2)
+    points[15] = CGPoint(x: 0.5, y: 0.8)
+    XCTAssertNoThrow(try GarmentLandmarkValidation.validate(points, against: outline))
+    points[1] = CGPoint(x: 0.5, y: 0.4)
+    XCTAssertThrowsError(try GarmentLandmarkValidation.validate(points, against: outline)) { error in
+      assertCaptureError(error, matches: .shape)
+    }
+  }
+
+  func testProjectionKeepsTypedDepthRejection() {
+    let intrinsics = simd_float3x3(SIMD3(1000, 0, 0), SIMD3(0, 1000, 0), SIMD3(960, 720, 1))
+    let transform = simd_float4x4(SIMD4(1, 0, 0, 0), SIMD4(0, 0, -1, 0), SIMD4(0, 1, 0, 0), SIMD4(0, 1, 0, 1))
+    let projection = GarmentPlaneProjection(intrinsics: intrinsics, cameraTransform: transform,
+                                            imageSize: SIMD2(1920, 1440), planeHeight: 2)
+    XCTAssertThrowsError(try projection.project(nativeUV: CGPoint(x: 0.5, y: 0.5))) { error in
+      assertCaptureError(error, matches: .depth)
+    }
+  }
+
+  func testPortraitCoordinatesMapToNativeUVBeforeProjection() throws {
+    let intrinsics = simd_float3x3(SIMD3(1000, 0, 0), SIMD3(0, 1000, 0), SIMD3(960, 720, 1))
+    let transform = simd_float4x4(SIMD4(1, 0, 0, 0), SIMD4(0, 0, -1, 0), SIMD4(0, 1, 0, 0), SIMD4(0, 1, 0, 1))
+    let projection = GarmentPlaneProjection(intrinsics: intrinsics, cameraTransform: transform,
+                                            imageSize: SIMD2(1920, 1440), planeHeight: 0)
+    let uv = try GarmentPlaneProjection.nativeCameraUV(fromPortrait: CGPoint(x: 0.23, y: 0.67))
+    XCTAssertEqual(uv.x, 0.67, accuracy: 0.000001)
+    XCTAssertEqual(uv.y, 0.77, accuracy: 0.000001)
+    let point = try projection.project(nativeUV: uv)
+    XCTAssertEqual(point.x, 0.3264, accuracy: 0.0001)
+    XCTAssertEqual(point.y, 0, accuracy: 0.0001)
+    XCTAssertEqual(point.z, 0.3888, accuracy: 0.0001)
+    XCTAssertThrowsError(try GarmentPlaneProjection.nativeCameraUV(fromPortrait: CGPoint(x: 1.01, y: 0.5)))
+
+    for invalidUV in [CGPoint(x: .nan, y: 0.5), CGPoint(x: .infinity, y: 0.5),
+                      CGPoint(x: -0.01, y: 0.5), CGPoint(x: 0.5, y: 1.01)] {
+      XCTAssertThrowsError(try projection.project(nativeUV: invalidUV)) { error in
+        assertCaptureError(error, matches: .depth)
+      }
+    }
   }
 
   func testComparisonRejectsBadDimensionsAndDoesNotClaimFit() {

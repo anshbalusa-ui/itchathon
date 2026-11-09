@@ -1,6 +1,26 @@
-import Foundation
+import OSLog
 
 enum BodyScanTiming {
+  enum Stage: String, CaseIterable {
+    case framing, selection, bodyPass, passCheckpoint, detailPass, captureFinalization, photoPreflight, reconstruction, textureValidation, avatarLoading
+  }
+
+  private static let logger = Logger(subsystem: "app.onyou", category: "BodyScanTiming")
+
+  static func seconds(for duration: Duration) -> Double {
+    let components = duration.components
+    return max(0, Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000)
+  }
+
+  static func record(_ stage: Stage, duration: Duration) {
+    logger.info("Stage duration: \(stage.rawValue, privacy: .public); seconds: \(Self.seconds(for: duration), privacy: .public)")
+  }
+  static func buildProgress(current: Double, fraction: Double) -> Double? {
+    guard fraction.isFinite else { return nil }
+    return max(current, min(0.99, max(0, fraction)))
+  }
+
+
   static func remaining(_ seconds: TimeInterval?) -> String {
     guard let seconds, seconds.isFinite, seconds > 0 else { return "Estimating time remaining…" }
     if seconds < 45 { return "Almost ready" }

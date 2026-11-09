@@ -9,8 +9,14 @@ import plistlib
 import subprocess
 import sys
 import tempfile
+from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT_SPEC = ROOT / "Project.json"
+PROJECT = json.loads(PROJECT_SPEC.read_text())
+PROJECT_FILE = PROJECT["name"] + ".xcodeproj"
+APP_NAME = PROJECT["targets"]["FitCheck"]["settings"]["PRODUCT_NAME"]
+APP_IDENTIFIER = PROJECT["targets"]["FitCheck"]["settings"]["PRODUCT_BUNDLE_IDENTIFIER"]
 ASSET = "FitCheckGeometricVest.fitmesh"
 DIGEST = "ecc2df7e57f5a12ac89f4bd16bb51d101718780ee609a72f41c8ff1b653f7f30"
 PRIVACY = {
@@ -19,7 +25,9 @@ PRIVACY = {
     "NSPrivacyAccessedAPICategoryFileTimestamp": ["C617.1"],
 }
 MARKERS = (
-    "HumanShowcaseAssets", "HumanShowcaseModel", "HumanBodyRegion",
+    # The pinned HumanShowcaseAssets loader now powers On You's production body.
+    # Its developer UI, inspection map and experimental Metal labs remain isolated.
+    "HumanShowcaseModel", "HumanBodyRegion",
     "demo.fit-map", "demo.region-summary", "demo.region",
     "CatalogPreviewAssociation", "CatalogIllustrativePreview", "RendererPresentation",
     "catalog.preview.open", "renderer.product-context", "View illustrative 3D preview",
@@ -55,6 +63,7 @@ MARKERS = (
     "demo.avatar.left", "demo.avatar.right", "demo.avatar.reset", "demo.avatar.retry",
     "demo.replay.scene", "demo.replay.shape-a", "demo.replay.shape-b",
     "demo.replay.left", "demo.replay.right", "demo.replay.reset", "demo.replay.retry",
+    "OnYouTryOnFixtures", "-onyou-tryon-fixture", "onyou.synthetic",
 )
 RELEASE_SELECTORS = (
     "FitCheckUITests/FridayDemoUITests/testDemoRemainsExcludedFromRelease",
@@ -65,11 +74,13 @@ RELEASE_SELECTORS = (
     "FitCheckTests/RendererDevelopmentResourceIsolationTests",
     "FitCheckUITests/AvatarPilotUITests",
     "FitCheckUITests/CatalogUITests/testNormalLaunchAndReleaseOptInRemainIsolated",
-    "FitCheckUITests/IntegrationUITests/testInternalRouteFlagsRemainLegacyInRelease",
+    "FitCheckUITests/IntegrationUITests/testInternalRouteFlagsRemainUnavailableInRelease",
     "FitCheckUITests/RendererUITests/testRendererLabRemainsUnavailableFromProductionLaunches",
     "FitCheckUITests/AvatarGeometryUITests/testGeometryLabIsAbsentFromProductionLaunches",
     "FitCheckUITests/AvatarGeometryUITests/testArtifactPersistenceIsAbsentFromProductionLaunches",
     "FitCheckUITests/SpatialReplayUITests/testSyntheticReplayIsAbsentFromEveryProductionLaunch",
+    "FitCheckUITests/OnYouUITests",
+    "FitCheckUITests/TryOnUITests/testSyntheticFixtureRouteIsExcludedFromRelease",
 )
 MACHO_MAGICS = {bytes.fromhex(value) for value in (
     "cffaedfe", "cefaedfe", "feedfacf", "feedface", "cafebabe", "bebafeca", "cafebabf", "bfbafeca",
@@ -83,7 +94,7 @@ def require(condition, message):
 
 def source_digest():
     digest = hashlib.sha256()
-    paths = [ROOT / "project.yml", Path(__file__).resolve()]
+    paths = [PROJECT_SPEC, Path(__file__).resolve()]
     for directory in ("Sources", "Tests", "UITests", "DevelopmentAssets"):
         paths.extend(path for path in (ROOT / directory).rglob("*") if path.is_file())
     for path in sorted(paths):
@@ -135,14 +146,18 @@ def inspect_bundles(derived):
     require(human_source_hashes == HUMAN_SHOWCASE_DIGESTS,
             f"Reviewed human showcase source hashes changed: {human_source_hashes}")
     apps = {
-        "debug": derived / "DebugDerived/Build/Products/Debug-iphonesimulator/FitCheck.app",
-        "iPhone": derived / "iPhoneDerived/Build/Products/Debug-iphoneos/FitCheck.app",
-        "release": derived / "ReleaseDerived/Build/Products/Release-iphonesimulator/FitCheck.app",
-        "releaseTests": derived / "ReleaseTestDerived/Build/Products/Release-iphonesimulator/FitCheck.app",
+        "debug": derived / "DebugDerived/Build/Products/Debug-iphonesimulator" / (APP_NAME + ".app"),
+        "iPhone": derived / "iPhoneDerived/Build/Products/Debug-iphoneos" / (APP_NAME + ".app"),
+        "release": derived / "ReleaseDerived/Build/Products/Release-iphonesimulator" / (APP_NAME + ".app"),
+        "releaseTests": derived / "ReleaseTestDerived/Build/Products/Release-iphonesimulator" / (APP_NAME + ".app"),
     }
     result = {"sourceAssetSHA256": source_hash, "bundles": {}}
     for name, app in apps.items():
         require(app.is_dir(), f"Missing built app: {app}")
+        with (app / "Info.plist").open("rb") as stream:
+            info = plistlib.load(stream)
+        require(info["CFBundleIdentifier"] == APP_IDENTIFIER and info["CFBundleDisplayName"] == "On You",
+                f"Not the actual On You product: {app}")
         with (app / "PrivacyInfo.xcprivacy").open("rb") as stream:
             manifest = plistlib.load(stream)
         entries = manifest.get("NSPrivacyAccessedAPITypes", [])
@@ -161,16 +176,26 @@ def inspect_bundles(derived):
                             or path.name == "SpatialReplayFixtures"]
         require(not replay_resources, f"Synthetic replay resources packaged into {name}: {replay_resources}")
         bundle["syntheticReplayResources"] = replay_resources
+        # The exact reviewed body is a production resource, not a developer lab.
+        bundled_human_hashes = human_showcase_assets(app)
+        require(bundled_human_hashes == HUMAN_SHOWCASE_DIGESTS, f"Body resource hashes changed in {name}")
+        bundle["humanShowcaseSHA256"] = bundled_human_hashes
         if name in ("debug", "iPhone"):
             bundle["assetSHA256"] = development_asset(app)
-            bundled_human_hashes = human_showcase_assets(app)
-            require(bundled_human_hashes == HUMAN_SHOWCASE_DIGESTS,
-                    f"Human showcase resource hashes changed in {name}: {bundled_human_hashes}")
-            bundle["humanShowcaseSHA256"] = bundled_human_hashes
+            fixture_directory = app / "OnYouTryOnFixtures"
+            source_directory = ROOT / "DevelopmentAssets/OnYouTryOnFixtures"
+            source_files = {file.name for file in source_directory.iterdir() if file.is_file()}
+            require(fixture_directory.is_dir() and {file.name for file in fixture_directory.iterdir()} == source_files,
+                    f"Missing or unexpected authored try-on fixtures: {app}")
+            hashes = {file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in fixture_directory.iterdir()}
+            require(all(hashes[file.name] == hashlib.sha256(file.read_bytes()).hexdigest() for file in source_directory.iterdir()),
+                    f"Authored fixture bytes changed: {app}")
+            bundle["authoredTryOnFixtures"] = hashes
         else:
             leaks = [str(path.relative_to(app)) for path in app.rglob("*")
                      if path.suffix.lower() == ".fitmesh" or path.name == "FitCheckDevelopmentAssets"
-                     or path.name == "HumanShowcase" or path.name in HUMAN_SHOWCASE_FILES]
+                     or path.name == "OnYouTryOnFixtures" or path.name.startswith("synthetic-avatar-")
+                     or path.name in ("synthetic-shirt.png", "synthetic-shirt-coral.png", "unsupported-pose.usdz")]
             require(not leaks, f"Development resources leaked into {name}: {leaks}")
             bundle["developmentResourceLeaks"] = leaks
         result["bundles"][name] = bundle
@@ -247,7 +272,12 @@ class Verification:
             visit(node)
         require(len(cases) == summary["totalTestCount"] and cases, "xcresult case/summary count mismatch")
         require(all(case["result"] == "Passed" for case in cases), "A test case did not pass")
-        identifiers = [case["nodeIdentifierURL"].removeprefix("test://com.apple.xcode/FitCheck/") for case in cases]
+        identifiers = []
+        for case in cases:
+            parts = unquote(urlsplit(case["nodeIdentifierURL"]).path).strip("/").split("/")
+            index = next((i for i, part in enumerate(parts) if part in ("FitCheckTests", "FitCheckUITests")), None)
+            require(index is not None, f"Unknown test target: {case['nodeIdentifierURL']}")
+            identifiers.append("/".join(parts[index:]))
         for selector in selectors:
             require(any(item == selector or item.startswith(selector + "/") for item in identifiers),
                     f"Requested selector did not execute: {selector}")
@@ -258,8 +288,8 @@ class Verification:
 
     def run(self, simulator):
         before = source_digest()
-        self.command("xcodegen", ["xcodegen", "generate"])
-        common = ["xcodebuild", "-project", "FitCheck.xcodeproj", "-scheme", "FitCheck"]
+        self.command("xcodegen", ["xcodegen", "generate", "--spec", str(PROJECT_SPEC)])
+        common = ["xcodebuild", "-project", PROJECT_FILE, "-scheme", "FitCheck"]
         destination = ["-destination", "platform=iOS Simulator,id=" + simulator]
         debug = self.test("DebugTests", common + ["-configuration", "Debug"] + destination + [
             "-derivedDataPath", str(self.output / "DebugDerived"), "-resultBundlePath", str(self.output / "DebugTests.xcresult"),
@@ -304,11 +334,14 @@ def main():
         else:
             devices = verification.command("available-simulators", ["xcrun", "simctl", "list", "devices", "available", "--json"], True)
             phones = [device for group in devices["devices"].values() for device in group
-                      if device["isAvailable"] and device["name"].startswith("iPhone")]
+                      if device["isAvailable"] and device.get("deviceTypeIdentifier", "").split(".")[-1].startswith("iPhone")]
             require(phones, "No available iPhone simulator")
             phones.sort(key=lambda device: (device["state"] != "Booted", device["name"], device["udid"]))
             simulator = args.simulator or phones[0]["udid"]
             require(any(device["udid"] == simulator for device in phones), "Requested simulator is not an available iPhone")
+            if next(device for device in phones if device["udid"] == simulator)["state"] != "Booted":
+                verification.command("simulator-boot", ["xcrun", "simctl", "boot", simulator])
+            verification.command("simulator-ready", ["xcrun", "simctl", "bootstatus", simulator, "-b"])
             verification.command("xcode-version", ["xcodebuild", "-version"])
             verification.command("xcodegen-version", ["xcodegen", "--version"])
             result = verification.run(simulator)

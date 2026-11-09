@@ -28,11 +28,13 @@ final class ClosetStore {
 
   var reference: ClosetGarment? { garments.first(where: \.isReference) }
   func imageURL(for garment: ClosetGarment) -> URL { root.appendingPathComponent((garment.imageID ?? garment.id).uuidString + ".png") }
+  func hasPhoto(for garment: ClosetGarment) -> Bool { FileManager.default.isReadableFile(atPath: imageURL(for: garment).path) }
 
   @discardableResult
-  func add(name: String, image: Data, dimensions: GarmentScanDimensions?, productURL: URL?) throws -> ClosetGarment {
-    guard !unreadable, image.count <= 20_000_000, UIImage(data: image) != nil else { throw GarmentCaptureError.storage }
-    let garment = ClosetGarment(name: name.trimmingCharacters(in: .whitespacesAndNewlines), dimensions: dimensions, productURL: productURL)
+  func add(name: String, image: Data, dimensions: GarmentScanDimensions?, productURL: URL?, pattern: GarmentPatternEvidence? = nil) throws -> ClosetGarment {
+    guard !unreadable, image.count <= 20_000_000, UIImage(data: image) != nil,
+          pattern?.matches(image) != false else { throw GarmentCaptureError.storage }
+    let garment = ClosetGarment(name: name.trimmingCharacters(in: .whitespacesAndNewlines), dimensions: dimensions, productURL: productURL, pattern: pattern)
     guard garment.isValid else { throw GarmentCaptureError.storage }
     let file = imageURL(for: garment)
     try image.write(to: file, options: [.atomic, .completeFileProtection])
@@ -48,11 +50,12 @@ final class ClosetStore {
   func replaceCapture(for garment: ClosetGarment, with capture: GarmentCaptureResult) throws {
     guard let index = garments.firstIndex(where: { $0.id == garment.id }), !unreadable,
           capture.dimensions.isValid, capture.image.count <= 20_000_000,
-          UIImage(data: capture.image) != nil else { throw GarmentCaptureError.storage }
+          UIImage(data: capture.image) != nil, capture.pattern?.matches(capture.image) != false else { throw GarmentCaptureError.storage }
     var items = garments
     let previous = imageURL(for: items[index])
     items[index].imageID = UUID()
     items[index].dimensions = capture.dimensions
+    items[index].pattern = capture.pattern
     let destination = imageURL(for: items[index])
     try capture.image.write(to: destination, options: [.atomic, .completeFileProtection])
     do { try persist(items) }

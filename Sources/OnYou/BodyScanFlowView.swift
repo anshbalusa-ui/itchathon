@@ -85,8 +85,8 @@ struct BodyScanFlowView: View {
             .font(.title3).foregroundStyle(.secondary)
         }
         VStack(alignment: .leading, spacing: 24) {
-          preparationTip("Hold your pose", symbol: "figure.stand", detail: "Arms slightly apart. Feet in view. Wear close-fitting clothes and find even light.")
-          preparationTip("Body, then detail", symbol: "camera", detail: "A slow circle at chest height, then another near eye level. Follow the coverage ring until each circle is complete.")
+          preparationTip("Hold your pose", symbol: "figure.stand", detail: "Stand still with arms slightly away from your torso. Keep head and feet in view. Wear close-fitting clothes and find even light.")
+          preparationTip("Body, then detail", symbol: "camera", detail: "Follow the coverage ring for two slow circles around the person. Keep their head and feet in view for each circle.")
           preparationTip("No measurements to enter", symbol: "checkmark", detail: "Depth sets the scale automatically. Your photos stay on this iPhone and are removed after your avatar is built.")
         }
         Text("Capture moves at your pace. Once it’s done, we’ll estimate how long the build has left.")
@@ -216,7 +216,7 @@ struct BodyScanFlowView: View {
       VStack(alignment: .leading, spacing: 20) {
         BodyScanJourneyView(step: .ready).padding(.horizontal, 24)
         if let url = model.modelURL, let calibration = model.calibration {
-          ScannedAvatarPreview(url: url, referenceHeightCM: calibration.referenceHeightCM)
+          ScannedAvatarPreview(url: url, referenceHeightCM: calibration.referenceHeightCM,preparedScene: model.preparedScene)
             .frame(height: 420)
         }
         VStack(alignment: .leading, spacing: 10) {

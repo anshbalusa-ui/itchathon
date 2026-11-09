@@ -7,6 +7,9 @@ struct ClosetGarmentDetailView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var deleting = false
   @State private var scanning = false
+  @State private var scanningBody = false
+  @State private var tryingOn = false
+  @State private var tryOnAvatar: AvatarScanAsset?
   @State private var captureError: String?
 
   private var current: ClosetGarment { store.garments.first(where: { $0.id == garment.id }) ?? garment }
@@ -14,10 +17,30 @@ struct ClosetGarmentDetailView: View {
   var body: some View {
     List {
       Section {
-        GarmentPhotoView(url: store.imageURL(for: current))
-          .frame(height: 320)
-          .accessibilityLabel("Photo of \(current.name)")
-          .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+        if store.hasPhoto(for: current) {
+          GarmentPhotoView(url: store.imageURL(for: current))
+            .frame(height: 320)
+            .accessibilityLabel("Photo of \(current.name)")
+            .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+        } else {
+          ContentUnavailableView("Shirt photo missing",systemImage: "photo.badge.exclamationmark",
+            description: Text("Retake the actual shirt to restore its preview. Saved dimensions alone can’t supply a garment image."))
+            .accessibilityElement(children: .contain).accessibilityIdentifier("garment.photo-missing")
+        }
+      }
+      Section {
+        if store.hasPhoto(for: current), current.dimensions != nil, let asset = scans.asset {
+          Button {
+            tryOnAvatar = asset
+            tryingOn = true
+          } label: { Label("Try on",systemImage: "tshirt") }
+            .accessibilityIdentifier("garment.tryon")
+        } else if store.hasPhoto(for: current), current.dimensions != nil {
+          Button("Scan your body to try this on", systemImage: "figure.stand") { scanningBody = true }
+            .accessibilityIdentifier("garment.scanbody")
+        }
+        Button(current.dimensions == nil ? "Scan to compare fit" : "Retake shirt scan", systemImage: "camera") { scanning = true }
+          .accessibilityIdentifier("garment.rescan")
       }
       if let dimensions = current.dimensions {
         if let reference = store.reference, reference.id != current.id, let base = reference.dimensions {
@@ -42,17 +65,6 @@ struct ClosetGarmentDetailView: View {
             .foregroundStyle(.secondary)
         }
       }
-      Section {
-        if current.dimensions != nil, let asset = scans.asset {
-          NavigationLink {
-            TryOnView(avatar: asset, garment: current, photoURL: store.imageURL(for: current))
-          } label: { Label("Try on", systemImage: "tshirt") }
-        } else if current.dimensions != nil {
-          Label("Scan your body to try this on", systemImage: "figure.stand")
-            .foregroundStyle(.secondary)
-        }
-        Button(current.dimensions == nil ? "Scan to compare fit" : "Retake shirt scan", systemImage: "camera") { scanning = true }
-      }
       if let url = current.productURL { Section { Link("View product", destination: url) } }
       Section {
         Button("Delete garment", systemImage: "trash", role: .destructive) { deleting = true }
@@ -60,6 +72,11 @@ struct ClosetGarmentDetailView: View {
     }
     .navigationTitle(current.name)
     .navigationBarTitleDisplayMode(.inline)
+    .navigationDestination(isPresented: $tryingOn) {
+      if let asset = tryOnAvatar {
+        TryOnView(avatar: asset,garment: current,photoURL: store.imageURL(for: current))
+      }
+    }
     .sheet(isPresented: $scanning) {
       NavigationStack {
         AutomaticGarmentScanView { capture in
@@ -68,6 +85,7 @@ struct ClosetGarmentDetailView: View {
         }
       }
     }
+    .fullScreenCover(isPresented: $scanningBody) { BodyScanFlowView(store: scans) }
     .alert("Capture couldn’t be saved", isPresented: Binding(get: { captureError != nil }, set: { if !$0 { captureError = nil } })) {
       Button("OK", role: .cancel) { captureError = nil }
     } message: { Text(captureError ?? "") }
