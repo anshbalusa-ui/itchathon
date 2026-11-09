@@ -19,6 +19,20 @@ Scripts/launch_onyou.sh --fixtures
 
 The first command opens the normal app. The second opens the **same Body/Closet/try-on screens** with disclosed authored data in isolated temporary stores. Neither command erases simulators or requires signing credentials. Use `--simulator UDID` to choose a particular iPhone; `--body b` with `--fixtures` selects the wider/taller second body.
 
+## Measurement-driven avatar demo (M1, Debug only)
+
+The reviewed M1 work is integrated alongside the native On You app; no branch switch is needed.
+
+```sh
+Scripts/launch_friday_demo.sh
+```
+
+In **FitCheck Demo Showcase**, tap **Create avatar**. Enter height, chest/waist/hip circumferences and shoulder width in **cm**, or choose fictional **Sample A / Sample B**, then **Generate avatar**. Drag or use Left / Right / Reset; show the illustrative shirt, or choose **Edit measurements** to generate another shape. The internal hub also has **Measurement avatar demo**.
+
+These values change actual smooth human mesh geometry in native Metal, not a label or image. This internal lab is a non-persistent generic illustration: it is not a personal scan, validated fit or size recommendation. Its shirt uses the same illustrative deformation without a fit/pressure map. Normal On You scanning, its saved-avatar try-on and the separate manual measurement store retain their existing boundaries.
+
+The helper builds unsigned Debug using `Project.json`, rejects Release/device/older builds without the measurement demo and pinned assets, and never erases simulator data. Use `--simulator UDID` or `--app "/absolute/path/to/Debug-iphonesimulator/On You.app"`. See the [M1 evidence and limitations](Docs/FRIDAY_DEMO_D1_HANDOFF.md) and [final integration audit](Docs/ONYOU_FINAL_GAP_AUDIT.md).
+
 ## Screens
 
 - **Body:** a gesture-only viewer. Drag to orbit and pinch to zoom. A saved scan takes priority over the manual measurement model.

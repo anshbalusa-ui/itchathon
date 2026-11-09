@@ -66,7 +66,7 @@ fi
 
 [[ -d "$APP" ]] || fail "app bundle not found: $APP"
 APP="$(cd "$APP" && pwd -P)"
-python3 - "$APP" <<'PY' || fail 'app is not a Debug FitCheck simulator build with the human showcase assets'
+python3 - "$APP" <<'PY' || fail 'app is not a current Debug FitCheck simulator build with the measurement avatar demo'
 import pathlib, plistlib, sys
 app = pathlib.Path(sys.argv[1])
 try:
@@ -79,7 +79,8 @@ try:
     binaries = [executable, app / (executable.name + ".debug.dylib")]
     payloads = [path.read_bytes() for path in binaries if path.is_file()]
     if not all(any(marker in data for data in payloads)
-               for marker in (b"-fitcheck-demo-internal", b"HumanShowcaseModel")):
+               for marker in (b"-fitcheck-demo-internal", b"HumanShowcaseModel",
+                              b"MeasurementAvatarGenerator", b"demo.open-measurements")):
         sys.exit(1)
 except (OSError, KeyError, plistlib.InvalidFileException):
     sys.exit(1)
@@ -96,9 +97,9 @@ STATE="$(xcrun simctl list devices | python3 -c 'import sys; u=sys.argv[1]; line
 if [[ "$STATE" != *"(Booted)"* ]]; then
   xcrun simctl boot "$SIMULATOR" || fail "could not boot simulator $SIMULATOR"
 fi
-open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR" || fail 'could not open Simulator'
 xcrun simctl bootstatus "$SIMULATOR" -b || fail 'simulator did not finish booting'
 xcrun simctl install "$SIMULATOR" "$APP" || fail 'could not install demo app'
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" || fail 'app bundle identifier is missing'
 xcrun simctl launch --terminate-running-process "$SIMULATOR" "$BUNDLE_ID" -fitcheck-demo-internal || fail 'could not launch the internal demo'
+open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR" || fail 'could not open Simulator'
 printf 'Friday demo launched on simulator %s\n' "$SIMULATOR"
