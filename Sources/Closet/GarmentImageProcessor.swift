@@ -4,6 +4,7 @@ import UIKit
 import Vision
 
 enum GarmentImageProcessor {
+  private static let context = CIContext(options: [.cacheIntermediates: false])
   static func normalized(_ data: Data) throws -> CGImage {
     guard data.count <= 30_000_000,
           let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -21,9 +22,10 @@ enum GarmentImageProcessor {
     try handler.perform([request])
     guard let observation = request.results?.first, observation.allInstances.count == 1 else { throw GarmentCaptureError.unclear }
     let mask = try observation.generateScaledMaskForImage(forInstances: observation.allInstances, from: handler)
-    let cutout = try observation.generateMaskedImage(ofInstances: observation.allInstances, from: handler, croppedToInstancesExtent: true)
+    // Retained keypoints, mask and stored photo must share the same canvas.
+    let cutout = try observation.generateMaskedImage(ofInstances: observation.allInstances, from: handler, croppedToInstancesExtent: false)
     let ciImage = CIImage(cvPixelBuffer: cutout)
-    guard let rendered = CIContext().createCGImage(ciImage, from: ciImage.extent),
+    guard let rendered = context.createCGImage(ciImage, from: ciImage.extent),
           let data = UIImage(cgImage: rendered).pngData() else { throw GarmentCaptureError.image }
     return (mask, data)
   }

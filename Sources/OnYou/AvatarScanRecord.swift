@@ -1,7 +1,7 @@
 import Foundation
 import simd
 
-struct AvatarScanRecord: Codable, Identifiable, Equatable {
+struct AvatarScanRecord: Codable, Identifiable, Equatable, Sendable {
   var id: UUID
   var date: Date
   var referenceHeightCM: Double
@@ -26,12 +26,12 @@ struct AvatarScanRecord: Codable, Identifiable, Equatable {
   }
 }
 
-struct AvatarScanAsset: Equatable {
+struct AvatarScanAsset: Equatable, Sendable {
   var record: AvatarScanRecord
   var url: URL
 }
 
-struct AvatarScanCalibration: Equatable {
+struct AvatarScanCalibration: Equatable, Sendable {
   var minimum: SIMD3<Float>
   var maximum: SIMD3<Float>
   var referenceHeightCM: Double

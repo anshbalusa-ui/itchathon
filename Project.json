@@ -61,13 +61,15 @@
             "$(SRCROOT)/DevelopmentAssets/FitCheckGeometricVest.fitmesh",
             "$(SRCROOT)/DevelopmentAssets/HumanShowcase/human-showcase-v1.bin",
             "$(SRCROOT)/DevelopmentAssets/HumanShowcase/LICENSE.txt",
-            "$(SRCROOT)/DevelopmentAssets/HumanShowcase/NOTICE.txt"
+            "$(SRCROOT)/DevelopmentAssets/HumanShowcase/NOTICE.txt",
+            "$(SRCROOT)/DevelopmentAssets/OnYouTryOnFixtures"
           ],
           "outputFiles": [
             "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/FitCheckDevelopmentAssets",
-            "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/HumanShowcase"
+            "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/HumanShowcase",
+            "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/OnYouTryOnFixtures"
           ],
-          "script": "set -eu\ndestination=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nshowcase=\"${destination}/HumanShowcase\"\n/bin/mkdir -p \"${showcase}\"\n/bin/cp -f \"${SRCROOT}/DevelopmentAssets/HumanShowcase/\"* \"${showcase}/\"\nlegacy=\"${destination}/FitCheckDevelopmentAssets\"\nif [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n  /bin/mkdir -p \"${legacy}\"\n  /bin/cp -f \"${SRCROOT}/DevelopmentAssets/FitCheckGeometricVest.fitmesh\" \"${legacy}/FitCheckGeometricVest.fitmesh\"\nelse\n  /bin/rm -f \"${legacy}/FitCheckGeometricVest.fitmesh\"\nfi\n"
+          "script": "set -eu\ndestination=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nshowcase=\"${destination}/HumanShowcase\"\n/bin/mkdir -p \"${showcase}\"\n/bin/cp -f \"${SRCROOT}/DevelopmentAssets/HumanShowcase/\"* \"${showcase}/\"\nlegacy=\"${destination}/FitCheckDevelopmentAssets\"\nfixtures=\"${destination}/OnYouTryOnFixtures\"\nif [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n  /bin/mkdir -p \"${legacy}\" \"${fixtures}\"\n  /bin/cp -f \"${SRCROOT}/DevelopmentAssets/FitCheckGeometricVest.fitmesh\" \"${legacy}/FitCheckGeometricVest.fitmesh\"\n  /bin/cp -f \"${SRCROOT}/DevelopmentAssets/OnYouTryOnFixtures/\"* \"${fixtures}/\"\nelse\n  /bin/rm -f \"${legacy}/FitCheckGeometricVest.fitmesh\"\n  if [ -d \"${fixtures}\" ]; then /bin/rm -r \"${fixtures}\"; fi\nfi\n"
         }
       ]
     },
@@ -123,6 +125,7 @@
         }
       },
       "test": {
+        "debugEnabled": false,
         "targets": [
           "FitCheckTests",
           "FitCheckUITests"

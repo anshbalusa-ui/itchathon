@@ -7,6 +7,7 @@ struct AddGarmentView: View {
   @State private var selection: PhotosPickerItem?
   @State private var image: Data?
   @State private var dimensions: GarmentScanDimensions?
+  @State private var pattern: GarmentPatternEvidence?
   @State private var name = ""
   @State private var productLink = ""
   @State private var scanning = false
@@ -70,7 +71,7 @@ struct AddGarmentView: View {
     .sheet(isPresented: $scanning) {
       NavigationStack {
         AutomaticGarmentScanView { capture in
-          image = capture.image; dimensions = capture.dimensions; error = nil
+          image = capture.image; dimensions = capture.dimensions; pattern = capture.pattern; error = nil
         }
       }
     }
@@ -82,7 +83,7 @@ struct AddGarmentView: View {
         guard let data = try await selection.loadTransferable(type: Data.self) else { throw GarmentCaptureError.image }
         let processed = try await Task.detached(priority: .userInitiated) { try GarmentImageProcessor.importedPhoto(data) }.value
         try Task.checkCancellation()
-        image = processed; dimensions = nil
+        image = processed; dimensions = nil; pattern = nil
       } catch is CancellationError { }
       catch { self.error = error.localizedDescription }
     }
@@ -103,7 +104,7 @@ struct AddGarmentView: View {
     let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
     do {
       try store.add(name: title.isEmpty ? (dimensions == nil ? "Saved garment" : "Scanned shirt") : title,
-                    image: image, dimensions: dimensions, productURL: url)
+                    image: image, dimensions: dimensions, productURL: url, pattern: pattern)
       dismiss()
     } catch { self.error = error.localizedDescription }
   }

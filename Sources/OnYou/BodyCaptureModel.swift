@@ -17,6 +17,7 @@ final class BodyCaptureModel {
   private(set) var completedPasses = 0
   private(set) var calibration: AvatarScanCalibration?
   private(set) var modelURL: URL?
+  private(set) var preparedScene: PreparedAvatarScene?
   private(set) var imageCount = 0
   private(set) var trackingInterrupted = false
   private(set) var captureStartedAt: Date?
@@ -32,6 +33,9 @@ final class BodyCaptureModel {
   private var reconstruction: PhotogrammetrySession?
   private var task: Task<Void, Never>?
   private var generation = UUID()
+  private var diagnosticStage: BodyScanTiming.Stage?
+  private var diagnosticStartedAt: ContinuousClock.Instant?
+
 
   static var isSupported: Bool { ObjectCaptureSession.isSupported && PhotogrammetrySession.isSupported }
 
@@ -52,21 +56,21 @@ final class BodyCaptureModel {
     case .finishing, .completed: mode = .finishing
     default: mode = .initializing
     }
-    let feedback = capture.feedback
-    let issue: String?
-    if mode == .finishing { issue = nil }
-    else if capture.isPaused { issue = "Capture is paused. Keep On You in the foreground to continue." }
-    else if feedback.contains(.environmentTooDark) || feedback.contains(.environmentLowLight) { issue = "Find brighter, even light so we can see the person clearly." }
-    else if feedback.contains(.movingTooFast) { issue = "Slow down. Keep the iPhone steady and the person still." }
-    else if feedback.contains(.outOfFieldOfView) { issue = "Step back and bring the whole person into view." }
-    else if feedback.contains(.objectTooClose) { issue = "Move back a little. Keep their head and feet visible." }
-    else if feedback.contains(.objectTooFar) { issue = "Move a little closer without cutting off their head or feet." }
-    else if feedback.contains(.objectNotDetected) && mode != .framing { issue = "Keep the person centered inside the selection box." }
-    else if capture.cameraTracking != .normal { issue = "Slowly move the iPhone so it can find the floor and settle its tracking." }
-    else { issue = nil }
+    let nativeFeedback = capture.feedback
+    var feedback = Set<BodyScanCameraStatus.Feedback>()
+    if nativeFeedback.contains(.environmentTooDark) { feedback.insert(.environmentTooDark) }
+    if nativeFeedback.contains(.environmentLowLight) { feedback.insert(.environmentLowLight) }
+    if nativeFeedback.contains(.movingTooFast) { feedback.insert(.movingTooFast) }
+    if nativeFeedback.contains(.outOfFieldOfView) { feedback.insert(.outOfFieldOfView) }
+    if nativeFeedback.contains(.objectTooClose) { feedback.insert(.objectTooClose) }
+    if nativeFeedback.contains(.objectTooFar) { feedback.insert(.objectTooFar) }
+    if nativeFeedback.contains(.objectNotDetected) { feedback.insert(.objectNotDetected) }
+    let trackingNormal = capture.cameraTracking == .normal
+    let issue = mode == .finishing ? nil : BodyScanCameraStatus.guidance(
+      for: feedback, mode: mode, capturePaused: capture.isPaused, trackingNormal: trackingNormal)?.message
     return BodyScanCameraStatus(mode: mode, completedPasses: completedPasses,
                                shots: capture.numberOfShotsTaken, passComplete: capture.userCompletedScanPass,
-                               trackingNormal: capture.cameraTracking == .normal, issue: issue,
+                               trackingNormal: trackingNormal, issue: issue,
                                selectionHint: selectionHint, pendingAction: pendingAction,
                                maximumShots: capture.maximumNumberOfInputImages)
   }
@@ -137,6 +141,7 @@ final class BodyCaptureModel {
       let session = ObjectCaptureSession()
       capture = session
       phase = .capturing
+      beginDiagnosticStage(.framing)
       session.start(imagesDirectory: images, configuration: configuration)
     } catch { fail(error) }
   }
@@ -146,14 +151,20 @@ final class BodyCaptureModel {
     Self.logger.info("Capture state: \(String(describing: self.cameraStatus.mode), privacy: .public); photos: \(self.capture?.numberOfShotsTaken ?? 0); passes: \(self.completedPasses)")
     selectionHint = nil
     switch state {
+    case .ready:
+      beginDiagnosticStage(.framing)
     case .detecting:
       pendingAction = nil
+      beginDiagnosticStage(.selection)
     case .capturing:
       pendingAction = nil
       if captureStartedAt == nil { captureStartedAt = Date() }
+      beginDiagnosticStage(completedPasses == 0 ? .bodyPass : .detailPass)
     case .finishing:
       pendingAction = nil
+      beginDiagnosticStage(.captureFinalization)
     case .completed:
+      endDiagnosticStage()
       imageCount = capture?.numberOfShotsTaken ?? 0
       capture = nil
       guard Self.hasCoverage(images: imageCount, passes: completedPasses), !trackingInterrupted else {
@@ -171,6 +182,7 @@ final class BodyCaptureModel {
     if capture.userCompletedScanPass && !recordedCurrentPass {
       recordedCurrentPass = true
       completedPasses += 1
+      beginDiagnosticStage(.passCheckpoint)
     } else if !capture.userCompletedScanPass && pendingAction == .nextPass {
       recordedCurrentPass = false
       pendingAction = nil
@@ -185,6 +197,7 @@ final class BodyCaptureModel {
   func nextPass() {
     guard let capture, capture.state == .capturing, capture.userCompletedScanPass else { return }
     pendingAction = .nextPass
+    beginDiagnosticStage(completedPasses == 0 ? .bodyPass : .detailPass)
     selectionHint = nil
     capture.beginNewScanPass()
     capture.resume()
@@ -223,6 +236,7 @@ final class BodyCaptureModel {
   }
 
   func cancel() {
+    endDiagnosticStage()
     generation = UUID()
     task?.cancel()
     task = nil
@@ -234,6 +248,7 @@ final class BodyCaptureModel {
     work = nil
     modelURL = nil
     calibration = nil
+    preparedScene = nil
     completedPasses = 0
     imageCount = 0
     trackingInterrupted = false
@@ -263,20 +278,17 @@ final class BodyCaptureModel {
       do {
         // Metric scale must come from captured depth, never a guessed height.
         stage = "Checking your capture"
+        beginDiagnosticStage(.photoPreflight)
         let images = work.appendingPathComponent("Images")
         let files = try FileManager.default.contentsOfDirectory(at: images, includingPropertiesForKeys: nil)
           .filter { ["heic", "heif"].contains($0.pathExtension.lowercased()) }.map(\.standardizedFileURL)
-        var depthImages = Set<URL>()
-        for file in files {
-          try Task.checkCancellation()
-          guard generation == token else { return }
-          let sample = try await PhotogrammetrySample(contentsOf: file)
-          try Task.checkCancellation()
-          guard generation == token else { return }
-          if AvatarScanInput.containsFiniteDepth(sample.depthDataMap) { depthImages.insert(file) }
-        }
-        let input = AvatarScanInput(imageURLs: Set(files), depthImageURLs: depthImages)
+        try Task.checkCancellation()
+        guard generation == token else { return }
+        let input = try await AvatarScanInput.preflight(files: files)
+        try Task.checkCancellation()
+        guard generation == token else { return }
         imageCount = try input.validate(passes: completedPasses)
+        beginDiagnosticStage(.reconstruction)
         var configuration = PhotogrammetrySession.Configuration()
         configuration.checkpointDirectory = work.appendingPathComponent("Checkpoints")
         configuration.isObjectMaskingEnabled = true
@@ -295,9 +307,9 @@ final class BodyCaptureModel {
           guard generation == token else { return }
           switch output {
           case .requestProgress(let request, let fraction) where request == modelRequest:
-            if fraction.isFinite {
+            if let nextProgress = BodyScanTiming.buildProgress(current: progress, fraction: fraction) {
               hasBuildProgress = true
-              progress = max(progress, min(0.99, max(0, fraction)))
+              progress = nextProgress
             }
           case .requestProgressInfo(let request, let info) where request == modelRequest:
             if let value = info.processingStage { stage = title(value) }
@@ -319,11 +331,17 @@ final class BodyCaptureModel {
             imageCount = try input.validate(usedSampleIDs: Set(usedPoses.posesBySample.keys),
                                             urlsBySample: usedPoses.urlsBySample, rejectedIDs: rejected,
                                             passes: completedPasses)
+            endDiagnosticStage()
             stage = "Checking your avatar"
-            estimatedRemainingTime = nil
-            _ = try AvatarScanStore.digest(destination)
-            let result = try ScannedAvatarGeometry.load(url: destination)
-            calibration = result.calibration
+            let prepared = try await PreparedAvatarScene.load(url: destination)
+            try Task.checkCancellation()
+            guard generation == token else { return }
+            if let timings = prepared.loadTimings {
+              BodyScanTiming.record(.textureValidation,duration: timings.validation)
+              BodyScanTiming.record(.avatarLoading,duration: timings.scene)
+            }
+            calibration = prepared.calibration
+            preparedScene = prepared
             modelURL = destination
             reconstruction = nil
             progress = 1
@@ -341,6 +359,20 @@ final class BodyCaptureModel {
         fail(error)
       }
     }
+  }
+
+  private func beginDiagnosticStage(_ next: BodyScanTiming.Stage) {
+    if diagnosticStage == next { return }
+    endDiagnosticStage()
+    diagnosticStage = next
+    diagnosticStartedAt = ContinuousClock.now
+  }
+
+  private func endDiagnosticStage() {
+    guard let diagnosticStage, let diagnosticStartedAt else { return }
+    BodyScanTiming.record(diagnosticStage, duration: diagnosticStartedAt.duration(to: ContinuousClock.now))
+    self.diagnosticStage = nil
+    self.diagnosticStartedAt = nil
   }
 
   private func title(_ stage: PhotogrammetrySession.Output.ProcessingStage) -> String {

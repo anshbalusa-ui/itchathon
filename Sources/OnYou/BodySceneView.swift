@@ -1,12 +1,20 @@
 import SceneKit
 import SwiftUI
 
+struct BodySceneCameraRequest: Equatable {
+  enum Action: Equatable { case turn(Float), front, back, reset }
+  let id = UUID()
+  var action: Action
+}
+
 struct BodySceneView: UIViewRepresentable {
   var measurements: BodyMeasurements
   var scan: ScannedBodySource? = nil
   var wireframe: Bool = false
   var tryOn: TryOnResult? = nil
   var showingGarment = true
+  var cameraRequest: BodySceneCameraRequest? = nil
+  var isActive = true
 
   func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -15,6 +23,7 @@ struct BodySceneView: UIViewRepresentable {
     view.scene = context.coordinator.scene
     view.backgroundColor = .clear
     view.antialiasingMode = .multisampling4X
+    view.rendersContinuously = false
     view.allowsCameraControl = true
     view.defaultCameraController.interactionMode = .orbitTurntable
     view.defaultCameraController.inertiaEnabled = false
@@ -31,11 +40,19 @@ struct BodySceneView: UIViewRepresentable {
     return view
   }
 
+  static func dismantleUIView(_ view: SCNView, coordinator: Coordinator) {
+    view.isPlaying = false
+    view.scene = nil
+    view.pointOfView = nil
+    view.delegate = nil
+    coordinator.detach()
+  }
+
   func updateUIView(_ view: SCNView, context: Context) {
     let c = context.coordinator
     let height = scan?.referenceHeightCM ?? measurements.height
     if let scan {
-      if c.loadedScan != scan {
+      if c.loadedScan != scan || c.scannedNode == nil {
         c.updateScan(scan)
         view.pointOfView = c.camera
       }
@@ -44,9 +61,20 @@ struct BodySceneView: UIViewRepresentable {
       view.pointOfView = c.camera
     }
     c.updateTryOn(tryOn, showing: showingGarment)
+    c.scene.isPaused = !isActive
+    if let request = cameraRequest, request.id != c.lastCameraRequest {
+      c.lastCameraRequest = request.id
+      switch request.action {
+      case .turn(let delta): c.turn(view, by: delta)
+      case .front, .reset:
+        c.angle = 0; c.positionCamera(angle: 0, height: Float(height / 100)); view.pointOfView = c.camera
+      case .back:
+        c.angle = .pi; c.positionCamera(angle: .pi, height: Float(height / 100)); view.pointOfView = c.camera
+      }
+    }
     view.defaultCameraController.target = SCNVector3(0, Float(height / 100) * 0.51, 0.035)
     c.body.geometry?.firstMaterial?.fillMode = wireframe ? .lines : .fill
-    view.accessibilityValue = scan != nil ? "Captured textured avatar. Drag to rotate."
+    view.accessibilityValue = scan != nil ? "Saved textured avatar. Drag to rotate."
       : "Height \(measurements.height.formatted()) centimeters, chest \(measurements.chest.formatted()), waist \(measurements.waist.formatted()), hips \(measurements.hips.formatted())"
     view.accessibilityCustomActions = [
       UIAccessibilityCustomAction(name: "Rotate left") { _ in c.turn(view, by: -.pi / 6); return true },
@@ -71,6 +99,8 @@ struct BodySceneView: UIViewRepresentable {
     var garmentVisible = true
     var garmentNode: SCNNode?
     var failure: String?
+    var lastCameraRequest: UUID?
+    private var attemptedExampleLoad = false
     private var assets: HumanShowcaseMeshes?
     private var kernel: BodyShapeKernel?
 
@@ -121,6 +151,11 @@ struct BodySceneView: UIViewRepresentable {
       shadowNode.eulerAngles.x = -.pi / 2
       shadowNode.position.y = -0.005
       scene.rootNode.addChildNode(shadowNode)
+    }
+
+    private func prepareExampleIfNeeded() {
+      guard !attemptedExampleLoad else { return }
+      attemptedExampleLoad = true
       do {
         let loaded = try HumanShowcaseAssets.load()
         assets = loaded
@@ -137,6 +172,7 @@ struct BodySceneView: UIViewRepresentable {
     }
 
     func update(_ values: BodyMeasurements) {
+      prepareExampleIfNeeded()
       guard let assets, let kernel else { return }
       do {
         scannedNode?.removeFromParentNode()
@@ -156,62 +192,37 @@ struct BodySceneView: UIViewRepresentable {
 
     func updateScan(_ source: ScannedBodySource) {
       scannedNode?.removeFromParentNode()
-      scannedNode = nil
-      body.isHidden = true
-      shorts.isHidden = true
+      // Apply canonical yaw AFTER the saved scene's normalization transform.
+      // Rotating the normalized root itself would rotate before its translation.
+      let owner = SCNNode()
+      owner.name = "avatar.normalized-owner"
+      owner.addChildNode(source.scene.makeNode())
+      scannedNode = owner
+      scene.rootNode.addChildNode(owner)
       loadedScan = source
-      do {
-        let result = try ScannedAvatarGeometry.load(url: source.url, referenceHeightCM: source.referenceHeightCM)
-        scannedNode = result.node
-        scene.rootNode.addChildNode(result.node)
-        failure = nil
-        positionCamera(angle: 0, height: Float(source.referenceHeightCM / 100))
-      } catch {
-        failure = "The captured avatar couldn’t be opened. Retake or delete the scan from the Body tab."
-        let text = SCNText(string: "Scan unavailable", extrusionDepth: 0)
-        text.font = .systemFont(ofSize: 0.07)
-        text.firstMaterial?.diffuse.contents = UIColor.secondaryLabel
-        let node = SCNNode(geometry: text)
-        node.position = SCNVector3(-0.32, 0.9, 0)
-        scannedNode = node
-        scene.rootNode.addChildNode(node)
-      }
+      body.isHidden = true; shorts.isHidden = true; failure = nil
+      positionCamera(angle: 0,height: Float(source.referenceHeightCM/100))
+    }
+
+    func detach() {
+      garmentNode?.removeFromParentNode(); garmentNode = nil
+      scannedNode?.removeFromParentNode(); scannedNode = nil
+      loadedScan = nil; loadedTryOnID = nil
+      scene.rootNode.childNodes.forEach { $0.removeFromParentNode() }
     }
 
     func updateTryOn(_ result: TryOnResult?, showing: Bool) {
-      if loadedTryOnID != result?.id || garmentVisible != showing {
+      if loadedTryOnID != result?.id {
         garmentNode?.removeFromParentNode()
-        garmentNode = nil
+        garmentNode = result?.garment.makeNode()
         loadedTryOnID = result?.id
-        garmentVisible = showing
-        scannedNode?.eulerAngles.y = result?.bodyYaw ?? 0
-        if showing, let result, let node = Self.garmentNode(for: result) {
-          garmentNode = node
-          scene.rootNode.addChildNode(node)
-        }
+        if let garmentNode { scene.rootNode.addChildNode(garmentNode) }
       }
+      garmentVisible = showing
+      garmentNode?.isHidden = !showing
+      scannedNode?.eulerAngles.y = result?.bodyYaw ?? 0
     }
 
-    private static func garmentNode(for result: TryOnResult) -> SCNNode? {
-      let mesh = result.shape.mesh
-      guard mesh.positions.count < 65535, mesh.positions.count == mesh.textureCoordinates.count,
-            !mesh.front.isEmpty, !mesh.back.isEmpty else { return nil }
-      let vertices = mesh.positions.map { SCNVector3($0.x, $0.y, $0.z) }
-      let coords = mesh.textureCoordinates.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
-      let geometry = SCNGeometry(sources: [.init(vertices: vertices), .init(textureCoordinates: coords)],
-                                 elements: [.init(indices: mesh.front.map { UInt16($0) }, primitiveType: .triangles),
-                                            .init(indices: mesh.back.map { UInt16($0) }, primitiveType: .triangles)])
-      let front = SCNMaterial()
-      front.lightingModel = .constant
-      front.diffuse.contents = UIImage(contentsOfFile: result.photoURL.path)
-      front.isDoubleSided = true
-      let back = SCNMaterial()
-      back.lightingModel = .constant
-      back.diffuse.contents = UIColor(red: CGFloat(result.backColor.x), green: CGFloat(result.backColor.y), blue: CGFloat(result.backColor.z), alpha: 1)
-      back.isDoubleSided = true
-      geometry.materials = [front, back]
-      return SCNNode(geometry: geometry)
-    }
 
     func positionCamera(angle: Float, height: Float) {
       let distance = max(2.8, height * 1.9)
@@ -220,8 +231,13 @@ struct BodySceneView: UIViewRepresentable {
     }
 
     func turn(_ view: SCNView, by delta: Float) {
-      angle += delta
-      positionCamera(angle: angle, height: Float((loadedScan?.referenceHeightCM ?? measurements?.height ?? 175) / 100))
+      let current = view.pointOfView?.presentation.simdWorldPosition ?? camera.simdWorldPosition
+      let height = Float((loadedScan?.referenceHeightCM ?? measurements?.height ?? 175) / 100)
+      let target = SIMD3<Float>(0, height * 0.51, 0.035)
+      let distance = max(0.2, simd_length(SIMD2(current.x - target.x, current.z - target.z)))
+      angle = atan2(current.x - target.x, current.z - target.z) + delta
+      camera.simdWorldPosition = SIMD3(sin(angle) * distance + target.x, current.y, cos(angle) * distance + target.z)
+      camera.look(at: SCNVector3(target.x,target.y,target.z))
       view.pointOfView = camera
     }
 
@@ -243,15 +259,8 @@ struct BodySceneView: UIViewRepresentable {
 
 struct ScannedBodySource: Equatable {
   var url: URL
-  var referenceHeightCM: Double
+  var scene: PreparedAvatarScene
+  var referenceHeightCM: Double { scene.calibration.referenceHeightCM }
+  static func == (a: Self,b: Self) -> Bool { a.url == b.url && a.scene === b.scene }
 }
 
-struct ScannedAvatarPreview: View {
-  var url: URL
-  var referenceHeightCM: Double
-
-  var body: some View {
-    BodySceneView(measurements: .example, scan: ScannedBodySource(url: url, referenceHeightCM: referenceHeightCM))
-      .background(Color(uiColor: .secondarySystemGroupedBackground))
-  }
-}
