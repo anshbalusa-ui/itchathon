@@ -246,7 +246,7 @@ final class MeasurementAvatarUITests: NativeMeshUITestCase {
             app.terminate()
             app.launchArguments = arguments
             app.launch()
-            XCTAssertTrue(app.staticTexts["My Body"].waitForExistence(timeout: 8))
+            XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 8))
             for id in ["demo.open-measurements", "internal.open-measurements", "measurements.form", "measurements.scene"] {
                 XCTAssertFalse(app.descendants(matching: .any)[id].exists)
             }

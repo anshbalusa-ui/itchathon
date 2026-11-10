@@ -49,6 +49,40 @@ No other new implementation is justified by this audit. Authentication, cloud se
 - Fresh integrated verification must execute the union of current-main/PR #25/PR #26 cases, normal Debug/Release and unsigned iPhone SDK builds, Release exclusions and resource/privacy inspections. No deleted/skipped/weakened cases or substituted mock success.
 - Capture only actual screenshots needed to establish new integration: ordinary On You saved-avatar shirt rendering, the newly reachable existing native editor, and coexistence of original M1 routes where necessary. No decorative image generation or redundant recordings are planned.
 
+## Targeted completion after audit
+
+- The pre-change audit was committed first (`eac1beb`); both reviewed PR heads were then merged into the dedicated branch with their original histories retained. README reconciliation keeps native On You and the separate M1 lab. The verifier retains current project/resource/privacy logic plus every M1 marker and its Release exclusion selector.
+- The only new application integration is the existing native measurement editor's optional Body entry, using the same modal `NavigationStack` pattern as Closet. It retains the existing kernel, parser, store and history. Captured avatars still take priority; manual models neither replace scans nor authorize captured-avatar try-on.
+- Actual largest-accessibility recordings exposed truncated Body captions/actions and broken-word measurement labels. The existing bounded-preview/scrollable-controls pattern from try-on is reused only at accessibility sizes, and measurement rows stack labels above their existing inputs there; normal presentation and both rendering engines are retained.
+- The internal launcher reproduced rejection of a renamed iPhone and a missing `project.yml` failure. Its selection now uses iPhone device type and its build/product/bundle metadata comes from the actual `Project.json`. Original failures: `/Users/anshbalusa/onyou-finalization-artifacts-20261109/LegacyLauncherReproductions.json`.
+- M1's Release exclusion case still checked the obsolete “My Body” title. That copy assertion is removed in favor of the real native Body viewer launch contract; all four M1 exclusion checks and the case identity remain. The older legacy-home contract was already migrated upstream to `AvatarPilotUITests.testExplicitLegacyLaunchAndInternalOptInRemainIsolated`; it is not deleted or recreated here.
+- The new consumer UI regression exercises actual rendered body changes, lazy native numeric fields, cancellation/reopening, saved History, largest text/touch targets, retained Closet data and refusal to treat manual geometry as a saved scan. Intermediate failed attempts remain in the external evidence directory; only completed final receipts count as passes below.
+
 ## Completion evidence
 
-This pre-change audit records the actual integration/fix decisions. Fresh integrated results, minimal changes and final GitHub delivery will be recorded here after execution; no fresh integrated test pass or physical-device result is claimed at audit time.
+At delivery, every **READY TO INTEGRATE** entry above is integrated and every **NEEDS FIX** entry is repaired. Working engines, storage formats, capture/admission requirements and benchmarked algorithms were not rebuilt. Physical-validation entries remain **NEEDS DEVICE VALIDATION / NOT RUN**.
+
+| Fresh verification | Observed result |
+|---|---|
+| Complete Debug suite | **439 passed**: 399 unit + 40 UI; 0 failed, 0 skipped, 0 expected failures |
+| Release isolation | **21 passed**: 9 unit + 12 UI; 0 failed, 0 skipped, 0 expected failures |
+| Unsigned generic iPhone SDK Debug build | PASS |
+| Normal Release build | PASS; `ENABLE_TESTABILITY=NO` |
+| Resource/privacy inspections | PASS in Debug, iPhone SDK, normal Release and Release-test app bundles; no Release development resources/markers; pinned production human asset retained |
+| Existing regression identities | All 362 original current-main unit cases, all 424 PR #26 Debug cases and all 14 added M1 Debug cases represented; no missing required identities |
+| Additional consumer coverage | Native numeric editor at largest accessibility text: Cancel/reopen, real rendered shape change after Save, History, retained Closet and refusal to authorize scan try-on from manual data |
+| Physical camera/LiDAR/fit validation | **NOT RUN** |
+
+Verified source fingerprint: `18f25b290081ff9533c5f397068f00c302a469bb381a0dfb22ac68c132d7c340`. The full gate freezes all source/test/project/verifier inputs; subsequent completion edits are documentation only.
+
+Local evidence root: `/Users/anshbalusa/onyou-finalization-artifacts-20261109/`.
+
+- Full receipt/build logs/xcresults: `FullVerification/verification-kqxe8wp7/verification.json`.
+- Exact regression preservation: `IntegratedRegressionPreservation.json`.
+- Actual unedited simulator screenshots: `FinalVisualEvidence/manifest.json`; native app index with absolute paths and provenance: `FinalVisualEvidence/onyou-integration-index.json`.
+- Visually inspected native shirt front / side / back / second garment: `FinalVisualEvidence/A8051560-2833-42FA-863D-1661D494F152.png`, `5EE583E4-9D3A-4099-A820-7D631B51B63D.png`, `6C8A6194-E9D8-4ABA-9563-1C68E7AE7A44.png`, `6DE92B50-1707-4326-988F-0A835020EA95.png` in that directory. The index also identifies manual editor, saved model, History, missing-scan recovery and distinct-body/accessibility captures.
+- Before/after and launch receipts: `TargetedRuntimeProof.json`, `LegacyLauncherReproductions.json`, `MeasurementRouteBefore.xcresult` and passing `MeasurementRouteAfter6.xcresult`. Earlier failed implementation/automation attempts remain intact, not counted as passing runs.
+
+Both launch paths were freshly exercised: the repaired `Scripts/launch_friday_demo.sh` generated the current project, built/installed the current Debug app on a renamed iPhone and opened the genuine Metal showcase; `Scripts/launch_onyou.sh --fixtures` with the full gate's verified Debug `--app` opened the actual On You app. The latter remains open in Simulator. Standard build-from-source commands and the separate Debug lab are documented in README.
+
+Remaining work is physical validation, not a second implementation: real capture/retakes/lighting, reconstructed body likeness and metric accuracy, device performance and garment-dimension/fit validation. Manual geometry remains a generic measurement illustration; the shirt shell is geometric, with inferred rear material and no physical cloth/pressure model. Cold mesh preparation can take several seconds on this Intel simulator; existing off-main/cancellation/cache improvements are retained, with no new phone-speed claim.

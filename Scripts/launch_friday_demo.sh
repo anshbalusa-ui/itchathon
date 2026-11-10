@@ -44,12 +44,16 @@ if [[ -z "$APP" ]]; then
   command -v xcodegen >/dev/null 2>&1 || fail 'required tool not found: xcodegen'
 fi
 
+PROJECT_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$ROOT/Project.json")"
+PRODUCT_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["targets"]["FitCheck"]["settings"]["PRODUCT_NAME"])' "$ROOT/Project.json")"
+BUNDLE_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["targets"]["FitCheck"]["settings"]["PRODUCT_BUNDLE_IDENTIFIER"])' "$ROOT/Project.json")"
+
 DEVICES="$(xcrun simctl list devices available --json)" || fail 'could not query available simulators'
 if [[ -z "$SIMULATOR" ]]; then
-  SIMULATOR="$(printf '%s' "$DEVICES" | python3 -c 'import json,sys; d=json.load(sys.stdin); devices=[x for group in d["devices"].values() for x in group if x.get("isAvailable") and x.get("name", "").startswith("iPhone")]; devices.sort(key=lambda x:(x.get("state") != "Booted", x.get("name", ""), x.get("udid", ""))); print(devices[0]["udid"] if devices else "")')" || fail 'could not select an iPhone simulator'
+  SIMULATOR="$(printf '%s' "$DEVICES" | python3 -c 'import json,sys; d=json.load(sys.stdin); devices=[x for group in d["devices"].values() for x in group if x.get("isAvailable") and x.get("deviceTypeIdentifier", "").split(".")[-1].startswith("iPhone")]; devices.sort(key=lambda x:(x.get("state") != "Booted", x.get("name", ""), x.get("udid", ""))); print(devices[0]["udid"] if devices else "")')" || fail 'could not select an iPhone simulator'
 fi
 [[ -n "$SIMULATOR" ]] || fail 'no available iPhone simulator found'
-printf '%s' "$DEVICES" | python3 -c 'import json,sys; d=json.load(sys.stdin); u=sys.argv[1]; ok=any(x.get("udid")==u and x.get("isAvailable") and x.get("name", "").startswith("iPhone") for group in d["devices"].values() for x in group); sys.exit(0 if ok else 1)' "$SIMULATOR" || fail "simulator is not an available iPhone: $SIMULATOR"
+printf '%s' "$DEVICES" | python3 -c 'import json,sys; d=json.load(sys.stdin); u=sys.argv[1]; ok=any(x.get("udid")==u and x.get("isAvailable") and x.get("deviceTypeIdentifier", "").split(".")[-1].startswith("iPhone") for group in d["devices"].values() for x in group); sys.exit(0 if ok else 1)' "$SIMULATOR" || fail "simulator is not an available iPhone: $SIMULATOR"
 
 if [[ -z "$APP" ]]; then
   xcodebuild -version || fail 'xcodebuild could not report its version'
@@ -57,21 +61,21 @@ if [[ -z "$APP" ]]; then
   DERIVED_DATA="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).expanduser().resolve())' "$DERIVED_DATA")" || fail 'could not resolve derived-data path'
   case "$DERIVED_DATA/" in "$ROOT/"*) fail 'derived data must be outside the repository' ;; esac
   mkdir -p "$DERIVED_DATA"
-  (cd "$ROOT" && xcodegen generate) || fail 'xcodegen project generation failed'
-  (cd "$ROOT" && xcodebuild -project FitCheck.xcodeproj -scheme FitCheck -configuration Debug \
+  (cd "$ROOT" && xcodegen generate --spec Project.json) || fail 'xcodegen project generation failed'
+  (cd "$ROOT" && xcodebuild -project "$PROJECT_NAME.xcodeproj" -scheme FitCheck -configuration Debug \
     -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR" \
     -derivedDataPath "$DERIVED_DATA" CODE_SIGNING_ALLOWED=NO build) || fail 'Debug simulator build failed'
-  APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/FitCheck.app"
+  APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/$PRODUCT_NAME.app"
 fi
 
 [[ -d "$APP" ]] || fail "app bundle not found: $APP"
 APP="$(cd "$APP" && pwd -P)"
-python3 - "$APP" <<'PY' || fail 'app is not a current Debug FitCheck simulator build with the measurement avatar demo'
+python3 - "$APP" "$BUNDLE_ID" <<'PY' || fail 'app is not a current Debug On You simulator build with the measurement avatar demo'
 import pathlib, plistlib, sys
 app = pathlib.Path(sys.argv[1])
 try:
     info = plistlib.loads((app / "Info.plist").read_bytes())
-    if info.get("CFBundleIdentifier") != "com.itchathon.fitcheck":
+    if info.get("CFBundleIdentifier") != sys.argv[2]:
         sys.exit(1)
     if "iPhoneSimulator" not in info.get("CFBundleSupportedPlatforms", []):
         sys.exit(1)
@@ -99,7 +103,6 @@ if [[ "$STATE" != *"(Booted)"* ]]; then
 fi
 xcrun simctl bootstatus "$SIMULATOR" -b || fail 'simulator did not finish booting'
 xcrun simctl install "$SIMULATOR" "$APP" || fail 'could not install demo app'
-BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" || fail 'app bundle identifier is missing'
 xcrun simctl launch --terminate-running-process "$SIMULATOR" "$BUNDLE_ID" -fitcheck-demo-internal || fail 'could not launch the internal demo'
 open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR" || fail 'could not open Simulator'
 printf 'Friday demo launched on simulator %s\n' "$SIMULATOR"

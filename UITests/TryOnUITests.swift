@@ -14,6 +14,48 @@ final class TryOnUITests: XCTestCase {
   }
 
   #if DEBUG
+  func testManualMeasurementsChangeRenderedBodyWithoutAuthorizingScanTryOn() throws {
+    app.launchArguments = ["-onyou-tryon-fixture", "-onyou-fixture-scenario=missing-avatar",
+      "-on-you.measurement-unit", "centimeters", "-on-you.wireframe", "NO",
+      "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-AppleInterfaceStyle", "Dark"]
+    app.launch()
+    XCTAssertTrue(scene("onyou.synthetic").waitForExistence(timeout: 30))
+    let example = try bodyPixels()
+    capture("integration-01-example-body-largest-text")
+
+    XCTAssertGreaterThanOrEqual(app.buttons["body.measurements"].frame.height, 44)
+    tap("body.measurements")
+    XCTAssertTrue(app.buttons["measurement.cancel"].waitForExistence(timeout: 10))
+    let originalWaist = replaceMeasurement("measurement.waist", with: "125")
+    capture("integration-01b-measurements-editor")
+    tap("measurement.cancel")
+    XCTAssertLessThan(try bodyPixels().difference(from: example), 0.01, "Leaving without Save must preserve the original rendered body")
+    tap("body.measurements")
+    XCTAssertEqual(replaceMeasurement("measurement.waist", with: "125"), originalWaist, "Cancelled input must not become the next editor draft")
+    tap("measurement.save")
+    _ = try bodyPixels(changedFrom: example)
+    capture("integration-02-saved-measurement-body-largest-text")
+
+    app.tabBars.buttons["History"].tap()
+    let saved = app.cells.firstMatch
+    XCTAssertTrue(saved.waitForExistence(timeout: 10))
+    saved.tap()
+    let recordedWaist = scene("snapshot.waist")
+    reveal(recordedWaist)
+    XCTAssertTrue(recordedWaist.exists)
+    XCTAssertTrue((recordedWaist.value as? String ?? "").contains("125"), "History must contain the entered measurement")
+    capture("integration-03-measurement-history")
+
+    app.tabBars.buttons["Body"].tap()
+    _ = try bodyPixels(changedFrom: example)
+    openShirt("Fixture · Tide shirt")
+    reveal(app.buttons["garment.scanbody"])
+    XCTAssertTrue(app.buttons["garment.scanbody"].isHittable)
+    XCTAssertFalse(app.buttons["garment.tryon"].exists, "Manual measurements must not authorize a captured-avatar try-on")
+    XCTAssertFalse(scene("tryon.scene").exists)
+    capture("integration-04-manual-model-keeps-scan-required")
+  }
+
   func testSavedAvatarClosetTryOnRotationVisibilityAndReopening() throws {
     launchFixture()
     capture("01-body-saved-synthetic-avatar")
@@ -182,8 +224,8 @@ final class TryOnUITests: XCTestCase {
   private func openShirt(_ name: String, selectCloset: Bool = true) {
     if selectCloset { app.tabBars.buttons["Closet"].tap() }
     let title = app.staticTexts[name]
-    XCTAssertTrue(title.waitForExistence(timeout: 10))
     reveal(title)
+    XCTAssertTrue(title.waitForExistence(timeout: 10))
     title.tap()
   }
 
@@ -201,13 +243,49 @@ final class TryOnUITests: XCTestCase {
 
   private func tap(_ identifier: String) {
     let button = app.buttons[identifier]
+    if !app.navigationBars.buttons.matching(identifier: identifier).firstMatch.exists { reveal(button) }
     XCTAssertTrue(button.waitForExistence(timeout: 10), identifier)
-    reveal(button)
     XCTAssertTrue(button.isHittable, identifier)
     button.tap()
   }
 
   private func reveal(_ element: XCUIElement) {
+    let form = app.collectionViews["measurement.form"]
+    if form.exists {
+      // Native Form rows are lazy; asking for an absent row's frame throws.
+      let frame = element.exists ? element.frame : .zero
+      let preferDown = frame.isEmpty || frame.midY >= form.frame.midY
+      for down in [preferDown, !preferDown] {
+        for _ in 0..<12 {
+          if element.exists && element.isHittable && form.frame.contains(element.frame) { return }
+          form.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: down ? 0.8 : 0.2))
+            .press(forDuration: 0.15, thenDragTo: form.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: down ? 0.2 : 0.8)))
+        }
+      }
+      let diagnostic = XCTAttachment(string: "Unreachable native measurement control: \(element.debugDescription)\n\(app.debugDescription)")
+      diagnostic.lifetime = .keepAlways
+      add(diagnostic)
+      capture("unreachable-native-measurement-control")
+      return
+    }
+    let bodyControls = app.scrollViews["body.controls"]
+    if bodyControls.exists && bodyControls.isHittable {
+      var visible = bodyControls.frame.intersection(app.frame)
+      let tabs = app.tabBars.firstMatch
+      if tabs.exists { visible.size.height = max(0, min(visible.maxY, tabs.frame.minY) - visible.minY) }
+      for _ in 0..<12 {
+        if element.exists && element.isHittable && visible.contains(element.frame) { return }
+        let down = !element.exists || element.frame.isEmpty || element.frame.maxY > visible.maxY
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let x = visible.maxX - 18 - app.frame.minX
+        let from = visible.minY + visible.height * (down ? 0.8 : 0.2) - app.frame.minY
+        let to = visible.minY + visible.height * (down ? 0.2 : 0.8) - app.frame.minY
+        origin.withOffset(CGVector(dx: x, dy: from)).press(forDuration: 0.15,
+          thenDragTo: origin.withOffset(CGVector(dx: x, dy: to)))
+      }
+      capture("unreachable-body-control")
+      return
+    }
     for _ in 0..<8 {
       if element.exists && element.isHittable { return }
       let controls = app.scrollViews["tryon.controls"]
@@ -252,6 +330,33 @@ final class TryOnUITests: XCTestCase {
     try Pixels(image: scene("tryon.scene").screenshot().image)
   }
 
+  private func bodyPixels(changedFrom previous: Pixels? = nil) throws -> Pixels {
+    var latest: Pixels?
+    let ready = NSPredicate { [self] _, _ in
+      guard scene("body.scene").exists,
+            let image = try? Pixels(image: scene("body.scene").screenshot().image),
+            image.hasVisibleBody else { return false }
+      latest = image
+      return previous.map { image.difference(from: $0) > 0.015 } ?? true
+    }
+    XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: app)], timeout: 25),
+      .completed, "The actual body surface must be visible and change when the saved measurement changes")
+    return try XCTUnwrap(latest)
+  }
+
+  private func replaceMeasurement(_ identifier: String, with value: String) -> String {
+    let field = app.textFields[identifier]
+    reveal(field)
+    XCTAssertTrue(field.isHittable)
+    let previous = field.value as? String ?? ""
+    field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+    field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: previous.count) + value)
+    app.buttons["Done"].tap()
+    XCTAssertEqual(field.value as? String, value)
+    return previous
+  }
+
   private func capture(_ name: String) {
     let attachment = XCTAttachment(screenshot: app.screenshot())
     attachment.name = name
@@ -271,6 +376,18 @@ final class TryOnUITests: XCTestCase {
         context.draw(cg, in: CGRect(x: 0, y: 0, width: 120, height: 180))
       }
       rgba = bytes
+    }
+    var hasVisibleBody: Bool {
+      var count = 0
+      for y in 15..<145 {
+        for x in 25..<95 {
+          let i = (y * 120 + x) * 4
+          let contrast = abs(Int(rgba[i])-Int(rgba[0])) + abs(Int(rgba[i+1])-Int(rgba[1])) + abs(Int(rgba[i+2])-Int(rgba[2]))
+          if contrast > 45 { count += 1 }
+          if count > 200 { return true }
+        }
+      }
+      return false
     }
     func count(_ cloth: Cloth) -> Int {
       var count = 0
