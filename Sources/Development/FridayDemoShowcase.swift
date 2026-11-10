@@ -48,13 +48,10 @@ private struct FridayGarmentDemoView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("FitCheck").font(.title2.weight(.bold))
                         Spacer()
-                        Text("3D SHOWCASE")
-                            .font(.caption.weight(.semibold))
-                            .tracking(1.5)
-                            .foregroundStyle(.secondary)
+                        measurementEntry
                     }
                     .padding(.horizontal, 20)
-                    .accessibilityElement(children: .combine)
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("demo.showcase")
                 }
                 viewport
@@ -63,6 +60,7 @@ private struct FridayGarmentDemoView: View {
                     .padding(.horizontal, 16)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
+                        if dynamicTypeSize.isAccessibilitySize { measurementEntry }
                         productHeading
                         viewControls
                         collection
@@ -85,6 +83,19 @@ private struct FridayGarmentDemoView: View {
         .onAppear { model.open(isActive: scenePhase == .active) }
         .onDisappear { model.close() }
         .onChange(of: scenePhase) { _, phase in model.setActive(phase == .active) }
+    }
+
+    private var measurementEntry: some View {
+        NavigationLink {
+            MeasurementAvatarDemoView()
+        } label: {
+            Label("Create avatar", systemImage: "person.crop.circle.badge.plus")
+                .font(.subheadline.weight(.semibold))
+                .frame(minHeight: 36)
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityLabel("Create avatar from demo measurements")
+        .accessibilityIdentifier("demo.open-measurements")
     }
 
     private var productHeading: some View {

@@ -1,6 +1,6 @@
 # FitCheck — Friday Demo D1
 
-The D1 baseline below is retained as historical verification and media evidence. The **requested human-avatar refinement** at the end supersedes its blocky showcase artwork, clothing meshes and “3D Avatar” link title. Use the current branch's launch helper; its prebuilt-app checks intentionally reject old D1 bundles without the human assets.
+The D1 baseline below is retained as historical verification and media evidence. The **requested human-avatar refinement** supersedes its blocky artwork; the final **M1 — Measurement-driven human avatar** section adds editable dimensions and supersedes D2's fixed-body limitation. D1/D2 test totals and recordings are historical, not M1 verification. Use the current branch's launch helper; prebuilt apps must include the measurement demo and pinned human assets.
 
 ## Owner-authorized team integration — PR #24
 
@@ -374,4 +374,167 @@ Prebuilt launches were also exercised on the main, smaller and larger simulators
 - Review base: `feature/friday-visual-demo-d1` at `40cee194750647657783e9eac622cc997dcb3f2e`, not `main`.
 
 A documentation-only commit records this review identity after the implementation commit; it changes no verified build/test input. The exact delivered branch-tip SHA is recorded in `/Users/anshbalusa/fitcheck-d2-artifacts/delivery.json` and the PR head. PR #21 remains draft against `main` at S2C commit `235bee6a5cd7b334d4689ad6e09ff9f4080acb16`; PR #22 remains draft against S2C at the unchanged D1 head. No existing PR or branch was merged or modified.
+
+## M1 — Measurement-driven human avatar
+
+### Source and scope
+
+- Exact base: integrated `main` at `40feaf4931614637c3e1dc05407af2660eb56f19`.
+- Implementation branch: `feature/measurement-avatar-demo-m1`.
+- New entry: **Create avatar** on the Friday showcase, or **Measurement avatar demo** in the internal development hub. No new launch argument is required.
+- Everything new is Debug-only. Normal Release still opens the existing legacy application. Scanner, profile, S2A/S2B/S2C authorization and synthetic replay admission are unchanged.
+
+This is a numbers-to-model demonstration, not a substitute for device scanning. Five entered dimensions reshape an authored generic human; those five dimensions cannot uniquely identify or reproduce a real person. No camera is used, no completed personal scan is claimed, and no measurements are saved, uploaded or promoted into a profile.
+
+### Presenter / teammate journey
+
+```bash
+git fetch origin
+git switch feature/measurement-avatar-demo-m1
+git pull --ff-only
+Scripts/launch_friday_demo.sh
+```
+
+Preserve existing local work before switching branches. The helper requires Xcode, an installed iPhone simulator, XcodeGen and Python 3; no signing credentials or physical device are needed. It boots, installs and launches before opening the graphical Simulator, and never erases a simulator. Use `--simulator UDID` to select a device. A prebuilt app without the measurement route is rejected rather than silently showing the old fixed-human demo.
+
+1. **FitCheck Demo Showcase → Create avatar**.
+2. Choose fictional **Sample A / Sample B**, or edit the five numbers in **cm**.
+3. **Generate avatar** shows the actual smooth human surface in native Metal.
+4. Drag, **Left / Right / Reset**, and **Show illustrative shirt** inspect the generated result.
+5. **Edit measurements** regenerates another shape. Back returns to the showcase; reopening starts at Sample A, not the last person's values.
+
+The scanner remains a separate experimental module, not part of this required journey. There is no measurement-entry feature in normal Release.
+
+### Inputs and fictional presets
+
+| Dimension, cm | Accepted range | Sample A | Sample B |
+| --- | ---: | ---: | ---: |
+| Height | 140–210 | 180 | 170 |
+| Chest circumference | 60–150 | 96 | 110 |
+| Waist circumference | 50–140 | 80 | 100 |
+| Hip circumference | 60–155 | 98 | 112 |
+| Shoulder width | 30–65 | 43 | 48 |
+
+Values must be finite. Invalid input leaves no successful-looking scene and presents a field-specific range message beside Generate, including at the largest accessibility text size. The presets are quick controls before the editable fields; numeric keyboard dismissal has an explicit **Done** button.
+
+### What genuinely changes
+
+- The pinned CC0 human source stays unchanged. A cached one-level Loop refinement smooths its actual surface before measurement deformation; normals are recomputed from generated triangles.
+- Height controls actual floor-to-head world height. Chest, waist and hip targets calibrate actual central torso cross-section perimeters rather than applying one global scale. Shoulder width changes the upper trunk and carries the arms laterally.
+- Smooth bounded interpolation transitions between body regions. The head and hands retain their local proportions; the arms move with the shoulders rather than developing torso-dependent deltoid bulges.
+- The shirt and shorts use the same spatial deformation field and remain illustrative compatible geometry. The renderer frames actual generated bounds, including rotation and narrow viewports.
+- Each generated scene has distinct measurement-result authority. It cannot enable D2's authored shell-spacing map, substitute an unrelated garment, or become a saved personal avatar.
+- Backgrounding releases GPU ownership; foregrounding rebuilds the current CPU result. Editing, leaving or rapid navigation cancels generation and disposes the prior scene; late results cannot replace a newer session.
+
+The source-defined fitting bands are hip 51%, waist 57%, chest 72% and upper-trunk width 75.5% of source height. These are demonstration-model controls, not validated clinical landmarks or measurement instructions. A smooth generic model matching selected dimensions is not evidence that an individual's anatomy, clothing pressure or fit has been reconstructed.
+
+### Verification coverage and limits
+
+M1 adds geometry regressions for actual section dimensions, independently changing each input, closed topology, normals, paired-limb/surface symmetry, head/hand preservation, clothing deformation and invalid inputs. Session tests cover cancellation, background rebuilding, retry and disposal; renderer tests project actual generated vertices at multiple heights, aspect ratios and rotations and enforce the no-clearance-map boundary.
+
+Actual UI journeys inspect rendered body/garment pixels and changed silhouettes, manually type a waist value, switch presets, rotate/reset, background/foreground, reopen, rapidly dismiss, and exercise the largest accessibility text size. Release isolation separately attempts both Debug entry paths and checks that normal legacy UI remains.
+
+No LiDAR phone, real person's measurements, physical garment validation, scan accuracy, physical drape, size recommendation or pressure/tightness measurement is claimed. The existing D2 spacing-map illustration belongs only to its authored fixed-body scene. Future personalized geometry and fit claims still require authorized inputs and real-device/physical validation.
+
+> FitCheck can now turn five demo measurements into a smooth, interactive 3D human and reshape illustrative clothing with it. This proves the numbers-to-model path; scanning remains separate, and the result is not an exact person or verified garment fit.
+
+### M1 publication
+
+- Verified implementation source: [`dadab48a1ebd70f76fbc63926977329e4c03c91a`](https://github.com/anshbalusa-ui/itchathon/commit/dadab48a1ebd70f76fbc63926977329e4c03c91a).
+- Published branch: `feature/measurement-avatar-demo-m1`.
+- Draft review: [PR #25 — Smooth measurement-driven human avatar demo](https://github.com/anshbalusa-ui/itchathon/pull/25), targeting `main`. This new feature is not merged.
+
+A later documentation-only commit records final verification and visual evidence without changing the verified build/test inputs. The delivered branch-tip identity is recorded in the PR head and the external M1 delivery artifact.
+
+### M1 actual simulator visuals and backup recording
+
+| Simulator | Appearance | Actual screenshot size | M1 rendered UI journeys |
+| --- | --- | --- | ---: |
+| iPhone 17e | Light | 1170×2532 | 2/2 passed; zero skips |
+| iPhone 17 Pro Max | Dark | 1320×2868 | 2/2 passed; zero skips |
+
+Both journeys exercise actual model pixels, a visibly different Sample B, a manually typed waist value, rotation/reset, illustrative clothing, background restoration, rapid dismissal/reopening and the largest accessibility text size. Original results are `/Users/anshbalusa/fitcheck-m1-artifacts/SmallLight.xcresult` and `LargeDark.xcresult`; their screenshot exports/manifests are `SmallLightScreenshots/` and `LargeDarkScreenshots/` in the same directory.
+
+Full-body framing, smoother head/arms/torso, five editable values, clothing contrast, readable controls and always-visible validation were inspected in the actual images. Eleven byte-identical, human-readable screenshot copies are in:
+
+`/Users/anshbalusa/fitcheck-m1-artifacts/MeasurementScreenshots/`
+
+Key images: `m1-01-sample-inputs.png`, `m1-02-generated-a.png`, `m1-03-rotated-human.png`, `m1-04-illustrative-clothing.png`, `m1-05-generated-b.png`, `m1-06-manual-waist.png`, `m1-09-invalid-input-accessibility.png` and `m1-11-rapid-navigation-recovery.png`.
+
+| Finished actual recording | Duration | Location |
+| --- | ---: | --- |
+| Measurement demo meeting edit | 49.9 s | `/Users/anshbalusa/fitcheck-m1-artifacts/measurement-demo-50s-cfr.mp4` |
+| Unmodified Simulator source | 690.745 s | `/Users/anshbalusa/fitcheck-m1-artifacts/measurement-demo-original.mov` |
+
+The source was captured with `xcrun simctl io … recordVideo --codec=h264` during the passing large/dark UI run; the recorder finalized with exit 0. Native AVFoundation shortened waits/navigation and normalized output to 30 fps, retaining the actual 1320×2868 app footage. This is not a real-time generation-performance claim. The edit shows numbers → generated A → rotation/clothing → generated B → typing waist 82 → narrower generated waist → clean reopening.
+
+The finished file was decoded and its segments visually inspected, including the numeric keyboard and changed silhouette. `visual-evidence.json` retains source/output SHA-256 identities and unchanged screenshot hashes. Exact source ranges are in `measurement-demo-50s-story.json` and `measurement-demo-50s-cfr.metadata.json`; decoded frames/metadata are in `OriginalVideoInspection/`, `MeetingVideoInspection/` and `MeetingVideoDetailInspection/`.
+
+The first optional edit export failed with AVFoundation `-11800` / underlying `-16364`; its original evidence and failed filename are explicitly recorded in `initial-video-export-failure.json`. Only the `-cfr.mp4` file above is the finished meeting edit.
+
+If graphical Simulator access is unavailable:
+
+```bash
+open /Users/anshbalusa/fitcheck-m1-artifacts/measurement-demo-50s-cfr.mp4
+open /Users/anshbalusa/fitcheck-m1-artifacts/MeasurementScreenshots/m1-01-sample-inputs.png
+open /Users/anshbalusa/fitcheck-m1-artifacts/MeasurementScreenshots/m1-05-generated-b.png
+```
+
+These are backup materials, not a replacement for live Metal rendering. Earlier D2 media remains valid evidence of the fixed-human showcase only; it is not relabelled as M1 measurement generation.
+
+### Original M1 full-run evidence — not a complete gate pass
+
+`/Users/anshbalusa/fitcheck-m1-artifacts/full-verification/verification-g9l9c9o9` preserves the first completed full-script attempt. Its complete Debug suite passed **381/381**, with zero failures/skips; all **367** previous Debug case identities remain represented and passing (`Debug-regression-preservation.json`). The unsigned iPhone SDK and normal Release build commands also completed.
+
+Release isolation did **not** pass in that attempt: nine unit cases passed, but the UI runner was killed with signal 9 before connecting/finishing bootstrap, so no Release UI case ran. This is an XCTest runner/bootstrap failure, not a passed UI suite or a product assertion failure. The exact reason for the OS kill is unconfirmed. Original logs/results remain unchanged; exported scheduling/session diagnostics are in `/Users/anshbalusa/fitcheck-m1-artifacts/ReleaseBootstrapDiagnostics/`.
+
+Secondary simulators and media processing were stopped, and the owned main simulator was shut down and booted headlessly without erasing data. A complete unchanged-source verification rerun was then started. No test, source condition, pixel threshold or Release boundary was weakened to recover this failure.
+
+### M1 final fresh verification — PASS
+
+The complete unchanged-source rerun finished successfully:
+
+```bash
+python3 Scripts/verify_development.py \
+  --simulator 66353AE4-9E8A-4854-B729-53BA83B99BB4 \
+  --output-root /Users/anshbalusa/fitcheck-m1-artifacts/full-verification
+```
+
+Authoritative report:
+
+`/Users/anshbalusa/fitcheck-m1-artifacts/full-verification/verification-1n5bxsj5/verification.json`
+
+| Fresh gate | Result |
+| --- | --- |
+| Debug build and complete tests | **381/381** — 348 unit, 33 UI |
+| Unsigned generic iPhone SDK build | Passed |
+| Normal Release build | Passed; `ENABLE_TESTABILITY=NO` |
+| Release isolation | **18/18** — 9 unit, 9 UI |
+| Failures / skips / expected failures in either suite | **0 / 0 / 0** |
+| Resource and privacy inspections | Passed for Debug, iPhone, normal Release and Release-test bundles |
+| Normal Release development symbols/resources | No marker or resource leaks |
+
+Verified build/test-input SHA-256:
+
+`12223f5a4cb90c2fb8d4fa48a6be5015a6fa5291e266cea9fd1c9addd6ca2af2`
+
+All **367 previous Debug** and **17 previous Release** case identities remain present and passing; M1 adds **14 Debug** and **1 Release** cases. `regression-preservation.json` retains every final case identity/result and the set comparison. No previous regression was skipped, deleted or weakened. The successful report is separate from the original bootstrap failure; neither evidence directory was overwritten.
+
+Development visual findings were fixed before freezing the verified inputs: torso-dependent upper-arm bulges now use coherent shoulder translation; largest-text preset/rotation controls use explicit vertical layouts; invalid-value messages remain beside Generate. The UI helper scrolls through an empty trailing gutter rather than starting a gesture inside numeric text selection, retaining the same reachability, rendered-pixel, silhouette-change and recovery assertions.
+
+The new geometry regression checks actual section-envelope and paired-limb symmetry, not incidental reflection pairing of subdivided vertex samples: 212 pinned-source triangles lack reflected counterparts because of triangulation choices, despite exactly mirrored original vertex positions. Numerical evidence is retained in `source-topology-evidence.json`; no original test was changed for that correction.
+
+No product failure remains observed in the verified demo paths. Hardware LiDAR validation, individualized anatomical reconstruction and physical garment-fit validation remain outside this demonstration.
+
+### M1 final verified launch
+
+After the successful full gate, the exact simplest command completed successfully:
+
+```bash
+Scripts/launch_friday_demo.sh
+```
+
+It generated the project, built current unsigned Debug, installed FitCheck and launched the Friday showcase on **iPhone 17 FitCheck Main Demo / iOS 26.5** (`66353AE4-9E8A-4854-B729-53BA83B99BB4`), then opened the graphical Simulator. Xcode 26.5 (17F42) and XcodeGen 2.46.0 were used; no device signing, credentials or simulator erasure was involved.
+
+The final live surface was captured and inspected at `/Users/anshbalusa/fitcheck-m1-artifacts/final-running-showcase.png`: the human wears the Navy sample shirt, and **Create avatar** is clearly visible. The app is left open there. The stale prebuilt rejection is separately recorded in `stale-demo-rejection.json`; an old fixed-human app was not accepted as the current measurement demo.
 

@@ -93,6 +93,8 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     private var depthState: MTLDepthStencilState?
     private let isSyntheticGeometryScene: Bool
     let isHumanAvatarScene: Bool
+    private let isMeasurementAvatarScene: Bool
+    private let measurementBounds: (minimum: SIMD3<Float>, maximum: SIMD3<Float>)?
     private var modestyGarment: RendererRenderObject?
     private var humanRegion = HumanBodyRegion.whole
     private var humanMapVisible = false
@@ -113,6 +115,15 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
     convenience init(human: HumanShowcaseMeshes, garment: HumanShowcaseGarment) throws {
         try self.init(configuration: .standard, mannequinAsset: .mannequinFixture, garmentAsset: nil,
                       generatedMesh: nil, human: human, humanGarment: garment)
+    }
+
+    /// Editable demo dimensions have their own authority; never a scan/artifact promotion.
+    convenience init(measurementAvatar: MeasurementAvatarResult) throws {
+        var configuration = RendererSceneConfiguration.standard
+        configuration.targetHeight = (measurementAvatar.body.minimum.y + measurementAvatar.body.maximum.y) * 0.5
+        configuration.cameraDistance = 4.5
+        try self.init(configuration: configuration, mannequinAsset: .mannequinFixture, garmentAsset: nil,
+                      generatedMesh: nil, measurementAvatar: measurementAvatar)
     }
 
     convenience init(geometry: GeometryResult, fitSurface: Bool = false) throws {
@@ -136,10 +147,12 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
 
     private init(configuration: RendererSceneConfiguration, mannequinAsset: RendererAssetDescriptor,
                  garmentAsset: RendererAssetDescriptor?, generatedMesh: RendererMesh?, fitSurface: Bool = false,
-                 human: HumanShowcaseMeshes? = nil, humanGarment: HumanShowcaseGarment? = nil) throws {
+                 human: HumanShowcaseMeshes? = nil, humanGarment: HumanShowcaseGarment? = nil,
+                 measurementAvatar: MeasurementAvatarResult? = nil) throws {
         try configuration.validate()
-        guard human == nil || generatedMesh == nil else { throw RendererFailure.invalidConfiguration }
-        if generatedMesh == nil, human == nil { try mannequinAsset.validate(for: .mannequin) }
+        let sourceCount = (human == nil ? 0 : 1) + (generatedMesh == nil ? 0 : 1) + (measurementAvatar == nil ? 0 : 1)
+        guard sourceCount <= 1 else { throw RendererFailure.invalidConfiguration }
+        if sourceCount == 0 { try mannequinAsset.validate(for: .mannequin) }
         if fitSurface {
             guard let generatedMesh else { throw RendererFailure.invalidConfiguration }
             // Frame only admitted geometry. The orbit pivot and exact CPU/GPU
@@ -167,16 +180,32 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         self.commandQueue = queue
         self.view = view
         self.isSyntheticGeometryScene = generatedMesh != nil
-        self.isHumanAvatarScene = human != nil
+        self.isHumanAvatarScene = human != nil || measurementAvatar != nil
+        self.isMeasurementAvatarScene = measurementAvatar != nil
+        if let measurementAvatar {
+            measurementBounds = (
+                simd_min(measurementAvatar.body.minimum, simd_min(measurementAvatar.shirt.minimum, measurementAvatar.shorts.minimum)),
+                simd_max(measurementAvatar.body.maximum, simd_max(measurementAvatar.shirt.maximum, measurementAvatar.shorts.maximum))
+            )
+        } else {
+            measurementBounds = nil
+        }
         self.camera = RendererCamera(position: SIMD3<Float>(0, configuration.targetHeight, configuration.cameraDistance),
                                      target: SIMD3<Float>(0, configuration.targetHeight, 0),
                                      nearClip: configuration.nearClip, farClip: configuration.farClip,
                                      verticalFieldOfView: configuration.verticalFieldOfView)
-        mannequin = try RendererRenderObject(mesh: human?.body ?? generatedMesh ?? RendererProceduralAssets.mannequin(),
-                                            color: human != nil ? SIMD4<Float>(0.70, 0.72, 0.74, 1)
+        let humanBody = human?.body ?? measurementAvatar?.body
+        mannequin = try RendererRenderObject(mesh: humanBody ?? generatedMesh ?? RendererProceduralAssets.mannequin(),
+                                            color: humanBody != nil ? SIMD4<Float>(0.70, 0.72, 0.74, 1)
                                                 : generatedMesh == nil ? SIMD4<Float>(0.68, 0.65, 0.60, 1)
                                                 : SIMD4<Float>(0.34, 0.49, 0.39, 1), device: device)
-        if let human {
+        if let measurementAvatar {
+            modestyGarment = try RendererRenderObject(mesh: measurementAvatar.shorts, color: SIMD4<Float>(0.32, 0.35, 0.38, 1),
+                                                      device: device, usesClearance: false)
+            garment = try RendererRenderObject(mesh: measurementAvatar.shirt, color: RendererProceduralAssets.color(for: .navy),
+                                               device: device, usesClearance: false)
+            garmentAssetIdentifier = "demo.measurement-shaped-shirt"
+        } else if let human {
             guard let humanGarment else { throw RendererFailure.invalidConfiguration }
             modestyGarment = try RendererRenderObject(mesh: human.shorts, color: SIMD4<Float>(0.32, 0.35, 0.38, 1),
                                                       device: device, usesClearance: false)
@@ -240,7 +269,7 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
 
     func applyHuman(orbit: RendererOrbit, appearance: RendererAppearance,
                     region: HumanBodyRegion, mapVisible: Bool) throws {
-        guard !isDisposed, isHumanAvatarScene else { throw RendererFailure.unsupportedAsset }
+        guard !isDisposed, isHumanAvatarScene, !isMeasurementAvatarScene else { throw RendererFailure.unsupportedAsset }
         humanRegion = region
         humanMapVisible = mapVisible
         apply(orbit: orbit, appearance: appearance)
@@ -409,7 +438,26 @@ final class RendererSceneSession: NSObject, MTKViewDelegate {
         let largestVerticalExtent = max(configuration.targetHeight, 1.8 - configuration.targetHeight)
         let radius = fittedSurfaceRadius ?? sqrt(largestVerticalExtent * largestVerticalExtent + 0.4 * 0.4)
         let distance: Float
-        if isHumanAvatarScene {
+        if let bounds = measurementBounds {
+            // Eight transformed box corners bound every body/clothing vertex at
+            // any permitted orbit; no per-frame mesh scan or copied position array.
+            var halfWidth: Float = 0
+            var halfHeight: Float = 0
+            var depth: Float = 0
+            for corner in 0..<8 {
+                let point = SIMD4<Float>(
+                    corner & 1 == 0 ? bounds.minimum.x : bounds.maximum.x,
+                    corner & 2 == 0 ? bounds.minimum.y : bounds.maximum.y,
+                    corner & 4 == 0 ? bounds.minimum.z : bounds.maximum.z, 1
+                )
+                let transformed = modelTransform * point
+                halfWidth = max(halfWidth, abs(transformed.x))
+                halfHeight = max(halfHeight, abs(transformed.y - configuration.targetHeight))
+                depth = max(depth, abs(transformed.z))
+            }
+            distance = max(halfHeight / verticalTangent,
+                           halfWidth / (verticalTangent * safeAspect)) * 1.10 + depth + configuration.nearClip
+        } else if isHumanAvatarScene {
             let bounds = mannequin.mesh
             let halfWidth = max(abs(bounds.minimum.x), abs(bounds.maximum.x))
             let depth = max(abs(bounds.minimum.z), abs(bounds.maximum.z))

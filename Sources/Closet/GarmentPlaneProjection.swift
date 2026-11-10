@@ -1,19 +1,28 @@
 import Foundation
 import simd
 
-/// Portrait image fractions -> calibrated camera ray -> horizontal garment plane.
+/// Native landscape camera UV -> calibrated camera ray -> horizontal garment plane.
 struct GarmentPlaneProjection {
   var intrinsics: simd_float3x3
   var cameraTransform: simd_float4x4
   var imageSize: SIMD2<Float>
   var planeHeight: Float
 
-  func project(_ point: CGPoint) throws -> SIMD3<Float> {
-    guard point.x.isFinite, point.y.isFinite, (0...1).contains(point.x), (0...1).contains(point.y),
-          imageSize.x > 0, imageSize.y > 0, intrinsics[0][0] > 0, intrinsics[1][1] > 0,
+  static func nativeCameraUV(fromPortrait point: CGPoint) throws -> CGPoint {
+    guard point.x.isFinite, point.y.isFinite,
+          (0...1).contains(point.x), (0...1).contains(point.y) else { throw GarmentCaptureError.depth }
+    return CGPoint(x: point.y, y: 1 - point.x)
+  }
+
+  func project(nativeUV: CGPoint) throws -> SIMD3<Float> {
+    guard nativeUV.x.isFinite, nativeUV.y.isFinite,
+          (0...1).contains(nativeUV.x), (0...1).contains(nativeUV.y),
+          imageSize.x.isFinite, imageSize.y.isFinite, imageSize.x > 0, imageSize.y > 0,
+          intrinsics[0][0].isFinite, intrinsics[1][1].isFinite,
+          intrinsics[2][0].isFinite, intrinsics[2][1].isFinite,
+          intrinsics[0][0] > 0, intrinsics[1][1] > 0,
           planeHeight.isFinite else { throw GarmentCaptureError.depth }
-    // ARKit's native sensor buffer is landscape; capture is explicitly portrait.
-    let pixel = SIMD2(Float(point.y) * imageSize.x, (1 - Float(point.x)) * imageSize.y)
+    let pixel = SIMD2(Float(nativeUV.x) * imageSize.x, Float(nativeUV.y) * imageSize.y)
     let ray = SIMD4((pixel.x - intrinsics[2][0]) / intrinsics[0][0],
                     -(pixel.y - intrinsics[2][1]) / intrinsics[1][1], -1, 0)
     let direction = cameraTransform * ray

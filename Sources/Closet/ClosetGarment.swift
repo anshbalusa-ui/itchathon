@@ -1,6 +1,6 @@
 import Foundation
 
-struct ClosetGarment: Identifiable, Codable, Equatable {
+struct ClosetGarment: Identifiable, Codable, Equatable, Sendable {
   var id = UUID()
   var name: String
   var date = Date()
@@ -8,10 +8,12 @@ struct ClosetGarment: Identifiable, Codable, Equatable {
   var productURL: URL?
   var isReference = false
   var imageID: UUID? = nil
+  var pattern: GarmentPatternEvidence? = nil
 
   var isValid: Bool {
     !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       && name.count <= 120 && dimensions?.isValid != false
+      && pattern?.isValid != false && (pattern == nil || dimensions != nil)
       && (productURL.map { Self.productLink($0.absoluteString) != nil } ?? true)
   }
 

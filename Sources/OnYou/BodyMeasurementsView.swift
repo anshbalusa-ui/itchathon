@@ -7,6 +7,7 @@ struct BodyMeasurementsView: View {
   @AppStorage("on-you.measurement-unit") private var unit = BodyMeasurementUnit.centimeters
   @FocusState private var focused: BodyMeasurementField?
   @State private var initialized = false
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   private var parsed: BodyMeasurements? {
     BodyMeasurements.parse(fields, unit: unit)
@@ -36,17 +37,17 @@ struct BodyMeasurementsView: View {
           }
         }
         ForEach(BodyMeasurementField.allCases) { field in
-          HStack {
-            Text(field.title)
-            Spacer()
-            TextField(field.title, text: Binding(get: { fields[field] ?? "" }, set: { fields[field] = $0 }))
-              .keyboardType(.decimalPad)
-              .multilineTextAlignment(.trailing)
-              .frame(minWidth: 60, maxWidth: 120)
-              .focused($focused, equals: field)
-              .accessibilityLabel("\(field.title) in \(unit.title.lowercased())")
-              .accessibilityIdentifier("measurement.\(field.rawValue)")
-            Text(unit.symbol).foregroundStyle(.secondary)
+          if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+              Text(field.title)
+              measurementInput(field)
+            }
+          } else {
+            HStack {
+              Text(field.title)
+              Spacer()
+              measurementInput(field)
+            }
           }
         }
       } header: {
@@ -75,6 +76,7 @@ struct BodyMeasurementsView: View {
         Text("Saved on this iPhone. Each change is kept in History.")
       }
     }
+    .accessibilityIdentifier("measurement.form")
     .navigationTitle("Measurements")
     .scrollDismissesKeyboard(.interactively)
     .toolbar {
@@ -85,6 +87,19 @@ struct BodyMeasurementsView: View {
     }
     .onAppear { if !initialized { reload() } }
     .onChange(of: store.current) { reload() }
+  }
+
+  private func measurementInput(_ field: BodyMeasurementField) -> some View {
+    HStack {
+      TextField(field.title, text: Binding(get: { fields[field] ?? "" }, set: { fields[field] = $0 }))
+        .keyboardType(.decimalPad)
+        .multilineTextAlignment(.trailing)
+        .frame(minWidth: 60, maxWidth: typeSize.isAccessibilitySize ? .infinity : 120)
+        .focused($focused, equals: field)
+        .accessibilityLabel("\(field.title) in \(unit.title.lowercased())")
+        .accessibilityIdentifier("measurement.\(field.rawValue)")
+      Text(unit.symbol).foregroundStyle(.secondary)
+    }
   }
 
   private func reload() {

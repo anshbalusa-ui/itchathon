@@ -24,6 +24,15 @@ struct InternalDevelopmentHub: View {
                 .accessibilityIdentifier("internal.open-demo")
 
                 NavigationLink {
+                    MeasurementAvatarDemoView()
+                } label: {
+                    Label("Measurement avatar demo", systemImage: "person.crop.circle.badge.plus")
+                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("internal.open-measurements")
+
+                NavigationLink {
                     AvatarPilotRootView()
                 } label: {
                     Label("Avatar foundation and scanner", systemImage: "camera.viewfinder")
