@@ -2,6 +2,8 @@ What this repo does: On You captures textured body surfaces, measures flat shirt
 
 Audited source: GitHub integration `f84435a`, followed by the fixes in this report. Production entry, build/privacy configuration, body capture and admission, garment capture/inference, image association, try-on geometry/rendering/lifecycle, storage and their tests were traced. This was a risk-focused repository audit; the historical Debug labs were not reviewed line by line.
 
+Implementation status reconfirmed: **all five findings below are implemented in `8c6a073`**. The remaining work is the physical validation listed at the end, not an unimplemented audit patch.
+
 ## Must fix — repaired
 
 1. **Failed deletion could destroy the saved avatar** (`Sources/OnYou/AvatarScanStore.swift:66`).
@@ -52,5 +54,17 @@ Audited source: GitHub integration `f84435a`, followed by the fixes in this repo
 **Verdict:** Suitable for hands-on phone testing after these repairs. The preview is an illustration; live body reconstruction and garment-dimension accuracy still require calibrated physical captures.
 
 **Lean:** -3 lines, -0 dependencies possible from the redundant guidance. No speculative module deletion.
+
+## Scanning speed: evidence and targets
+
+| Work | Current evidence | Proposed usability target, not a measured result |
+| --- | --- | --- |
+| Shirt scanning | The real-photo image-contract test took **3.939 seconds** on the iPhone 17 Pro Max, iOS 27.0.1. This is one test run, including file decoding, a new landmark detector/model, Vision cutout, validation, PNG decoding and try-on pattern parsing. It excludes camera startup, live depth projection and three-frame consensus. | **3–5 seconds after the whole shirt is correctly framed**, including live validation. |
+| Body photo capture | Full physical capture has not been timed. The current contract requires two completed circles and at least 60 accepted images. Operator pace, framing and tracking affect elapsed time. | **60–120 seconds** for a well-prepared person and helper, without rushing or weakening coverage. |
+| Body reconstruction | Full physical reconstruction has not been timed. Photo/depth preflight, Apple's reconstruction/texture generation and final model loading are separate from walking the circles. | **Under 60 seconds** after capture on the target phone; aspirational until measured. |
+
+The shirt scheduler admits one analysis at a time, with frame timestamps strictly more than 0.7 seconds apart. Three agreeing samples therefore span more than 1.4 seconds between the first and third admitted frames, plus analysis completion and any framing/rejections. This is a scheduling lower bound, not observed live scan latency; multiplying the 3.939-second cold test by three would also be misleading because live capture reuses its landmark model and performs different work.
+
+Timing receipt: `ClosetTests/testRecognizedPhotoSurvivesTheCaptureToTryOnImageContract()` in `/tmp/onyou-audit-2yqopZ/PhoneVision.xcresult`, `test-details.durationInSeconds = 3.939152956008911`. No repeated-sample, warm-cache, percentile or end-to-end performance claim is supported by that single run. Existing `BodyScanTiming` diagnostics already separate capture passes, checkpoint waiting, preflight, reconstruction, texture validation and loading for the first real timed scan.
 
 **Not checked:** A real person's complete two-pass capture/reconstruction; repeatability against known measurements; real garment depth/lighting/fold variations; a physical camera interruption/restart; fabric stretch, tension, pressure or actual fit; every historical Debug lab and vendored Python training/conversion path; the full historical Debug/Release verification matrix. The SDK used was iOS 27.0.
