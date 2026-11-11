@@ -6,6 +6,7 @@ struct AutomaticGarmentScanView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.openURL) private var openURL
+  @AppStorage("on-you.capture-haptics") private var haptics = true
   @State private var capturing = false
   @State private var captureID = UUID()
   @State private var position = ScanPositionFeedback()
@@ -32,7 +33,10 @@ struct AutomaticGarmentScanView: View {
                   .padding(.horizontal, 18).padding(.vertical, 12)
                   .glassEffect(in: .capsule)
                 Spacer()
-                Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
+                Menu {
+                  Toggle("Guidance haptics", isOn: $haptics)
+                } label: { Label("Scan options", systemImage: "ellipsis").labelStyle(.iconOnly) }
+                .buttonStyle(.glass).buttonBorderShape(.circle)
               }
               Spacer(minLength: 24)
               ScrollView {

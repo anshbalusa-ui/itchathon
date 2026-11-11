@@ -5,7 +5,7 @@ import XCTest
 final class BodyScanUXTests: XCTestCase {
   func testPhotoLimitOffersRecoveryAndCanStillAcceptAFinalCompletedPass() {
     var status = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200,
-                                     trackingNormal: false, issue: "Move closer.", maximumShots: 200)
+                                     trackingNormal: false, issue: "Move closer.", maximumShots: 200, fullBodyViews: 3)
     XCTAssertTrue(status.exhaustedCaptureCapacity)
     XCTAssertEqual(status.action, .retakeScan)
     XCTAssertTrue(status.actionEnabled)
@@ -25,13 +25,13 @@ final class BodyScanUXTests: XCTestCase {
     XCTAssertEqual(status.action, .findPerson)
     status.pendingAction = .findPerson
     XCTAssertFalse(status.actionEnabled)
-    XCTAssertEqual(status.pendingTitle, "Finding person…")
+    XCTAssertEqual(status.pendingTitle, "Finding floor…")
     status.pendingAction = nil
     status.selectionHint = "Include the floor and try again."
     XCTAssertTrue(status.actionEnabled)
     XCTAssertEqual(status.instruction, status.selectionHint)
 
-    status = BodyScanCameraStatus(mode: .capturing, shots: 30)
+    status = BodyScanCameraStatus(mode: .capturing, shots: 30, fullBodyViews: 3)
     XCTAssertNil(status.action)
     XCTAssertFalse(status.awaitsNextStep)
     status.completedPasses = 1
@@ -58,7 +58,7 @@ final class BodyScanUXTests: XCTestCase {
     for issue in ["Move a little closer.", "Slow down.", "Capture is paused."] {
       var status = BodyScanCameraStatus(mode: .capturing, completedPasses: 1,
                                        shots: 30, passComplete: true,
-                                       trackingNormal: false, issue: issue)
+                                       trackingNormal: false, issue: issue, fullBodyViews: 3)
       XCTAssertEqual(status.action, .nextPass)
       XCTAssertTrue(status.actionEnabled)
       XCTAssertTrue(status.instruction.contains("Stop walking"))
@@ -72,10 +72,21 @@ final class BodyScanUXTests: XCTestCase {
     }
   }
 
-  func testWarningsStillBlockFramingAndStartingCapture() {
+  func testAdvisoryFeedbackCannotPreventAReadySessionFromStarting() {
+    for mode in [BodyScanCameraStatus.Mode.framing, .selecting] {
+      for issue in ["Keep the person centered inside the selection box.", "Find brighter light.", "Move back a little."] {
+        let status = BodyScanCameraStatus(mode: mode, trackingNormal: false, issue: issue)
+        XCTAssertTrue(status.actionEnabled, "The SDK's ready/detecting state admits the user's command; warnings must not deadlock Start.")
+      }
+    }
+    XCTAssertFalse(BodyScanCameraStatus(mode: .initializing).actionEnabled)
+    XCTAssertFalse(BodyScanCameraStatus(mode: .finishing).actionEnabled)
+  }
+
+  func testWarningsExplainRecoveryWithoutDisablingValidCommands() {
     for mode in [BodyScanCameraStatus.Mode.framing, .selecting] {
       let status = BodyScanCameraStatus(mode: mode, issue: "Find brighter light.")
-      XCTAssertFalse(status.actionEnabled)
+      XCTAssertTrue(status.actionEnabled)
       XCTAssertEqual(status.instruction, "Find brighter light.")
     }
   }
@@ -92,26 +103,40 @@ final class BodyScanUXTests: XCTestCase {
 
   func testPassProgressExplainsBodyDetailTransitionsAndCapacityRecovery() {
     let firstPass = BodyScanCameraStatus(mode: .capturing, completedPasses: 1,
-                                        shots: 31, passComplete: true)
+                                        shots: 31, passComplete: true, fullBodyViews: 3)
     XCTAssertEqual(firstPass.step, .detail)
     XCTAssertEqual(firstPass.currentPass,1,"A paused completed body circle must not be counted as the active detail circle")
     XCTAssertEqual(firstPass.action,.nextPass)
     XCTAssertTrue(firstPass.actionEnabled)
-    let detailCapture = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 45)
+    let detailCapture = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 45, fullBodyViews: 3)
     XCTAssertEqual(detailCapture.step,.detail)
     XCTAssertEqual(detailCapture.currentPass,2,"The second active circle must agree with the Detail stage")
     XCTAssertFalse(detailCapture.awaitsNextStep)
 
     let secondPass = BodyScanCameraStatus(mode: .capturing, completedPasses: 2,
-                                         shots: 58, passComplete: true)
+                                         shots: 58, passComplete: true, fullBodyViews: 3)
     XCTAssertEqual(secondPass.step, .detail)
     XCTAssertEqual(secondPass.currentPass,2)
     XCTAssertEqual(secondPass.action,.nextPass)
     XCTAssertTrue(secondPass.actionEnabled)
 
     let capacity = BodyScanCameraStatus(mode: .capturing, completedPasses: 1,
-                                        shots: 200, maximumShots: 200)
+                                        shots: 200, maximumShots: 200, fullBodyViews: 3)
     XCTAssertEqual(capacity.action, .retakeScan)
+  }
+
+  func testTwoCirclesOfTorsoPhotosCannotAuthorizeAWholeBodyAvatar() {
+    var status = BodyScanCameraStatus(mode: .capturing, completedPasses: 2, shots: 75, passComplete: true)
+    XCTAssertFalse(status.captureReady)
+    XCTAssertEqual(status.action, .nextPass)
+    XCTAssertTrue(status.instruction.contains("Head and feet"))
+    status.fullBodyViews = 2
+    XCTAssertFalse(status.captureReady)
+    status.passComplete = false
+    XCTAssertEqual(status.progressTitle, "75 photos · Extra detail")
+    status.fullBodyViews = 3
+    XCTAssertTrue(status.captureReady)
+    XCTAssertEqual(status.action, .buildAvatar)
   }
 
   func testStageDiagnosticConversionUsesMonotonicDurationOnly() {
@@ -125,11 +150,11 @@ final class BodyScanUXTests: XCTestCase {
   }
 
   func testProgressAndTimingDoNotInventCompletionOrTime() {
-    let photosOnly = BodyScanCameraStatus(mode: .capturing, shots: 500)
+    let photosOnly = BodyScanCameraStatus(mode: .capturing, shots: 500, fullBodyViews: 3)
     XCTAssertFalse(photosOnly.awaitsNextStep)
     XCTAssertNil(photosOnly.action)
-    XCTAssertEqual(photosOnly.progressTitle, "Pass 1 of 2 · Body circle in progress")
-    var detail = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 60)
+    XCTAssertEqual(photosOnly.progressTitle, "500 photos · Circle 1 of 2")
+    var detail = BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 60, fullBodyViews: 3)
     XCTAssertNil(detail.action)
     XCTAssertTrue(detail.progressDetail.contains("Finish the detail ring"))
     detail.completedPasses = 2
@@ -157,18 +182,18 @@ final class BodyScanUXTests: XCTestCase {
     // Render the shipping camera chrome around a clearly synthetic, camera-free surface.
     // This checks layout; it does not pretend to capture a person in the simulator.
     for (name, size, typeSize, status) in [
-      ("capture-body", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, shots: 23)),
-      ("capture-standard", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43)),
-      ("capture-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43)),
+      ("capture-body", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, shots: 23, fullBodyViews: 3)),
+      ("capture-standard", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, fullBodyViews: 3)),
+      ("capture-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, fullBodyViews: 3)),
       ("capture-finding", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .framing, pendingAction: .findPerson)),
-      ("capture-paused", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.")),
-      ("capture-paused-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.")),
-      ("capture-low-light", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, trackingNormal: false, issue: "Find brighter, even light so we can see the person clearly.")),
-      ("capture-out-of-view", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, issue: "Bring the whole person back into view, with their head and feet visible.")),
-      ("capture-tracking", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, trackingNormal: false, issue: "Slowly move the iPhone so it can find the floor and settle its tracking.")),
-      ("capture-limit", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200, maximumShots: 200)),
-      ("capture-limit-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200, maximumShots: 200)),
-      ("capture-ready", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 2, shots: 60, passComplete: true))
+      ("capture-paused", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.", fullBodyViews: 3)),
+      ("capture-paused-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 30, passComplete: true, trackingNormal: false, issue: "Move a little closer.", fullBodyViews: 3)),
+      ("capture-low-light", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, trackingNormal: false, issue: "Find brighter, even light so we can see the person clearly.", fullBodyViews: 3)),
+      ("capture-out-of-view", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, issue: "Bring the whole person back into view, with their head and feet visible.", fullBodyViews: 3)),
+      ("capture-tracking", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 43, trackingNormal: false, issue: "Slowly move the iPhone so it can find the floor and settle its tracking.", fullBodyViews: 3)),
+      ("capture-limit", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200, maximumShots: 200, fullBodyViews: 3)),
+      ("capture-limit-accessible", CGSize(width: 393, height: 852), DynamicTypeSize.accessibility2, BodyScanCameraStatus(mode: .capturing, completedPasses: 1, shots: 200, maximumShots: 200, fullBodyViews: 3)),
+      ("capture-ready", CGSize(width: 393, height: 852), DynamicTypeSize.large, BodyScanCameraStatus(mode: .capturing, completedPasses: 2, shots: 60, passComplete: true, fullBodyViews: 3))
     ] {
       let root = BodyScanCameraView(status: status, startedAt: Date().addingTimeInterval(-75), close: {}, performAction: {}) {
         ZStack {

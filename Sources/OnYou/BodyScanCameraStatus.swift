@@ -13,6 +13,7 @@ struct BodyScanCameraStatus: Equatable {
   var selectionHint: String?
   var pendingAction: Action?
   var maximumShots: Int?
+  var fullBodyViews = 0
   enum Feedback: Hashable {
     case environmentTooDark, environmentLowLight, movingTooFast
     case outOfFieldOfView, objectTooClose, objectTooFar, objectNotDetected
@@ -22,14 +23,14 @@ struct BodyScanCameraStatus: Equatable {
     case lighting, movement, tooClose, tooFar, paused, selection, tracking, framing
     var message: String {
       switch self {
-      case .lighting: "Find brighter, even light so we can see the person clearly."
-      case .movement: "Slow down. Keep the iPhone steady and the person still."
-      case .tooClose: "Move back a little. Keep their head and feet visible."
-      case .tooFar: "Move a little closer without cutting off their head or feet."
-      case .paused: "Capture is paused. Keep On You in the foreground to continue."
-      case .selection: "Keep the person centered inside the selection box."
-      case .tracking: "Slowly move the iPhone so it can find the floor and settle its tracking."
-      case .framing: "Bring the whole person back into view, with their head and feet visible."
+      case .lighting: "Add more light."
+      case .movement: "Move more slowly."
+      case .tooClose: "Step back to include their feet."
+      case .tooFar: "Move a little closer."
+      case .paused: "Scan paused."
+      case .selection: "Drag the corners to include head and feet."
+      case .tracking: "Move the iPhone slowly."
+      case .framing: "Keep head and feet in view."
       }
     }
   }
@@ -48,6 +49,9 @@ struct BodyScanCameraStatus: Equatable {
   }
 
 
+  var hasFullBodyEvidence: Bool { fullBodyViews >= 3 }
+  var captureReady: Bool { AvatarScanInput.hasCoverage(images: shots, passes: completedPasses) && hasFullBodyEvidence }
+
   var currentPass: Int { completedPasses >= 2 ? 2 : max(1, completedPasses + (passComplete ? 0 : 1)) }
   var passLabel: String { currentPass == 1 ? "Body circle" : "Detail circle" }
 
@@ -55,7 +59,7 @@ struct BodyScanCameraStatus: Equatable {
   var exhaustedCaptureCapacity: Bool {
     guard let maximumShots, maximumShots > 0 else { return false }
     return mode == .capturing && shots >= maximumShots
-      && !AvatarScanInput.hasCoverage(images: shots, passes: completedPasses)
+      && !captureReady
   }
 
   var step: BodyScanStep {
@@ -69,14 +73,14 @@ struct BodyScanCameraStatus: Equatable {
   var title: String {
     switch mode {
     case .initializing: return "Opening your camera"
-    case .framing: return "Get the whole person in view"
+    case .framing: return "Find the floor"
     case .selecting: return "Frame from head to toe"
     case .finishing: return "Saving your capture"
     case .capturing:
       if exhaustedCaptureCapacity { return "This scan needs another try" }
       if passComplete && completedPasses == 1 { return "Body circle complete" }
-      if AvatarScanInput.hasCoverage(images: shots, passes: completedPasses) { return "Your capture is ready" }
-      if passComplete && completedPasses >= 2 { return "Detail circle complete" }
+      if captureReady { return "Your capture is ready" }
+      if passComplete && completedPasses >= 2 { return hasFullBodyEvidence ? "Detail circle complete" : "Include the whole body" }
       return completedPasses == 0 ? "Walk a slow circle" : "Capture the face and details"
     }
   }
@@ -92,20 +96,22 @@ struct BodyScanCameraStatus: Equatable {
       if shots < 60 {
         return "Stop walking. This circle is complete, but we need more photos before building. Tap Capture more detail to start a fresh ring."
       }
-      return "Stop walking. Capture is paused. Tap Build my avatar, then relax your pose."
+      if !hasFullBodyEvidence { return "Head and feet aren’t clear yet. Keep the whole person visible for another circle." }
+      return "Stop walking. Tap Build my avatar, then relax your pose."
     }
-    if let issue, mode != .finishing { return issue }
     if let selectionHint { return selectionHint }
+    if let issue, mode != .finishing { return issue }
     switch mode {
     case .initializing: return "Hold the iPhone steady while the camera gets ready."
-    case .framing: return "Show the floor around their feet. Move the iPhone slowly to find the space."
-    case .selecting: return "Fit the box from head to feet, with their hands inside."
+    case .framing: return "Point at the floor beside their feet."
+    case .selecting: return "Drag the corners to include head and feet."
     case .finishing: return "Your photos are being saved before we build the avatar. Keep On You open."
     case .capturing:
+      if shots >= 6 && !hasFullBodyEvidence { return "Keep head and feet in view." }
       if completedPasses >= 2 && shots < 60 { return "We need a little more detail. Continue around the person with their whole body in view." }
       return completedPasses == 0
-        ? "Keep head and feet visible. Follow the camera ring; we’ll pause when it’s complete."
-        : "Keep the same pose and the whole person visible. Follow the detail ring."
+        ? "Walk slowly around the person. Follow the ring."
+        : "Keep the same pose. Follow the second ring."
     }
   }
 
@@ -116,16 +122,16 @@ struct BodyScanCameraStatus: Equatable {
     case .initializing, .finishing: return nil
     case .capturing:
       if exhaustedCaptureCapacity { return .retakeScan }
-      if passComplete && (completedPasses < 2 || shots < 60) { return .nextPass }
-      if AvatarScanInput.hasCoverage(images: shots, passes: completedPasses) { return .buildAvatar }
+      if passComplete && (completedPasses < 2 || shots < 60 || !hasFullBodyEvidence) { return .nextPass }
+      if captureReady { return .buildAvatar }
       return nil
     }
   }
 
   var actionTitle: String {
     switch action {
-    case .findPerson: "Find person"
-    case .startCapture: "Start scanning"
+    case .findPerson: "Set floor"
+    case .startCapture: "Start scan"
     case .nextPass: completedPasses < 2 ? "Continue to details" : "Capture more detail"
     case .buildAvatar: "Build my avatar"
     case .retakeScan: "Retake scan"
@@ -135,7 +141,7 @@ struct BodyScanCameraStatus: Equatable {
 
   var pendingTitle: String {
     switch pendingAction {
-    case .findPerson: "Finding person…"
+    case .findPerson: "Finding floor…"
     case .startCapture: "Starting capture…"
     case .nextPass: "Starting next circle…"
     case .buildAvatar: "Saving capture…"
@@ -145,20 +151,19 @@ struct BodyScanCameraStatus: Equatable {
   }
 
   var awaitsNextStep: Bool {
-    mode == .capturing && (passComplete || exhaustedCaptureCapacity || AvatarScanInput.hasCoverage(images: shots, passes: completedPasses))
+    mode == .capturing && (passComplete || exhaustedCaptureCapacity || captureReady)
   }
 
   var actionEnabled: Bool {
-    guard pendingAction == nil else { return false }
-    // Completed capture transitions use saved evidence, not live framing feedback.
-    if action == .nextPass || action == .buildAvatar || action == .retakeScan { return true }
-    return trackingNormal && issue == nil
+    // SDK state admits commands; advisory feedback must never deadlock the Start button.
+    pendingAction == nil && action != nil
   }
 
   var progressTitle: String {
-    if completedPasses >= 2 && shots >= 60 { return "Capture complete" }
+    if captureReady { return "Capture complete" }
     if awaitsNextStep { return completedPasses < 2 ? "Body complete · Details next" : "More photo detail needed" }
-    return "Pass \(currentPass) of 2 · \(passLabel) in progress"
+    if completedPasses >= 2 { return "\(shots) photos · Extra detail" }
+    return "\(shots) photos · Circle \(currentPass) of 2"
   }
 
   var progressDetail: String {

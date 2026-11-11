@@ -13,28 +13,21 @@ struct ScanPositionIndicator: View {
 
   var body: some View {
     let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
-    return layout {
-      Image(systemName: position.direction.symbol).font(.title3.weight(.semibold))
-        .frame(width: 28).accessibilityHidden(true)
-      VStack(alignment: .leading, spacing: 3) {
-        Text(position.direction.instruction).font(.subheadline.weight(.semibold))
-          .fixedSize(horizontal: false, vertical: true)
-        Text(position.source).font(.caption).foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
+    return Group {
+      if position.meters != nil {
+        layout {
+          Image(systemName: position.direction == .hold || position.direction == .searching ? "ruler" : position.direction.symbol)
+            .accessibilityHidden(true)
+          Text(position.distanceText).font(.subheadline.monospacedDigit().weight(.semibold))
+          Text(position.source).font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(color)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Distance, \(position.distanceText). \(position.source). \(position.direction.instruction)")
+        .accessibilityIdentifier("scan.position")
       }
-      .layoutPriority(1)
-      Spacer(minLength: 4)
-      Text(position.distanceText).font(.title3.monospacedDigit().weight(.semibold))
-        .accessibilityLabel("Distance").accessibilityValue(position.distanceText)
-      Button(haptics ? "Turn guidance haptics off" : "Turn guidance haptics on", systemImage: "waveform") { haptics.toggle() }
-        .labelStyle(.iconOnly).buttonStyle(.plain).frame(minWidth: 44, minHeight: 44)
-        .foregroundStyle(haptics ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
     }
-    .foregroundStyle(color)
-    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-    .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 20))
-    .accessibilityElement(children: .contain)
-    .accessibilityIdentifier("scan.position")
     .task(id: active && haptics) {
       guard active && haptics else { return }
       while !Task.isCancelled {

@@ -84,6 +84,29 @@ final class ScanPositionFeedbackTests: XCTestCase {
     XCTAssertFalse(BodyCaptureEvidence.visible([], in: [:]))
   }
 
+  func testWholeBodyRequiresAHeadAndBothAnklesInsideTheImage() {
+    var points: [VNHumanBodyPoseObservation.JointName: CGPoint] = [
+      .nose: CGPoint(x: 0.5, y: 0.9),
+      .leftShoulder: CGPoint(x: 0.35, y: 0.75), .rightShoulder: CGPoint(x: 0.65, y: 0.75),
+      .leftHip: CGPoint(x: 0.4, y: 0.5), .rightHip: CGPoint(x: 0.6, y: 0.5),
+      .leftAnkle: CGPoint(x: 0.4, y: 0.1), .rightAnkle: CGPoint(x: 0.6, y: 0.1)
+    ]
+    XCTAssertTrue(BodyCaptureEvidence.fullyVisible(points))
+    points[.leftAnkle] = nil
+    XCTAssertFalse(BodyCaptureEvidence.fullyVisible(points))
+    points[.leftAnkle] = CGPoint(x: 0.4, y: 0.005)
+    XCTAssertFalse(BodyCaptureEvidence.fullyVisible(points))
+    points[.leftAnkle] = CGPoint(x: 0.4, y: 0.1)
+    points[.nose] = nil
+    XCTAssertFalse(BodyCaptureEvidence.fullyVisible(points))
+    points[.leftEar] = CGPoint(x: 0.5, y: 0.91)
+    XCTAssertTrue(BodyCaptureEvidence.fullyVisible(points))
+    points[.leftEar] = CGPoint(x: 0.5, y: 0.3)
+    XCTAssertFalse(BodyCaptureEvidence.fullyVisible(points))
+    points[.leftEar] = CGPoint(x: .nan, y: 0.91)
+    XCTAssertFalse(BodyCaptureEvidence.fullyVisible(points))
+  }
+
   private func buffer(format: OSType, size: Int) throws -> CVPixelBuffer {
     var buffer: CVPixelBuffer?
     XCTAssertEqual(CVPixelBufferCreate(nil, size, size, format, nil, &buffer), kCVReturnSuccess)

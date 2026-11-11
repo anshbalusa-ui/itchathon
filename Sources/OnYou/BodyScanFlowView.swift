@@ -70,28 +70,17 @@ struct BodyScanFlowView: View {
 
   private var setup: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 28) {
-        BodyScanJourneyView(step: .frame)
-        VStack(alignment: .leading, spacing: 16) {
-          Image(systemName: "figure.stand")
-            .font(.system(size: 52, weight: .light))
-            .foregroundStyle(.tint)
-            .frame(width: 104, height: 104)
-            .background(.tint.opacity(0.08), in: Circle())
-            .accessibilityHidden(true)
-          Text("Let’s get you in frame.")
-            .font(.largeTitle.bold())
-          Text("Ask someone to hold your iPhone while you stand still. We’ll guide them around you.")
-            .font(.title3).foregroundStyle(.secondary)
-        }
-        VStack(alignment: .leading, spacing: 24) {
-          preparationTip("Hold your pose", symbol: "figure.stand", detail: "Stand still with arms slightly away from your torso. Keep head and feet in view. Wear close-fitting clothes and find even light.")
-          preparationTip("Body, then detail", symbol: "camera", detail: "Follow the coverage ring for two slow circles around the person. Keep their head and feet in view for each circle.")
-          preparationTip("No measurements to enter", symbol: "checkmark", detail: "Depth sets the scale automatically. Your photos stay on this iPhone and are removed after your avatar is built.")
-        }
-        Text("Capture moves at your pace. Once it’s done, we’ll estimate how long the build has left.")
-          .font(.footnote).foregroundStyle(.secondary)
-
+      VStack(spacing: 28) {
+        Image(systemName: "figure.arms.open")
+          .font(.system(size: 120, weight: .ultraLight))
+          .foregroundStyle(.tint).padding(.vertical, 24)
+          .accessibilityHidden(true)
+        Text("Stand still, arms apart.").font(.largeTitle.bold())
+          .multilineTextAlignment(.center)
+        Text("Ask a helper to hold your iPhone.")
+          .font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        Label("Even light, with room to walk around you.", systemImage: "sun.max")
+          .font(.callout).multilineTextAlignment(.center)
       }
       .padding(24)
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -107,6 +96,7 @@ struct BodyScanFlowView: View {
           Task { await model.start() }
         }
         .accessibilityIdentifier("scan.start")
+        Text("Processed on this iPhone").font(.caption).foregroundStyle(.secondary)
       }
       .padding(.horizontal, 24).padding(.vertical, 16)
       .background(.bar)
@@ -114,22 +104,8 @@ struct BodyScanFlowView: View {
     .background(Color(uiColor: .systemBackground))
   }
 
-  private func preparationTip(_ title: String, symbol: String, detail: String) -> some View {
-    HStack(alignment: .top, spacing: 16) {
-      Image(systemName: symbol)
-        .font(.title3).foregroundStyle(.tint)
-        .frame(width: 28)
-      VStack(alignment: .leading, spacing: 5) {
-        Text(title).font(.headline)
-        Text(detail).font(.subheadline).foregroundStyle(.secondary)
-      }
-    }
-    .fixedSize(horizontal: false, vertical: true)
-  }
-
   private var preparing: some View {
     VStack(spacing: 24) {
-      BodyScanJourneyView(step: .frame)
       Spacer()
       ProgressView().controlSize(.large)
       Text("Getting the camera ready").font(.title2.weight(.semibold))
@@ -143,9 +119,10 @@ struct BodyScanFlowView: View {
   private func captureView(_ session: ObjectCaptureSession) -> some View {
     BodyScanCameraView(status: model.cameraStatus, startedAt: model.captureStartedAt,
                        position: model.positionFeedback, torsoViews: model.torsoViews, legViews: model.legViews,
-                       close: requestClose, performAction: model.performCameraAction) {
-      // Keep Apple's live camera, coverage ring, and capture animations intact.
-      ObjectCaptureView(session: session)
+                       close: { model.cancel(); dismiss() }, performAction: model.performCameraAction,
+                       reframe: model.resetSelection, pauseForCancel: model.setCapturePromptVisible) {
+      // Keep native selection handles and coverage; replace the ready-state reticle with a quiet framing guide.
+      ObjectCaptureView(session: session).hideObjectReticle()
     }
     .onChange(of: session.state, initial: true) { _, state in
       if model.capture === session { model.stateChanged(state) }
@@ -154,6 +131,12 @@ struct BodyScanFlowView: View {
       if model.capture === session { model.captureProgressChanged() }
     }
     .onChange(of: session.numberOfShotsTaken) { _, _ in
+      if model.capture === session { model.captureProgressChanged() }
+    }
+    .task(id: session.numberOfShotsTaken) {
+      guard session.numberOfShotsTaken > 0 else { return }
+      // Retry once after the SDK finishes writing the newest photo.
+      do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
       if model.capture === session { model.captureProgressChanged() }
     }
     .onChange(of: model.cameraStatus.awaitsNextStep) { _, waiting in

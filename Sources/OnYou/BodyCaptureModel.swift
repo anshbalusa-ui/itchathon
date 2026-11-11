@@ -34,6 +34,7 @@ final class BodyCaptureModel {
   private(set) var lastDistanceAt: Date?
   private(set) var torsoViews = 0
   private(set) var legViews = 0
+  private(set) var fullBodyViews = 0
   var stage = "Aligning images"
   private var work: URL?
   private var reconstruction: PhotogrammetrySession?
@@ -49,7 +50,7 @@ final class BodyCaptureModel {
     guard let capture else { return false }
     return capture.state == .capturing
       && Self.hasCoverage(images: capture.numberOfShotsTaken, passes: completedPasses)
-      && !trackingInterrupted
+      && !trackingInterrupted && fullBodyViews >= 3
   }
 
   var cameraStatus: BodyScanCameraStatus {
@@ -78,7 +79,7 @@ final class BodyCaptureModel {
                                shots: capture.numberOfShotsTaken, passComplete: capture.userCompletedScanPass,
                                trackingNormal: trackingNormal, issue: issue,
                                selectionHint: selectionHint, pendingAction: pendingAction,
-                               maximumShots: capture.maximumNumberOfInputImages)
+                               maximumShots: capture.maximumNumberOfInputImages, fullBodyViews: fullBodyViews)
   }
 
   func positionFeedback(now: Date) -> ScanPositionFeedback {
@@ -106,6 +107,8 @@ final class BodyCaptureModel {
       lastDistanceAt = observation.capturedAt
       if observation.torsoVisible { torsoViews += 1 }
       if observation.legsVisible { legViews += 1 }
+      if observation.fullBodyVisible { fullBodyViews += 1 }
+      captureProgressChanged()
     }
   }
 
@@ -118,7 +121,7 @@ final class BodyCaptureModel {
       pendingAction = .findPerson
       if !capture.startDetecting() {
         pendingAction = nil
-        selectionHint = "We couldn’t find the floor yet. Include the space around their feet, move the iPhone slowly, then try again."
+        selectionHint = "Move slowly over the floor, then try again."
       }
     case .startCapture:
       pendingAction = .startCapture
@@ -129,10 +132,15 @@ final class BodyCaptureModel {
     }
   }
 
+  func resetSelection() {
+    guard phase == .capturing, let capture, capture.state == .detecting, pendingAction == nil else { return }
+    if capture.resetDetection() { selectionHint = nil }
+  }
+
   func actionTimedOut(_ action: BodyScanCameraStatus.Action) {
     guard phase == .capturing, pendingAction == action, action != .buildAvatar else { return }
     pendingAction = nil
-    selectionHint = "Still getting ready. Hold the iPhone steady with the full person and floor in view, then try again."
+    selectionHint = "Hold still, include the floor, then try again."
   }
 
   func clearSaveError() { saveError = nil }
@@ -202,7 +210,7 @@ final class BodyCaptureModel {
       endDiagnosticStage()
       imageCount = capture?.numberOfShotsTaken ?? 0
       capture = nil
-      guard Self.hasCoverage(images: imageCount, passes: completedPasses), !trackingInterrupted else {
+      guard Self.hasCoverage(images: imageCount, passes: completedPasses), fullBodyViews >= 3, !trackingInterrupted else {
         fail(AvatarScanError.insufficientCoverage); return
       }
       reconstruct()
@@ -279,7 +287,7 @@ final class BodyCaptureModel {
     evidenceTask?.cancel(); evidenceTask = nil
     evidenceReader = BodyCaptureEvidence()
     lastDistance = nil; lastDistanceAt = nil
-    torsoViews = 0; legViews = 0
+    torsoViews = 0; legViews = 0; fullBodyViews = 0
     capture?.cancel()
     capture = nil
     reconstruction?.cancel()

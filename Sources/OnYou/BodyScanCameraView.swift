@@ -3,122 +3,173 @@ import SwiftUI
 struct BodyScanCameraView<Camera: View>: View {
   var status: BodyScanCameraStatus
   var startedAt: Date?
-  var position: (Date) -> ScanPositionFeedback = { _ in ScanPositionFeedback(source: "Waiting for a depth photo") }
+  var position: (Date) -> ScanPositionFeedback = { _ in ScanPositionFeedback() }
   var torsoViews = 0
   var legViews = 0
   var close: () -> Void
   var performAction: () -> Void
+  var reframe: () -> Void = {}
+  var pauseForCancel: (Bool) -> Void = { _ in }
   @ViewBuilder var camera: () -> Camera
-  @State private var informationHeight: CGFloat = 220
-  @Environment(\.dynamicTypeSize) private var typeSize
+  @AppStorage("on-you.capture-haptics") private var haptics = true
+  @State private var cancelExpanded = false
+  @State private var showingHelp = false
+  @State private var panelHeight: CGFloat = 150
+  @Namespace private var closeTransition
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     GeometryReader { geometry in
-      ZStack {
-        camera().frame(maxWidth: .infinity, maxHeight: .infinity)
-          .ignoresSafeArea()
-        VStack(spacing: 0) {
-          HStack {
-            Button("Close scan", systemImage: "xmark", action: close)
-              .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-              .accessibilityIdentifier("scan.close")
-            Spacer()
-            Text(status.mode == .capturing ? status.passLabel : "Body scan")
-              .font(.subheadline.weight(.semibold))
-              .padding(.horizontal, 18).padding(.vertical, 12)
-              .glassEffect(in: .capsule)
-            Spacer()
-            Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
+      VStack(spacing: 0) {
+        camera()
+          .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+          .overlay {
+            if status.mode == .framing { BodyScanFloorGuide().allowsHitTesting(false).accessibilityHidden(true) }
           }
-          Spacer(minLength: 30)
+          .overlay(alignment: .top) { header.padding(16) }
+          .clipped()
+        ScrollView {
           VStack(spacing: 12) {
-            ScrollView {
-              VStack(alignment: .leading, spacing: 12) {
-                information
-                if !status.awaitsNextStep && status.mode != .finishing {
-                  TimelineView(.periodic(from: .now, by: 1)) { context in
-                    ScanPositionIndicator(position: position(context.date), active: status.trackingNormal)
-                  }
-                }
-                if status.mode == .capturing { captureProgress }
-              }
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { informationHeight = $0 }
+            if status.awaitsNextStep {
+              Text(status.title).font(.headline).accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("scan.camera.title")
             }
-            .frame(height: min(informationHeight, max(120, geometry.size.height * (typeSize.isAccessibilitySize ? 0.42 : 0.34))))
-            .scrollBounceBehavior(.basedOnSize)
-            actionRow.fixedSize(horizontal: false, vertical: true)
+            Text(status.instruction)
+              .font(.callout.weight(.medium)).multilineTextAlignment(.center)
+              .fixedSize(horizontal: false, vertical: true)
+              .accessibilityIdentifier("scan.camera.guidance")
+            if status.mode != .initializing && status.mode != .finishing && !status.awaitsNextStep {
+              TimelineView(.periodic(from: .now, by: 1)) { context in
+                ScanPositionIndicator(position: position(context.date), active: !cancelExpanded && !showingHelp)
+              }
+            }
+            actionRow.disabled(cancelExpanded)
           }
-          .padding(16)
-          .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30))
+          .padding(20).frame(maxWidth: .infinity)
+          .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(height: min(panelHeight, geometry.size.height * 0.44))
+        .scrollBounceBehavior(.basedOnSize)
+        .background(.regularMaterial)
       }
     }
-    .background(.black)
-    .tint(.blue)
-    .preferredColorScheme(.dark)
+    .background(.black).tint(.blue).preferredColorScheme(.dark)
+    .onChange(of: cancelExpanded || showingHelp) { _, value in pauseForCancel(value) }
+    .sheet(isPresented: $showingHelp) { help }
   }
 
-  private var information: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      VStack(alignment: .leading, spacing: 8) {
-        Text(status.title)
-          .font(.title3.weight(.semibold))
-          .fixedSize(horizontal: false, vertical: true)
-          .accessibilityAddTraits(.isHeader)
-          .accessibilityIdentifier("scan.camera.title")
-        Text(status.instruction)
-          .font(.callout)
-          .foregroundStyle(status.issue != nil && !status.awaitsNextStep ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
-          .fixedSize(horizontal: false, vertical: true)
-          .accessibilityIdentifier("scan.camera.guidance")
+  private var header: some View {
+    HStack(alignment: .top) {
+      Menu {
+        Button("Scan help", systemImage: "info") { showingHelp = true }
+        Toggle("Guidance haptics", isOn: $haptics)
+      } label: {
+        Label("Scan options", systemImage: "ellipsis").labelStyle(.iconOnly)
+          .frame(width: 44, height: 44)
+          .glassEffect(.regular.interactive(), in: .circle)
+      }
+      .buttonStyle(.plain)
+      .accessibilityIdentifier("scan.options")
+      Spacer()
+      GlassEffectContainer(spacing: 12) {
+        HStack(spacing: 12) {
+          if cancelExpanded {
+            Button("Keep scanning", systemImage: "checkmark") { setCancelExpanded(false) }
+              .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
+              .accessibilityIdentifier("scan.keep")
+          }
+          Button {
+            if cancelExpanded { close() } else { setCancelExpanded(true) }
+          } label: {
+            HStack {
+              if cancelExpanded { Text("Cancel scan").font(.subheadline.weight(.semibold)) }
+              else { Image(systemName: "xmark") }
+            }
+            .frame(minWidth: 44, minHeight: 44)
+            .padding(.horizontal, cancelExpanded ? 14 : 0)
+            .glassEffect(.regular.interactive(), in: .capsule)
+          }
+          .buttonStyle(.plain)
+          .glassEffectID("close", in: closeTransition)
+          .glassEffectTransition(.matchedGeometry)
+          .accessibilityLabel(cancelExpanded ? "Cancel scan" : "Close scan")
+          .accessibilityHint(cancelExpanded ? "Discards this attempt. Your saved avatar is kept." : "Shows Cancel scan and Keep scanning.")
+          .accessibilityIdentifier(cancelExpanded ? "scan.cancel" : "scan.close")
+        }
       }
     }
+    .foregroundStyle(.white)
   }
 
-  private var captureProgress: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text("\(status.shots) photos · \(min(2, status.completedPasses)) of 2 circles complete").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
-        .fixedSize(horizontal: false, vertical: true)
-      if torsoViews + legViews > 0 {
-        Text("Sampled photos · Torso visible in \(torsoViews) · Legs visible in \(legViews)")
-          .fixedSize(horizontal: false, vertical: true)
-        Text("Visibility is not complete surface coverage. Follow the camera ring.")
-          .fixedSize(horizontal: false, vertical: true)
-      } else if status.awaitsNextStep {
-        Text(status.progressDetail).fixedSize(horizontal: false, vertical: true)
-      }
-      if !status.awaitsNextStep { elapsedLabel.fixedSize(horizontal: false, vertical: true) }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .font(.caption).foregroundStyle(.secondary)
-    .accessibilityElement(children: .combine)
-    .accessibilityIdentifier("scan.capture-progress")
-  }
-
-  @ViewBuilder private var elapsedLabel: some View {
-    if let startedAt {
-      TimelineView(.periodic(from: .now, by: 1)) { context in
-        Text(BodyScanTiming.elapsed(since: startedAt, now: context.date))
-      }
-    }
+  private func setCancelExpanded(_ value: Bool) {
+    withAnimation(reduceMotion ? nil : .snappy) { cancelExpanded = value }
   }
 
   @ViewBuilder private var actionRow: some View {
     if status.pendingAction != nil {
       BodyScanPrimaryButton(title: status.pendingTitle, busy: true, action: {})
     } else if status.action != nil {
-      BodyScanPrimaryButton(title: status.actionTitle, enabled: status.actionEnabled, action: performAction)
-        .accessibilityIdentifier("scan.camera.action")
-    } else {
-      HStack(spacing: 10) {
-        if status.mode == .initializing || status.mode == .finishing { ProgressView() }
-        else { Image(systemName: status.issue == nil ? "camera" : "hand.raised") }
-        Text(status.mode == .capturing ? (status.issue == nil ? "Capturing automatically" : "Adjust position to continue") : "Keep On You open")
-          .font(.subheadline.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 12) { reframeButton; primaryAction }
+        VStack(spacing: 12) { primaryAction; reframeButton }
       }
-      .frame(maxWidth: .infinity, minHeight: 40)
+    } else if status.mode == .initializing || status.mode == .finishing {
+      ProgressView().accessibilityLabel(status.title)
+    } else {
+      HStack(spacing: 8) {
+        Circle().fill(.red).frame(width: 8, height: 8).accessibilityHidden(true)
+        Text(status.progressTitle)
+          .font(.caption.monospacedDigit())
+      }
+      .accessibilityElement(children: .combine).accessibilityIdentifier("scan.capture-progress")
     }
+  }
+
+  private var primaryAction: some View {
+    BodyScanPrimaryButton(title: status.actionTitle, enabled: status.actionEnabled, action: performAction)
+      .accessibilityIdentifier("scan.camera.action")
+  }
+
+  @ViewBuilder private var reframeButton: some View {
+    if status.mode == .selecting {
+      Button("Reframe", systemImage: "arrow.counterclockwise", action: reframe)
+        .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.large)
+        .accessibilityHint("Clears the selected box so you can select the whole person again.")
+        .accessibilityIdentifier("scan.reframe")
+    }
+  }
+
+  private var help: some View {
+    NavigationStack {
+      List {
+        Section("Framing") {
+          Text("Step back until the head and feet are visible. Keep the person still, with their arms slightly apart.")
+          Text("Point the center of the camera at the floor beside their feet and tap Set floor. Then lift the camera and drag the box corners to include their head, hands, and feet. Use Reframe if the box selects the wrong area.")
+        }
+        Section("Scanning") {
+          Text("Tap Start scan. Walk slowly around the person and follow the camera ring. We pause after each circle.")
+          Text("The camera needs three photos that clearly show the head, torso, and both ankles, as well as two complete circles and at least 60 photos.")
+        }
+        Section("This attempt") {
+          if let startedAt {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+              LabeledContent("Time", value: BodyScanTiming.elapsed(since: startedAt, now: context.date))
+            }
+          }
+          LabeledContent("Photos", value: "\(status.shots)")
+          LabeledContent("Circles completed", value: "\(status.completedPasses)")
+          LabeledContent("Whole-body views checked", value: "\(status.fullBodyViews)")
+          LabeledContent("Torso visible in sampled photos", value: "\(torsoViews)")
+          LabeledContent("Legs visible in sampled photos", value: "\(legViews)")
+          Text("Visibility checks do not measure complete surface coverage. Follow the camera ring.").font(.footnote)
+        }
+        Section("Distance") {
+          Text("When available, the number is depth from the last captured photo, not a live distance. Move closer or back when the camera asks.")
+        }
+      }
+      .navigationTitle("Scan help").navigationBarTitleDisplayMode(.inline)
+      .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingHelp = false } } }
+    }
+    .presentationDetents([.medium, .large])
   }
 }
