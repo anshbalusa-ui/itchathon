@@ -71,10 +71,12 @@ final class ClosetStore {
   }
 
   func delete(_ garment: ClosetGarment) {
+    guard let saved = garments.first(where: { $0.id == garment.id }) else { return }
     do {
       try persist(garments.filter { $0.id != garment.id })
-      let file = imageURL(for: garment)
+      let file = imageURL(for: saved)
       if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+      error = nil
     } catch { self.error = error.localizedDescription }
   }
 

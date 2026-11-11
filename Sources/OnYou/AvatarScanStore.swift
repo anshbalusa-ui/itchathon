@@ -23,7 +23,11 @@ final class AvatarScanStore {
       // Only our UUID-named abandoned attempts are removed, after loading the active record.
       for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
         if let id = UUID(uuidString: url.lastPathComponent), id != asset?.record.id {
-          try? FileManager.default.removeItem(at: url)
+          do { try FileManager.default.removeItem(at: url) }
+          catch {
+            hasUnreadableScan = true
+            self.error = "Old scan files couldn’t be removed. Use Delete scan to retry."
+          }
         }
       }
     } catch {
@@ -61,14 +65,17 @@ final class AvatarScanStore {
 
   func delete() {
     do {
+      // Unlink the record before its model so a denied deletion keeps a usable scan.
+      if FileManager.default.fileExists(atPath: manifest.path) { try FileManager.default.removeItem(at: manifest) }
+      asset = nil
+      hasUnreadableScan = false
       for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
         where UUID(uuidString: url.lastPathComponent) != nil {
         try FileManager.default.removeItem(at: url)
       }
-      if FileManager.default.fileExists(atPath: manifest.path) { try FileManager.default.removeItem(at: manifest) }
-      asset = nil
-      hasUnreadableScan = false
+      error = nil
     } catch {
+      if asset == nil { hasUnreadableScan = true }
       self.error = "The scan couldn’t be fully deleted. \(error.localizedDescription)"
     }
   }

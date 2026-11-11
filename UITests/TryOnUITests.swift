@@ -14,6 +14,19 @@ final class TryOnUITests: XCTestCase {
   }
 
   #if DEBUG
+  func testSavedShirtShowsItsEstimatedDimensionsAtLargestText() {
+    launchFixture(accessibility: true)
+    openShirt("Fixture · Tide shirt")
+    for (identifier, expected) in [("width", "52"), ("length", "72"), ("sleeves", "92")] {
+      let row = scene("garment.dimensions.\(identifier)")
+      reveal(row)
+      XCTAssertTrue(row.exists)
+      XCTAssertTrue((row.value as? String ?? row.label).contains(expected))
+      XCTAssertTrue(row.isHittable)
+    }
+    capture("audit-shirt-dimensions-largest-text")
+  }
+
   func testManualMeasurementsChangeRenderedBodyWithoutAuthorizingScanTryOn() throws {
     app.launchArguments = ["-onyou-tryon-fixture", "-onyou-fixture-scenario=missing-avatar",
       "-on-you.measurement-unit", "centimeters", "-on-you.wireframe", "NO",

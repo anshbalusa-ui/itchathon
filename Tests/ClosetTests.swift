@@ -207,6 +207,10 @@ final class ClosetTests: XCTestCase {
     XCTAssertEqual(reopened.garments.map(\.id), [photo.id])
     XCTAssertTrue(FileManager.default.fileExists(atPath: reopened.imageURL(for: updated).path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: reopened.imageURL(for: scanned).path))
+    reopened.delete(photo)
+    XCTAssertTrue(reopened.garments.isEmpty)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: reopened.imageURL(for: updated).path),
+                   "Deleting a retaken garment through an older selection must remove its current photo.")
     try Data("corrupt".utf8).write(to: root.appendingPathComponent("closet.json"))
     let corrupt = ClosetStore(directory: root)
     XCTAssertNotNil(corrupt.error)
@@ -227,4 +231,21 @@ final class ClosetTests: XCTestCase {
       XCTAssertEqual(points[index].y, y, accuracy: 0.025, "landmark \(index) y")
     }
   }
+
+  #if !targetEnvironment(simulator)
+  // Vision's foreground inference context is unavailable in the iOS simulator.
+  func testRecognizedPhotoSurvivesTheCaptureToTryOnImageContract() throws {
+    let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "GarmentIQ-Shirt", withExtension: "jpg"))
+    let image = try GarmentImageProcessor.normalized(Data(contentsOf: url))
+    let points = try GarmentLandmarkDetector().detect(in: image)
+    let foreground = try GarmentImageProcessor.foreground(image)
+    let mask = try GarmentImageProcessor.smallMask(foreground.mask)
+    let outline = try GarmentOutline.detect(mask: mask.bytes, width: mask.width, height: mask.height)
+    let evidence = try GarmentPatternEvidence.validate(image: foreground.cutout, points: points, outline: outline)
+    XCTAssertTrue(evidence.matches(foreground.cutout))
+    let stored = try GarmentImageProcessor.normalized(foreground.cutout)
+    let pattern = try TryOnBuilder.pattern(stored, landmarks: points.map { SIMD2(Float($0.x), Float($0.y)) })
+    XCTAssertEqual(pattern.points.count, 25)
+  }
+  #endif
 }

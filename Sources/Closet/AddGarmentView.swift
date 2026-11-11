@@ -30,6 +30,7 @@ struct AddGarmentView: View {
         }
         Section {
           Label(dimensions == nil ? "Photo only" : "Captured with depth", systemImage: dimensions == nil ? "photo" : "checkmark")
+          if let dimensions { GarmentDimensionsView(dimensions: dimensions) }
           Text(dimensions == nil
                ? "Photos and screenshots don’t establish physical scale. Save the look; scan the actual shirt to compare its dimensions."
                : "Garment landmarks and depth were checked across consistent captures. Dimensions are estimates; fabric stretch and drape aren’t measured.")

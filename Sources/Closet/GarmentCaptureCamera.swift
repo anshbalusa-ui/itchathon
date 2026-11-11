@@ -133,6 +133,9 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
       guard active, request == cameraRequest else { return }
       guard allowed else { onGuidance?("Camera access is off. Enable it in Settings, then reopen the scanner."); return }
       guard Self.supported else { onGuidance?("Automatic measurement needs a LiDAR iPhone. You can still add garment photos to your closet."); return }
+      needsRestart = false
+      orientationInvalid = false
+      analysis?.cancel(); analysis = nil
       if preview == nil {
         let scene = ARSCNView(frame: view.bounds)
         scene.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -206,9 +209,6 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
             }
           })
           guard scheduler.owns(ticket), active, !needsRestart, !Task.isCancelled else { return }
-          if let timings = result.timings {
-            onGuidance?("Checking complete. Stabilizing: foreground \(String(format: "%.2f", timings.foregroundSeconds))s, outline \(String(format: "%.2f", timings.silhouetteSeconds))s, landmarks \(String(format: "%.2f", timings.landmarkSeconds))s (\(String(format: "%.1f", timings.landmarkPredictionMS))ms model prediction), depth \(String(format: "%.2f", timings.depthSeconds))s, projection \(String(format: "%.2f", timings.projectionSeconds))s; total \(String(format: "%.2f", timings.totalSeconds))s.")
-          }
           if let dimensions = consensus.add(result.dimensions) {
             var accepted = result
             accepted.dimensions = dimensions

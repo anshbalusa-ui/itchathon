@@ -43,6 +43,7 @@ struct ClosetGarmentDetailView: View {
           .accessibilityIdentifier("garment.rescan")
       }
       if let dimensions = current.dimensions {
+        Section("Estimated dimensions") { GarmentDimensionsView(dimensions: dimensions) }
         if let reference = store.reference, reference.id != current.id, let base = reference.dimensions {
           Section("Compared with \(reference.name)") {
             ForEach(dimensions.comparison(to: base), id: \.0) { title, value in

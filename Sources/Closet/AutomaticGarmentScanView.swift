@@ -7,12 +7,14 @@ struct AutomaticGarmentScanView: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.openURL) private var openURL
   @State private var capturing = false
+  @State private var captureID = UUID()
   @State private var guidance = "Searching: lay a short-sleeved shirt flat, collar at the top, and hold the iPhone directly overhead."
 
   var body: some View {
     Group {
       if capturing {
         GarmentCaptureCamera(onResult: { result in onCapture(result); dismiss() }, onGuidance: { guidance = $0 })
+          .id(captureID)
           .overlay(alignment: .center) {
             RoundedRectangle(cornerRadius: 24)
               .stroke(.white.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [10, 8]))
@@ -26,8 +28,7 @@ struct AutomaticGarmentScanView: View {
                 .font(.callout).multilineTextAlignment(.center)
                 .accessibilityIdentifier("garment.guidance")
               Button("Restart scan") {
-                capturing = false
-                DispatchQueue.main.async { capturing = true }
+                captureID = UUID()
               }
               .buttonStyle(.bordered)
               .accessibilityIdentifier("garment.restart")
