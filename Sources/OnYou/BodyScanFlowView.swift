@@ -142,6 +142,7 @@ struct BodyScanFlowView: View {
 
   private func captureView(_ session: ObjectCaptureSession) -> some View {
     BodyScanCameraView(status: model.cameraStatus, startedAt: model.captureStartedAt,
+                       position: model.positionFeedback, torsoViews: model.torsoViews, legViews: model.legViews,
                        close: requestClose, performAction: model.performCameraAction) {
       // Keep Apple's live camera, coverage ring, and capture animations intact.
       ObjectCaptureView(session: session)
@@ -212,30 +213,27 @@ struct BodyScanFlowView: View {
   }
 
   private var review: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        BodyScanJourneyView(step: .ready).padding(.horizontal, 24)
+    GeometryReader { geometry in
+      ZStack(alignment: .bottom) {
         if let url = model.modelURL, let calibration = model.calibration {
-          ScannedAvatarPreview(url: url, referenceHeightCM: calibration.referenceHeightCM,preparedScene: model.preparedScene)
-            .frame(height: 420)
+          ScannedAvatarPreview(url: url, referenceHeightCM: calibration.referenceHeightCM, preparedScene: model.preparedScene)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, min(240, geometry.size.height * 0.32))
         }
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
           Text("Take a look around.").font(.title2.weight(.semibold))
-          Text("Drag to turn your avatar. Check the face, hands, and space around the arms before saving.")
-            .foregroundStyle(.secondary)
-          Text("Your scan includes the clothes you wore.")
-            .font(.footnote).foregroundStyle(.secondary)
-        }.padding(.horizontal, 24)
+          Text("Drag to turn. Check head, feet, and arms. The scan includes the clothes you wore.")
+            .font(.callout).foregroundStyle(.secondary)
+          if let calibration = model.calibration {
+            Text("Depth-derived height: \(calibration.referenceHeightCM.formatted(.number.precision(.fractionLength(0)))) cm")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          BodyScanPrimaryButton(title: "Use this avatar") { if model.save(to: store) { dismiss() } }
+          Button("Retake scan") { confirmingRetake = true }.frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 30))
+        .padding(16)
       }
-      .padding(.vertical, 20).frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .safeAreaInset(edge: .bottom) {
-      VStack(spacing: 12) {
-        BodyScanPrimaryButton(title: "Use this avatar") { if model.save(to: store) { dismiss() } }
-        Button("Retake scan") { confirmingRetake = true }
-      }
-      .padding(.horizontal, 24).padding(.vertical, 16)
-      .background(.bar)
     }
     .confirmationDialog("Retake your scan?", isPresented: $confirmingRetake, titleVisibility: .visible) {
       Button("Retake scan", role: .destructive) { model.cancel() }

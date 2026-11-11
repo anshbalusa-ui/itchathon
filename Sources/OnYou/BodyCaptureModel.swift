@@ -28,6 +28,12 @@ final class BodyCaptureModel {
   private(set) var saveError: String?
   private static let logger = Logger(subsystem: "app.onyou", category: "BodyCapture")
   private var recordedCurrentPass = false
+  private var evidenceReader = BodyCaptureEvidence()
+  private var evidenceTask: Task<Void, Never>?
+  private(set) var lastDistance: Double?
+  private(set) var lastDistanceAt: Date?
+  private(set) var torsoViews = 0
+  private(set) var legViews = 0
   var stage = "Aligning images"
   private var work: URL?
   private var reconstruction: PhotogrammetrySession?
@@ -73,6 +79,34 @@ final class BodyCaptureModel {
                                trackingNormal: trackingNormal, issue: issue,
                                selectionHint: selectionHint, pendingAction: pendingAction,
                                maximumShots: capture.maximumNumberOfInputImages)
+  }
+
+  func positionFeedback(now: Date) -> ScanPositionFeedback {
+    guard let capture, capture.cameraTracking == .normal, !capture.isPaused,
+          capture.state == .capturing || capture.state == .ready || capture.state == .detecting else {
+      return ScanPositionFeedback(source: "Distance unavailable while paused")
+    }
+    let feedback = capture.feedback
+    // Object Capture exposes qualitative live feedback, not its camera's live depth buffer.
+    return .body(meters: lastDistance, capturedAt: lastDistanceAt, now: now,
+                 tooClose: feedback.contains(.objectTooClose), tooFar: feedback.contains(.objectTooFar),
+                 framed: !feedback.contains(.outOfFieldOfView) && !feedback.contains(.objectNotDetected) && capture.state == .capturing)
+  }
+
+  private func updatePhotoEvidence() {
+    guard evidenceTask == nil, let work, (capture?.numberOfShotsTaken ?? 0) > 0 else { return }
+    let token = generation, reader = evidenceReader
+    let images = work.appendingPathComponent("Images", isDirectory: true)
+    evidenceTask = Task { [weak self] in
+      let observation = await reader.latest(in: images)
+      guard let self, generation == token, !Task.isCancelled else { return }
+      evidenceTask = nil
+      guard let observation else { return }
+      lastDistance = observation.meters
+      lastDistanceAt = observation.capturedAt
+      if observation.torsoVisible { torsoViews += 1 }
+      if observation.legsVisible { legViews += 1 }
+    }
   }
 
   func performCameraAction() {
@@ -139,6 +173,7 @@ final class BodyCaptureModel {
       configuration.checkpointDirectory = checkpoints
       configuration.isOverCaptureEnabled = false
       let session = ObjectCaptureSession()
+      session.shouldPlayHaptics = false // Guidance haptics share the camera UI’s mute control.
       capture = session
       phase = .capturing
       beginDiagnosticStage(.framing)
@@ -178,6 +213,7 @@ final class BodyCaptureModel {
 
   func captureProgressChanged() {
     guard phase == .capturing, let capture, capture.state == .capturing else { return }
+    updatePhotoEvidence()
     // Reconcile current SDK values; SwiftUI may deliver the photo and ring observers in either order.
     if capture.userCompletedScanPass && !recordedCurrentPass {
       recordedCurrentPass = true
@@ -240,6 +276,10 @@ final class BodyCaptureModel {
     generation = UUID()
     task?.cancel()
     task = nil
+    evidenceTask?.cancel(); evidenceTask = nil
+    evidenceReader = BodyCaptureEvidence()
+    lastDistance = nil; lastDistanceAt = nil
+    torsoViews = 0; legViews = 0
     capture?.cancel()
     capture = nil
     reconstruction?.cancel()

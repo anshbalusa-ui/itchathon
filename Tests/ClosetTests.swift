@@ -1,6 +1,7 @@
 import CoreGraphics
 import SceneKit
 import XCTest
+import UIKit
 @testable import FitCheck
 
 final class ClosetTests: XCTestCase {
@@ -17,6 +18,37 @@ final class ClosetTests: XCTestCase {
     case (.angle, .angle), (.depth, .depth), (.shape, .shape): break
     default: XCTFail("Unexpected garment capture rejection: \(error)", file: file, line: line)
     }
+  }
+
+  func testPhotoSaveKeepsTheOriginalBackgroundWithoutRecognition() throws {
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 60)).image { context in
+      UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 40, height: 60))
+      UIColor.white.setFill(); context.fill(CGRect(x: 10, y: 10, width: 20, height: 40))
+    }
+    let original = try XCTUnwrap(image.pngData())
+    let saved = try GarmentImageProcessor.importedPhoto(original)
+    let reopened = try GarmentImageProcessor.normalized(saved)
+    XCTAssertEqual(reopened.width, try GarmentImageProcessor.normalized(original).width)
+    var pixel = [UInt8](repeating: 0, count: 4)
+    let context = try XCTUnwrap(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    let corner = try XCTUnwrap(reopened.cropping(to: CGRect(x: 0, y: 0, width: 1, height: 1)))
+    context.draw(corner, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+    XCTAssertGreaterThan(pixel[2], 240)
+    XCTAssertEqual(pixel[3], 255)
+  }
+
+  func testGuidanceUsesActualPreviewCropInsteadOfAssumingCameraFieldOfView() {
+    let portrait = CGRect(x: 0.1, y: 0.2, width: 0.8, height: 0.6)
+    let rotate = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 1, ty: 0)
+    let uncropped = GarmentPlaneProjection.viewportBounds(fromPortrait: portrait, displayTransform: rotate)
+    XCTAssertEqual(uncropped.minX, portrait.minX, accuracy: 0.00001)
+    XCTAssertEqual(uncropped.minY, portrait.minY, accuracy: 0.00001)
+    let crop = rotate.concatenating(CGAffineTransform(a: 1.6, b: 0, c: 0, d: 1, tx: -0.3, ty: 0))
+    let visible = GarmentPlaneProjection.viewportBounds(fromPortrait: portrait, displayTransform: crop)
+    XCTAssertLessThan(visible.minX, 0)
+    XCTAssertGreaterThan(visible.maxX, 1)
+    XCTAssertEqual(ScanPositionFeedback.shirt(meters: 1, target: 1, bounds: visible, level: 1).direction, .farther)
   }
 
   func testMetricProjectionUsesDepthAndRejectsInvalidRays() throws {
@@ -60,7 +92,7 @@ final class ClosetTests: XCTestCase {
     XCTAssertNil(scheduler.admit(timestamp: 4.699), "The original minimum interval remains in force.")
     XCTAssertNotNil(scheduler.admit(timestamp: 4.71))
   }
-  func testCaptureConsensusNeedsThreeAgreeingFramesAndResetsOnOutlier() {
+  func testCaptureConsensusNeedsThreeAgreeingFramesAndRejectsOutliers() {
     let base = GarmentScanDimensions(bodyWidthM: 0.5, lengthM: 0.7, sleeveSpanM: 0.8)
     var consensus = GarmentCaptureConsensus()
     XCTAssertNil(consensus.add(base))
@@ -77,6 +109,34 @@ final class ClosetTests: XCTestCase {
     consensus.reset()
     XCTAssertEqual(consensus.count, 0)
     XCTAssertNil(consensus.add(base))
+  }
+
+  func testCaptureConsensusPreservesGoodFramesThroughBriefMissesAndExpiresThem() {
+    let base = GarmentScanDimensions(bodyWidthM: 0.5, lengthM: 0.7, sleeveSpanM: 0.8)
+    var consensus = GarmentCaptureConsensus()
+    XCTAssertNil(consensus.add(base, at: 1))
+    consensus.miss(at: 2)
+    XCTAssertEqual(consensus.count, 1)
+    XCTAssertNil(consensus.add(base, at: 3))
+    XCTAssertNil(consensus.add(.init(bodyWidthM: 0.7, lengthM: 0.9, sleeveSpanM: 1), at: 4))
+    XCTAssertEqual(consensus.add(base, at: 5), base)
+    consensus.miss(at: 18)
+    XCTAssertEqual(consensus.count, 0)
+    XCTAssertNil(consensus.add(base, at: 19))
+    XCTAssertNil(consensus.add(base, at: 20))
+    consensus.reset()
+    XCTAssertNil(consensus.add(base, at: 21))
+    XCTAssertEqual(consensus.count, 1)
+  }
+
+  func testClosedCollarAndSlightlyUnevenTorsoDoNotRequireANecklineHole() throws {
+    let width = 192, height = 256
+    var mask = [UInt8](repeating: 0, count: width * height)
+    for y in 30..<220 { for x in 50..<142 { mask[y * width + x] = 255 } }
+    for y in 40..<85 { for x in 20..<172 { mask[y * width + x] = 255 } }
+    for y in 143..<147 { for x in 50..<60 { mask[y * width + x] = 0 } }
+    let outline = try GarmentOutline.detect(mask: mask, width: width, height: height)
+    XCTAssertEqual(outline.bounds.minY, 30.0 / 256, accuracy: 0.001)
   }
 
   func testProjectionRejectsCameraRayParallelToMetricPlane() {

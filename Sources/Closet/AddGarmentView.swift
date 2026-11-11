@@ -40,12 +40,12 @@ struct AddGarmentView: View {
         Section {
           Label("Clothes you own", systemImage: "tshirt").font(.headline)
           Text("Lay a short-sleeved shirt flat. The camera finds the edges and depth supplies scale.")
-          Button("Scan a shirt", systemImage: "camera") { scanning = true }
+          Button("Scan a shirt", systemImage: "camera") { scanning = true }.disabled(loading)
             .accessibilityIdentifier("garment.scan")
         }
         Section {
-          Label("Something you found", systemImage: "photo").font(.headline)
-          Text("Add a product photo or screenshot, then keep its shopping link with it.")
+          Label("Save a photo", systemImage: "photo").font(.headline)
+          Text("Keep a photo and shopping link for later. Photo saves don’t provide measurements or try-on.")
           photoPicker
         } footer: {
           Text("Your images stay on this iPhone.")
@@ -53,8 +53,8 @@ struct AddGarmentView: View {
       }
       if image != nil {
         Section("Replace capture") {
-          Button("Scan a shirt", systemImage: "camera") { scanning = true }
-          photoPicker
+          Button("Scan a shirt", systemImage: "camera") { scanning = true }.disabled(loading)
+          if dimensions == nil { photoPicker }
         }
       }
       if loading { Section { ProgressView("Preparing photo…") } }
@@ -69,7 +69,7 @@ struct AddGarmentView: View {
           .accessibilityIdentifier("garment.save")
       }
     }
-    .sheet(isPresented: $scanning) {
+    .fullScreenCover(isPresented: $scanning) {
       NavigationStack {
         AutomaticGarmentScanView { capture in
           image = capture.image; dimensions = capture.dimensions; pattern = capture.pattern; error = nil

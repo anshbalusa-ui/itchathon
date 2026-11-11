@@ -104,8 +104,8 @@ struct BodyScanCameraStatus: Equatable {
     case .capturing:
       if completedPasses >= 2 && shots < 60 { return "We need a little more detail. Continue around the person with their whole body in view." }
       return completedPasses == 0
-        ? "Keep the person still and follow the coverage ring for the body circle. We’ll pause when it’s complete."
-        : "Follow the coverage ring for the detail circle. Keep the whole person in view and their pose still. We’ll pause when it’s complete."
+        ? "Keep head and feet visible. Follow the camera ring; we’ll pause when it’s complete."
+        : "Keep the same pose and the whole person visible. Follow the detail ring."
     }
   }
 

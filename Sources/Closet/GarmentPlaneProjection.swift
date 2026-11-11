@@ -14,6 +14,11 @@ struct GarmentPlaneProjection {
     return CGPoint(x: point.y, y: 1 - point.x)
   }
 
+  static func viewportBounds(fromPortrait bounds: CGRect, displayTransform: CGAffineTransform) -> CGRect {
+    let native = CGRect(x: bounds.minY, y: 1 - bounds.maxX, width: bounds.height, height: bounds.width)
+    return native.applying(displayTransform)
+  }
+
   func project(nativeUV: CGPoint) throws -> SIMD3<Float> {
     guard nativeUV.x.isFinite, nativeUV.y.isFinite,
           (0...1).contains(nativeUV.x), (0...1).contains(nativeUV.y),

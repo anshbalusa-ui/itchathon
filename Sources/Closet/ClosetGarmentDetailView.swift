@@ -39,7 +39,7 @@ struct ClosetGarmentDetailView: View {
           Button("Scan your body to try this on", systemImage: "figure.stand") { scanningBody = true }
             .accessibilityIdentifier("garment.scanbody")
         }
-        Button(current.dimensions == nil ? "Scan to compare fit" : "Retake shirt scan", systemImage: "camera") { scanning = true }
+        Button(current.dimensions == nil ? "Scan shirt dimensions" : "Retake shirt scan", systemImage: "camera") { scanning = true }
           .accessibilityIdentifier("garment.rescan")
       }
       if let dimensions = current.dimensions {
@@ -78,7 +78,7 @@ struct ClosetGarmentDetailView: View {
         TryOnView(avatar: asset,garment: current,photoURL: store.imageURL(for: current))
       }
     }
-    .sheet(isPresented: $scanning) {
+    .fullScreenCover(isPresented: $scanning) {
       NavigationStack {
         AutomaticGarmentScanView { capture in
           do { try store.replaceCapture(for: current, with: capture) }

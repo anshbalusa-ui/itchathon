@@ -32,7 +32,6 @@ enum GarmentImageProcessor {
 
   static func importedPhoto(_ data: Data) throws -> Data {
     let image = try normalized(data)
-    if let result = try? foreground(image) { return result.cutout }
     guard let result = UIImage(cgImage: image).pngData() else { throw GarmentCaptureError.image }
     return result
   }

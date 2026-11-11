@@ -6,14 +6,21 @@ import SwiftUI
 struct GarmentCaptureCamera: UIViewControllerRepresentable {
   var onResult: (GarmentCaptureResult) -> Void
   var onGuidance: (String) -> Void
+  var onPosition: (ScanPositionFeedback) -> Void
+  var onProgress: (Int) -> Void
 
   func makeUIViewController(context: Context) -> GarmentCaptureController {
     let controller = GarmentCaptureController()
     controller.onResult = onResult
     controller.onGuidance = onGuidance
+    controller.onPosition = onPosition
+    controller.onProgress = onProgress
     return controller
   }
-  func updateUIViewController(_ controller: GarmentCaptureController, context: Context) {}
+  func updateUIViewController(_ controller: GarmentCaptureController, context: Context) {
+    controller.onResult = onResult; controller.onGuidance = onGuidance
+    controller.onPosition = onPosition; controller.onProgress = onProgress
+  }
   static func dismantleUIViewController(_ controller: GarmentCaptureController, coordinator: ()) { controller.stop() }
 }
 
@@ -73,13 +80,29 @@ struct GarmentCaptureScheduler {
 
 struct GarmentCaptureConsensus {
   private(set) var count = 0
-  private var candidates: [GarmentScanDimensions] = []
+  private var candidates: [(dimensions: GarmentScanDimensions, time: TimeInterval)] = []
 
-  mutating func add(_ dimensions: GarmentScanDimensions) -> GarmentScanDimensions? {
-    if !candidates.allSatisfy({ $0.agrees(with: dimensions) }) { reset() }
-    candidates.append(dimensions)
-    count = candidates.count
-    return GarmentScanDimensions.consensus(candidates)
+  mutating func add(_ dimensions: GarmentScanDimensions, at time: TimeInterval = ProcessInfo.processInfo.systemUptime) -> GarmentScanDimensions? {
+    miss(at: time)
+    guard dimensions.isValid, time.isFinite else { return nil }
+    candidates.append((dimensions, time))
+    candidates = Array(candidates.suffix(5))
+    count = 1
+    for a in candidates.indices.dropLast() {
+      if candidates[a].dimensions.agrees(with: dimensions) { count = 2 }
+      for b in candidates.indices where b > a && b < candidates.count - 1 {
+        if let accepted = GarmentScanDimensions.consensus([candidates[a].dimensions, candidates[b].dimensions, dimensions]) {
+          count = 3; return accepted
+        }
+      }
+    }
+    return nil
+  }
+
+  mutating func miss(at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+    guard time.isFinite else { reset(); return }
+    candidates.removeAll { time < $0.time || time - $0.time > 12 }
+    count = min(count, candidates.count)
   }
 
   mutating func reset() {
@@ -92,6 +115,8 @@ struct GarmentCaptureConsensus {
 final class GarmentCaptureController: UIViewController, ARSessionDelegate {
   var onResult: ((GarmentCaptureResult) -> Void)?
   var onGuidance: ((String) -> Void)?
+  var onPosition: ((ScanPositionFeedback) -> Void)?
+  var onProgress: ((Int) -> Void)?
   private var preview: ARSCNView?
   private let analyzer = GarmentDepthAnalyzer()
   private var analysis: Task<Void, Never>?
@@ -101,6 +126,9 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
   private var orientationInvalid = false
   private var needsRestart = false
   private var cameraRequest: UInt64 = 0
+  private var lastPositionAt: TimeInterval = -.infinity
+  private var framing: (bounds: CGRect, at: TimeInterval)?
+  private var targetDistance = 0.9
 
   static var supported: Bool {
     #if targetEnvironment(simulator)
@@ -146,6 +174,8 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
         preview = scene
       }
       consensus.reset()
+      framing = nil; targetDistance = 0.9; lastPositionAt = -.infinity
+      onProgress?(0)
       scheduler.start()
       onGuidance?("Searching: center the whole shirt in view, collar at the top, camera directly overhead.")
       let config = ARWorldTrackingConfiguration()
@@ -177,6 +207,7 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
           scheduler.stop()
           analysis?.cancel(); analysis = nil
           orientationInvalid = true
+          onPosition?(ScanPositionFeedback()); onProgress?(0)
         }
         onGuidance?("Searching: turn the iPhone upright in portrait, collar toward the top.")
         return
@@ -186,6 +217,22 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
         consensus.reset()
         scheduler.start()
         onGuidance?("Searching: portrait restored. Center the whole shirt with the collar at the top.")
+      }
+      guard case .normal = frame.camera.trackingState else {
+        consensus.miss(); onProgress?(consensus.count); onPosition?(ScanPositionFeedback())
+        onGuidance?("Move slowly while camera tracking settles.")
+        return
+      }
+      if frame.timestamp - lastPositionAt >= 0.2 {
+        lastPositionAt = frame.timestamp
+        let depth = frame.sceneDepth
+        let meters = CaptureDepthSampler.meters(depth?.depthMap, confidence: depth?.confidenceMap)
+        let bounds = framing.flatMap { sample -> CGRect? in
+          guard frame.timestamp - sample.at < 3 else { return nil }
+          return GarmentPlaneProjection.viewportBounds(fromPortrait: sample.bounds,
+            displayTransform: frame.displayTransform(for: .portrait, viewportSize: view.bounds.size))
+        }
+        onPosition?(.shirt(meters: meters, target: targetDistance, bounds: bounds, level: Double(abs(frame.camera.transform.columns.2.y))))
       }
       guard let ticket = scheduler.admit(timestamp: frame.timestamp) else { return }
       onGuidance?("Recognizing: checking the shirt outline, collar, sleeves, and landmarks.")
@@ -207,6 +254,16 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
               case .projecting: onGuidance?("Checking: projecting visible edges onto the metric surface.")
               }
             }
+          }, onFraming: { bounds in
+            let meters = CaptureDepthSampler.meters(frame.sceneDepth?.depthMap, confidence: frame.sceneDepth?.confidenceMap)
+            Task { @MainActor [weak self] in
+              guard let self, scheduler.owns(ticket), active, !needsRestart else { return }
+              framing = (bounds, frame.timestamp)
+              // Include the preview's actual aspect-fill crop, not a model-specific FOV constant.
+              let visible = GarmentPlaneProjection.viewportBounds(fromPortrait: bounds,
+                displayTransform: frame.displayTransform(for: .portrait, viewportSize: view.bounds.size))
+              if let meters { targetDistance = min(2.5, max(0.35, meters * max(visible.width / 0.82, visible.height / 0.72))) }
+            }
           })
           guard scheduler.owns(ticket), active, !needsRestart, !Task.isCancelled else { return }
           if let dimensions = consensus.add(result.dimensions) {
@@ -217,11 +274,13 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
             stop()
             completion?(accepted)
           } else {
+            onProgress?(consensus.count)
             onGuidance?("Stabilizing: \(consensus.count) of 3 distinct frames agree. Hold still.")
           }
         } catch {
           guard scheduler.owns(ticket), active, !needsRestart, !Task.isCancelled else { return }
-          consensus.reset()
+          consensus.miss()
+          onProgress?(consensus.count)
           onGuidance?(error.localizedDescription)
         }
       }
@@ -232,6 +291,7 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
     MainActor.assumeIsolated {
       guard session === preview?.session else { return }
       needsRestart = true
+      onPosition?(ScanPositionFeedback()); onProgress?(0)
       scheduler.stop()
       analysis?.cancel(); analysis = nil
       consensus.reset()
@@ -242,6 +302,7 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
     MainActor.assumeIsolated {
       guard session === preview?.session else { return }
       needsRestart = true
+      onPosition?(ScanPositionFeedback()); onProgress?(0)
       scheduler.stop()
       analysis?.cancel(); analysis = nil
       consensus.reset()

@@ -60,7 +60,8 @@ enum GarmentLandmarkValidation {
 actor GarmentDepthAnalyzer {
   private let context = CIContext()
 
-  func analyze(_ frame: ARFrame, onStage: @Sendable (GarmentAnalysisStage) -> Void = { _ in }) async throws -> GarmentCaptureResult {
+  func analyze(_ frame: ARFrame, onStage: @Sendable (GarmentAnalysisStage) -> Void = { _ in },
+               onFraming: @Sendable (CGRect) -> Void = { _ in }) async throws -> GarmentCaptureResult {
     let started = ProcessInfo.processInfo.systemUptime
     var timings = GarmentAnalysisTimings()
     try Task.checkCancellation()
@@ -68,7 +69,7 @@ actor GarmentDepthAnalyzer {
     let camera = frame.camera
     guard case .normal = camera.trackingState, let sceneDepth = frame.sceneDepth,
           let confidence = sceneDepth.confidenceMap else { throw GarmentCaptureError.depth }
-    guard abs(camera.transform.columns.2.y) > 0.96 else { throw GarmentCaptureError.angle }
+    guard abs(camera.transform.columns.2.y) > 0.90 else { throw GarmentCaptureError.angle }
     // RGB is rotated for portrait Vision; depth and intrinsics remain native landscape.
     let source = CIImage(cvPixelBuffer: frame.capturedImage).oriented(.right)
     let factor = min(1, 1600 / source.extent.height)
@@ -81,6 +82,7 @@ actor GarmentDepthAnalyzer {
     let silhouetteStarted = ProcessInfo.processInfo.systemUptime
     let mask = try GarmentImageProcessor.smallMask(foreground.mask)
     var outline = try GarmentOutline.detect(mask: mask.bytes, width: mask.width, height: mask.height)
+    onFraming(outline.bounds)
     timings.silhouetteSeconds = ProcessInfo.processInfo.systemUptime - silhouetteStarted
     onStage(.landmarks)
     try Task.checkCancellation()

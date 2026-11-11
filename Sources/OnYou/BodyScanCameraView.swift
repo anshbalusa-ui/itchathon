@@ -3,6 +3,9 @@ import SwiftUI
 struct BodyScanCameraView<Camera: View>: View {
   var status: BodyScanCameraStatus
   var startedAt: Date?
+  var position: (Date) -> ScanPositionFeedback = { _ in ScanPositionFeedback(source: "Waiting for a depth photo") }
+  var torsoViews = 0
+  var legViews = 0
   var close: () -> Void
   var performAction: () -> Void
   @ViewBuilder var camera: () -> Camera
@@ -11,48 +14,45 @@ struct BodyScanCameraView<Camera: View>: View {
 
   var body: some View {
     GeometryReader { geometry in
-      VStack(spacing: 0) {
-        VStack(spacing: 18) {
+      ZStack {
+        camera().frame(maxWidth: .infinity, maxHeight: .infinity)
+          .ignoresSafeArea()
+        VStack(spacing: 0) {
           HStack {
             Button("Close scan", systemImage: "xmark", action: close)
-              .labelStyle(.iconOnly)
-              .buttonStyle(.bordered)
-              .buttonBorderShape(.circle)
+              .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
               .accessibilityIdentifier("scan.close")
             Spacer()
-            Text("Body scan").font(.headline).fixedSize(horizontal: false, vertical: true)
+            Text(status.mode == .capturing ? status.passLabel : "Body scan")
+              .font(.subheadline.weight(.semibold))
+              .padding(.horizontal, 18).padding(.vertical, 12)
+              .glassEffect(in: .capsule)
             Spacer()
             Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
           }
-          BodyScanJourneyView(step: status.step)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 18)
-        .background(.ultraThinMaterial)
-
-        camera()
-          .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-          .clipped()
-
-        VStack(spacing: 0) {
-          ScrollView {
-            information
-              .padding(.horizontal, 22).padding(.top, 22).padding(.bottom, 8)
+          Spacer(minLength: 30)
+          VStack(spacing: 12) {
+            ScrollView {
+              VStack(alignment: .leading, spacing: 12) {
+                information
+                if !status.awaitsNextStep && status.mode != .finishing {
+                  TimelineView(.periodic(from: .now, by: 1)) { context in
+                    ScanPositionIndicator(position: position(context.date), active: status.trackingNormal)
+                  }
+                }
+                if status.mode == .capturing { captureProgress }
+              }
               .frame(maxWidth: .infinity, alignment: .leading)
               .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { informationHeight = $0 }
+            }
+            .frame(height: min(informationHeight, max(120, geometry.size.height * (typeSize.isAccessibilitySize ? 0.42 : 0.34))))
+            .scrollBounceBehavior(.basedOnSize)
+            actionRow.fixedSize(horizontal: false, vertical: true)
           }
-          .frame(height: min(informationHeight, max(100, geometry.size.height * (typeSize.isAccessibilitySize ? 0.24 : 0.36))))
-          .scrollBounceBehavior(.basedOnSize)
-          if status.mode == .capturing && !status.awaitsNextStep {
-            captureProgress.padding(.horizontal, 22).padding(.top, 10)
-          }
-          actionRow
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 18)
+          .padding(16)
+          .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30))
         }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 16).padding(.vertical, 12)
       }
     }
     .background(.black)
@@ -61,10 +61,10 @@ struct BodyScanCameraView<Camera: View>: View {
   }
 
   private var information: some View {
-    VStack(alignment: .leading, spacing: 16) {
+    VStack(alignment: .leading, spacing: 10) {
       VStack(alignment: .leading, spacing: 8) {
         Text(status.title)
-          .font(.title2.weight(.semibold))
+          .font(.title3.weight(.semibold))
           .fixedSize(horizontal: false, vertical: true)
           .accessibilityAddTraits(.isHeader)
           .accessibilityIdentifier("scan.camera.title")
@@ -79,9 +79,16 @@ struct BodyScanCameraView<Camera: View>: View {
 
   private var captureProgress: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(status.progressTitle).font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+      Text("\(status.shots) photos · \(min(2, status.completedPasses)) of 2 circles complete").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
         .fixedSize(horizontal: false, vertical: true)
-      Text(status.progressDetail).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
+      if torsoViews + legViews > 0 {
+        Text("Sampled photos · Torso visible in \(torsoViews) · Legs visible in \(legViews)")
+          .fixedSize(horizontal: false, vertical: true)
+        Text("Visibility is not complete surface coverage. Follow the camera ring.")
+          .fixedSize(horizontal: false, vertical: true)
+      } else if status.awaitsNextStep {
+        Text(status.progressDetail).fixedSize(horizontal: false, vertical: true)
+      }
       if !status.awaitsNextStep { elapsedLabel.fixedSize(horizontal: false, vertical: true) }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
