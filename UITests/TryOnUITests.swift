@@ -31,6 +31,7 @@ final class TryOnUITests: XCTestCase {
     tap("measurement.cancel")
     XCTAssertLessThan(try bodyPixels().difference(from: example), 0.01, "Leaving without Save must preserve the original rendered body")
     tap("body.measurements")
+    XCTAssertTrue(app.buttons["measurement.cancel"].waitForExistence(timeout: 10))
     XCTAssertEqual(replaceMeasurement("measurement.waist", with: "125"), originalWaist, "Cancelled input must not become the next editor draft")
     tap("measurement.save")
     _ = try bodyPixels(changedFrom: example)
@@ -276,12 +277,14 @@ final class TryOnUITests: XCTestCase {
       for _ in 0..<12 {
         if element.exists && element.isHittable && visible.contains(element.frame) { return }
         let down = !element.exists || element.frame.isEmpty || element.frame.maxY > visible.maxY
+        // Short, slow swipes keep tall actions in view without touching the indicator or tab bar.
         let origin = app.coordinate(withNormalizedOffset: .zero)
-        let x = visible.maxX - 18 - app.frame.minX
-        let from = visible.minY + visible.height * (down ? 0.8 : 0.2) - app.frame.minY
-        let to = visible.minY + visible.height * (down ? 0.2 : 0.8) - app.frame.minY
+        let x = visible.midX - app.frame.minX
+        let from = visible.midY + visible.height * (down ? 0.1 : -0.1) - app.frame.minY
+        let to = visible.midY + visible.height * (down ? -0.1 : 0.1) - app.frame.minY
         origin.withOffset(CGVector(dx: x, dy: from)).press(forDuration: 0.15,
-          thenDragTo: origin.withOffset(CGVector(dx: x, dy: to)))
+          thenDragTo: origin.withOffset(CGVector(dx: x, dy: to)),
+          withVelocity: .slow, thenHoldForDuration: 0.15)
       }
       capture("unreachable-body-control")
       return
@@ -289,12 +292,21 @@ final class TryOnUITests: XCTestCase {
     for _ in 0..<8 {
       if element.exists && element.isHittable { return }
       let controls = app.scrollViews["tryon.controls"]
+      let list = app.collectionViews.firstMatch
       if controls.exists {
         let below = !element.exists || element.frame.midY >= controls.frame.midY
         let from = CGVector(dx: 0.92, dy: below ? 0.85 : 0.2)
         let to = CGVector(dx: 0.92, dy: below ? 0.2 : 0.85)
         controls.coordinate(withNormalizedOffset: from)
           .press(forDuration: 0.05, thenDragTo: controls.coordinate(withNormalizedOffset: to))
+      } else if list.exists {
+        // Scroll the list gutter; dragging its interactive 3D preview orbits the model.
+        let below = !element.exists || element.frame.midY >= list.frame.midY
+        let from = CGVector(dx: 0.98, dy: below ? 0.75 : 0.25)
+        let to = CGVector(dx: 0.98, dy: below ? 0.25 : 0.75)
+        list.coordinate(withNormalizedOffset: from).press(forDuration: 0.15,
+          thenDragTo: list.coordinate(withNormalizedOffset: to),
+          withVelocity: .slow, thenHoldForDuration: 0.15)
       } else {
         // A full fling can skip a tall Dynamic Type action row on compact
         // screens. Move a short distance in either direction toward its frame.

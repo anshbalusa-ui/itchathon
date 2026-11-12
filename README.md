@@ -52,9 +52,9 @@ On supported LiDAR iPhones, `ObjectCaptureSession` gathers photos and depth thro
 
 Two completed circles and at least 60 images are required. Invalid/skipped inputs reduce the admitted image count. Tracking problems, incomplete stitching, missing textures, invalid dimensions, or a height scale correction outside 0.9–1.1 reject the result. USDZ coordinates are converted to meters and Y-up. The user reviews the textured reconstruction and confirms it before it replaces an existing scan.
 
-Actual barefoot height calibrates uniform scale. Matching that single reference does not establish chest/waist accuracy or facial fidelity. A person must hold their pose; motion and loose clothing can compromise reconstruction. Hardware accuracy, repeatability, and likeness have **not** been validated in this workspace. Apple documents the [static-subject and overlapping-photo requirements](https://developer.apple.com/documentation/realitykit/capturing-photographs-for-realitykit-object-capture).
+Current native capture retains depth-derived metric scale; it does not ask for a separate height entry. Its recorded reference height comes from the reconstructed bounds, so a near-one scale is not independent measurement validation. The separate manual measurement model and older reference-height records retain their existing contracts. A person must hold their pose; motion and loose clothing can compromise reconstruction. Hardware accuracy, repeatability, and likeness have **not** been validated in this workspace. Apple documents the [static-subject and overlapping-photo requirements](https://developer.apple.com/documentation/realitykit/capturing-photographs-for-realitykit-object-capture).
 
-Scans live in a separate file-protected, backup-excluded Application Support directory. SHA-256 admission checks the saved model before loading. New-model installation writes the active record atomically, preserving the previous scan on failure. Raw photos/checkpoints are removed after successful reconstruction; canceled or abandoned capture work is cleaned separately. The simulator lacks LiDAR and presents an honest unsupported-device state, with no synthetic scan-success path.
+Scans live in a separate file-protected, backup-excluded Application Support directory. SHA-256 admission checks the saved model before loading. New-model installation writes the active record atomically, preserving the previous scan on failed admission/installation. The pipeline attempts to remove raw photos/checkpoints after successful preparation and cleans canceled/abandoned attempts separately; best-effort cleanup and locked-device/I/O-failure behavior still require device validation. The simulator lacks LiDAR and presents an honest unsupported-device state, with no synthetic scan-success path.
 
 ## Illustrative shirt draping
 
@@ -92,9 +92,19 @@ The current native verification entry reads **`Project.json`**, generates `On Yo
 
 It includes Debug unit/UI, unsigned iPhone-SDK compilation, normal Release, Release isolation and resource/privacy inspection. Test execution uses a noninteractive launcher; no debugger permission is required. `Scripts/benchmark_onyou.sh --help` describes the separate opt-in cold/warm native benchmark. Do not substitute results from PR #25 or the older standalone FitCheck project.
 
-**Final integrated verification:** the complete `Scripts/verify_development.py` matrix passed on the combined PR #25 / PR #26 implementation, including the newly reachable native measurement editor, actual rendered geometry, lifecycle/persistence regressions, unsigned iPhone SDK build, normal Release and resource/privacy isolation. See [the final gap audit](Docs/ONYOU_FINAL_GAP_AUDIT.md) for exact current totals, source fingerprint, inspected simulator screenshots, remaining hardware validation and launch evidence. The PR #26 handoff above remains historical benchmark/implementation evidence, not a substitute for this fresh integrated run.
+**Combined PR #27 baseline (historical):** [the final gap audit](Docs/ONYOU_FINAL_GAP_AUDIT.md) records the integrated PR #25/#26 verification, source fingerprint, original screenshots and launch evidence. Those receipts do not substitute for verification of the subsequent readiness delta.
 
 Historical teammate verification on November 6, 2026: nine unit tests and two UI tests passed on the iPhone 17 simulator. The UI tests cover clean viewer controls, scan preparation/cancellation, and manual entry/save/history. Bitrig builds passed for iOS Simulator Debug and physical-iPhone Release. Rendered screens were checked in the Bitrig iPhone preview. These results predate the try-on repair; a real person's capture/reconstruction and measurement accuracy remain untested.
+
+## Release-readiness review
+
+The focused review preserves the existing avatar, capture, Closet and illustrative try-on engines. It corrects the capture-capacity privacy declaration and compact accessibility test gestures, without changing scan admission or storage formats.
+
+- [Final readiness and exact fresh results](Docs/ONYOU_FINAL_RELEASE_READINESS.md): reviewed candidate, performance, actual visual evidence and remaining blockers.
+- [Device procedures](Docs/ONYOU_DEVICE_VALIDATION.md), [physical-fit roadmap](Docs/ONYOU_FIT_VALIDATION_ROADMAP.md) and [release acceptance checklist](Docs/ONYOU_RELEASE_CHECKLIST.md): reproducible gates, not invented physical validation.
+- [Post-MVP scope](Docs/ONYOU_POST_MVP_ROADMAP.md): accounts, cloud, retailer feeds and checkout are not required for the offline MVP.
+
+Real-device capture, dimensional/fit accuracy and signed distribution approval remain outstanding. The review does not publish the app or merge to main.
 
 ## Upstream
 
