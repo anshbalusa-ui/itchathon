@@ -1,12 +1,12 @@
 # On You scan algorithm audit
 
-Reviewed the shipping `OnYouRootView` flow, body capture, reconstruction acceptance, saved mesh calibration, and closet measurement/comparison code. The older scanners and fit engine are not wired into this flow.
+Reviewed the current `OnYouRootView` flow, body capture, reconstruction acceptance, saved mesh calibration and Closet/try-on code. The older scanners and fit engine are not wired into this native flow. Capture corrections below are historical; current integration status is updated for PR #27, with physical procedures in [device validation](ONYOU_DEVICE_VALIDATION.md).
 
 ## Remaining product and accuracy gaps
 
 | Priority | Finding | Evidence and consequence |
 | --- | --- | --- |
-| High | The scanned avatar does not drive garment fit. | `OnYouRootView` passes only `ClosetStore` to the closet. `BodyCaptureModel` saves a textured mesh; it does not extract chest, waist, hips, or anatomical landmarks. Closet comparisons use a reference shirt. Garment draping onto the scanned person is unimplemented. |
+| High | Illustrative saved-avatar try-on exists; physical garment fit is unvalidated. | `OnYouRootView` passes `AvatarScanStore` to Closet; compatible depth-scanned shirts open the existing `TryOnBuilder`/native scene. PR #26's shell and pose estimator are integrated in PR #27. `BodyCaptureModel` still reconstructs visible surface rather than extracting anatomical chest/waist/hip measurements. A visible geometric shirt does not establish physical fit, stretch or pressure; see [fit validation roadmap](ONYOU_FIT_VALIDATION_ROADMAP.md). |
 | High | Scale sanity is not accuracy validation. | `ScannedAvatarGeometry` derives reference height from the reconstructed bounds. For depth-scaled scans, the resulting scale factor is one by construction. Bounds checks reject implausible outputs but cannot establish dimensional error. Depth presence, image counts, and aligned camera poses are acceptance guards, not precision measurements. |
 | High | This remains photogrammetry of a clothed, stationary surface. | Body motion can spoil correspondence between photographs. Clothing hides the underlying body. There is no motion compensation, independent body-shape estimation, or face-specific likeness validation. A plausible textured object can pass the current mesh checks. |
 | Medium | Coverage is not anatomically validated. | Native ring completion records camera coverage. The app does not verify that the detail pass was actually at a different height, that every anatomical region reconstructed, or that aligned images still cover all sides after rejection. |
