@@ -56,6 +56,107 @@ final class TryOnUITests: XCTestCase {
     XCTAssertFalse(scene("tryon.scene").exists)
     capture("integration-04-manual-model-keeps-scan-required")
   }
+  func testMeasuredBodySizeJourneyChangesNormalSceneAndRestoresDeterministically() throws {
+    app.launchArguments = ["-onyou-tryon-fixture", "-onyou-fixture-scenario=missing-avatar",
+      "-on-you.measurement-unit", "centimeters", "-on-you.wireframe", "NO",
+      "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL", "-AppleInterfaceStyle", "Light"]
+    app.launch()
+    XCTAssertTrue(scene("onyou.synthetic").waitForExistence(timeout: 30))
+    XCTAssertTrue(scene("body.scene").waitForExistence(timeout: 20))
+    XCTAssertTrue(try bodyPixels().hasVisibleBody, "The normal Body scene must contain a rendered mannequin")
+    capture("measurement-journey-example-front-full-screen")
+    captureScene("measurement-journey-example-front-scene-only")
+
+    tap("body.measurements")
+    waitForMeasurementEditor()
+    let fields = ["height", "chest", "waist", "hips", "shoulders"]
+    var original: [String: String] = [:]
+    for field in fields {
+      let input = app.textFields["measurement.\(field)"]
+      reveal(input)
+      XCTAssertTrue(input.waitForExistence(timeout: 10))
+      original[field] = input.value as? String
+    }
+    XCTAssertEqual(original.count, fields.count, "Every original measurement must be retained for restoration")
+    tap("measurement.cancel")
+    XCTAssertTrue(scene("body.scene").waitForExistence(timeout: 10))
+    let example = try bodyPixels()
+
+    let slim = ["height": "175", "chest": "86", "waist": "68", "hips": "92", "shoulders": "40"]
+    let broad = ["height": "175", "chest": "116", "waist": "108", "hips": "120", "shoulders": "49"]
+    let tall = ["height": "205", "chest": "104", "waist": "88", "hips": "108", "shoulders": "45"]
+    let slimPixels = try saveMeasurements(slim, fields: fields, changedFrom: example)
+    capture("measurement-journey-slim-front-full-screen")
+    captureScene("measurement-journey-slim-front-scene-only")
+    XCTAssertGreaterThan(slimPixels.difference(from: example), 0.015, "A saved slim measurement set must change actual mannequin pixels")
+
+    let broadPixels = try saveMeasurements(broad, fields: fields, changedFrom: slimPixels)
+    capture("measurement-journey-broad-front-full-screen")
+    captureScene("measurement-journey-broad-front-scene-only")
+    XCTAssertGreaterThan(broadPixels.difference(from: slimPixels), 0.015,
+      "Same-height slim and broad inputs must produce different front-view renders")
+    XCTAssertGreaterThan(broadPixels.difference(from: example), 0.015)
+
+    let tallPixels = try saveMeasurements(tall, fields: fields, changedFrom: broadPixels)
+    capture("measurement-journey-tall-front-full-screen")
+    captureScene("measurement-journey-tall-front-scene-only")
+    XCTAssertGreaterThan(tallPixels.difference(from: broadPixels), 0.015,
+      "A taller measurement set must produce a distinct actual render")
+
+    dragBodyScene()
+    let orbitPixels = try bodyPixels()
+    XCTAssertGreaterThan(orbitPixels.difference(from: tallPixels), 0.01,
+      "Dragging the normal Body scene must change the camera view")
+    capture("measurement-journey-tall-orbit-side-full-screen")
+    captureScene("measurement-journey-tall-orbit-side-scene-only")
+
+    dragBodyScene(reverse: true)
+    let returnedFront = try bodyPixels()
+    XCTAssertGreaterThan(returnedFront.difference(from: orbitPixels), 0.01,
+      "A reverse drag must return to the front view")
+    let restored = try saveMeasurements(original, fields: fields, changedFrom: tallPixels)
+    capture("measurement-journey-restored-front-full-screen")
+    captureScene("measurement-journey-restored-front-scene-only")
+    XCTAssertLessThan(restored.difference(from: example), 0.01,
+      "Restoring the original measurements must deterministically restore the original render")
+  }
+
+  private func saveMeasurements(_ values: [String: String], fields: [String],
+                               changedFrom previous: Pixels) throws -> Pixels {
+    tap("body.measurements")
+    waitForMeasurementEditor()
+    for field in fields {
+      guard let value = values[field] else { XCTFail("Missing measurement: \(field)"); continue }
+      _ = replaceMeasurement("measurement.\(field)", with: value)
+    }
+    tap("measurement.save")
+    XCTAssertTrue(scene("body.scene").waitForExistence(timeout: 10), "Saving measurements must return to the normal Body scene")
+    return try bodyPixels(changedFrom: previous)
+  }
+
+  private func waitForMeasurementEditor() {
+    XCTAssertTrue(app.buttons["measurement.cancel"].waitForExistence(timeout: 10))
+    let form = app.collectionViews["measurement.form"]
+    let height = app.textFields["measurement.height"]
+    var previousFrame = CGRect.null
+    let settled = NSPredicate { [self] _, _ in
+      guard form.exists, height.exists else { return false }
+      let frame = height.frame
+      defer { previousFrame = frame }
+      return !frame.isEmpty && form.frame.intersection(app.frame).contains(frame) && frame == previousFrame
+    }
+    XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: settled, object: app)], timeout: 10),
+      .completed, "Wait for the sheet's native measurement row to finish laying out before typing")
+  }
+
+  private func dragBodyScene(reverse: Bool = false) {
+    let viewport = scene("body.scene")
+    XCTAssertTrue(viewport.waitForExistence(timeout: 10))
+    let start = CGVector(dx: reverse ? 0.78 : 0.22, dy: 0.5)
+    let end = CGVector(dx: reverse ? 0.22 : 0.78, dy: 0.5)
+    viewport.coordinate(withNormalizedOffset: start).press(forDuration: 0.1,
+      thenDragTo: viewport.coordinate(withNormalizedOffset: end), withVelocity: .slow, thenHoldForDuration: 0.1)
+  }
 
   func testSavedAvatarClosetTryOnRotationVisibilityAndReopening() throws {
     launchFixture()
@@ -258,7 +359,12 @@ final class TryOnUITests: XCTestCase {
       let preferDown = frame.isEmpty || frame.midY >= form.frame.midY
       for down in [preferDown, !preferDown] {
         for _ in 0..<12 {
-          if element.exists && element.isHittable && form.frame.contains(element.frame) { return }
+          // A presenting sheet can expose a row before it has an activation
+          // frame. Check layout before asking AX for a hit point.
+          if element.exists {
+            let frame = element.frame
+            if !frame.isEmpty && form.frame.intersection(app.frame).contains(frame) && element.isHittable { return }
+          }
           form.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: down ? 0.8 : 0.2))
             .press(forDuration: 0.15, thenDragTo: form.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: down ? 0.2 : 0.8)))
         }
@@ -345,9 +451,9 @@ final class TryOnUITests: XCTestCase {
   private func bodyPixels(changedFrom previous: Pixels? = nil) throws -> Pixels {
     var latest: Pixels?
     let ready = NSPredicate { [self] _, _ in
-      guard scene("body.scene").exists,
-            let image = try? Pixels(image: scene("body.scene").screenshot().image),
-            image.hasVisibleBody else { return false }
+      let viewport = scene("body.scene")
+      guard viewport.exists, (viewport.value as? String) != "Updating body model",
+            let image = try? Pixels(image: viewport.screenshot().image), image.hasVisibleBody else { return false }
       latest = image
       return previous.map { image.difference(from: $0) > 0.015 } ?? true
     }
@@ -371,6 +477,14 @@ final class TryOnUITests: XCTestCase {
 
   private func capture(_ name: String) {
     let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = name
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+  private func captureScene(_ name: String) {
+    let viewport = scene("body.scene")
+    XCTAssertTrue(viewport.exists, "The normal Body scene must be available for scene-only evidence")
+    let attachment = XCTAttachment(screenshot: viewport.screenshot())
     attachment.name = name
     attachment.lifetime = .keepAlways
     add(attachment)

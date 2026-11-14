@@ -70,9 +70,13 @@ Simulator backup materials stay outside Git at `/Users/anshbalusa/onyou-tryon-ar
 
 ## Manual model
 
-The bundled anatomical mesh comes from [MakeHuman](https://github.com/makehumancommunity/makehuman), under CC0. Original provenance and licenses remain in `DevelopmentAssets/HumanShowcase/`. Chest, waist, and hip scale factors come from convex cross-sections of the actual base mesh. Smooth regional deformation changes vertex positions; normals are rebuilt for the new surface. Height and shoulder width also affect geometry. SceneKit supplies native rendering, lighting, orbit, and zoom.
+The bundled anatomical mesh comes from [MakeHuman](https://github.com/makehumancommunity/makehuman), under CC0. Original provenance, licenses and the pinned asset remain in `DevelopmentAssets/HumanShowcase/`. The normal **Body** screen and measurement editor now use cached Loop-subdivided geometry, sharing the existing measurement demo's refinement rather than introducing another human asset. The modest shorts are refined with open waist/leg boundaries; disconnected clipping remnants at the hands are excluded.
 
-This is an approximate body shape from five dimensions. It does not uniquely reconstruct a person or simulate clothing fit. Shoulders use an approximate anatomical reference; unentered proportions are estimated.
+`BodyModelGenerator` prepares the template once and generates measurement changes off the UI thread. Chest, waist and hip circumferences are calibrated from the connected torso sections, not a fixed-width clipping window; shoulder width is calibrated against the reference shoulder section. A monotone arm transition prevents broad torso changes from folding the surface, while outward limb translation preserves upper-arm volume instead of pinching it. Height changes real geometry, normals are rebuilt after deformation, and the same inputs reproduce the same body. Stale requests cannot overwrite newer measurements or a saved scan, and the first load displays a progress indicator.
+
+SceneKit renders the mannequin with a neutral satin material, isolated studio lighting, orbit and zoom. These changes do **not** smooth, recolor or replace a saved textured scan, authorize manual models for scan-based try-on, or change measurement/history storage.
+
+This is an approximate body shape from five dimensions, not a personal likeness or validated clothing fit. The shoulder station and unentered body proportions are anatomical estimates. Different measurements produce different geometry, but two people with the same five measurements can still have very different bodies.
 
 [humanoid-kit](https://github.com/jbcom/humanoid-kit) was also reviewed: its web runtime and large morph system were unnecessary for this native MVP. No humanoid-kit software was copied. We reused the CC0 MakeHuman mesh already supplied by the requested itchathon repository.
 
@@ -80,7 +84,19 @@ This is an approximate body shape from five dimensions. It does not uniquely rec
 
 `Tests/AvatarScanTests.swift` checks scale admission, minimum coverage, textured USDZ persistence, failed-save preservation, corruption rejection, and deletion isolation. Its textured box is a synthetic fixture, not a human scan.
 
-`Tests/OnYouTests.swift` checks section dimensions, height, normals, invalid inputs, extreme values, history, persistence, and corrupted-storage handling. `UITests/OnYouUITests.swift` checks the clean viewer, scan setup/cancellation and Closet's automatic-capture route. The focused `TryOn…Tests` cover actual saved geometry, surface clearance, UV/index validation, rendered garment pixels, stale-work cancellation, retakes, rapid navigation, backgrounding, recovery and largest-text controls.
+`Tests/OnYouTests.swift` checks independent dimension targets, height, normals, invalid inputs, range edges, broad-body arm monotonicity, connected shorts/openings, determinism, history and persistence. `Tests/BodySceneLifecycleTests.swift` checks rapid edits, generation failure/recovery, dismissal and saved-scan priority. `UITests/TryOnUITests.swift` exercises same-height slim/broad and taller inputs through the native editor, compares actual rendered body pixels, rotates the model and restores the original measurements. The existing cancellation/History/scan-required journey remains covered. `UITests/OnYouUITests.swift` checks the clean viewer, scan setup/cancellation and Closet's automatic-capture route. The other focused `TryOn…Tests` cover actual saved geometry, surface clearance, UV/index validation, rendered garment pixels, stale-work cancellation, retakes, rapid navigation, backgrounding, recovery and largest-text controls.
+
+**Avatar smoothing verification (November 14, 2026):** 28 focused unit/UI tests passed on the iPhone 17 / iOS 26.5 simulator. The native editor journey saved these inputs, compared scene pixels, orbited the model and restored the original render:
+
+| Case | Height (cm) | Chest (cm) | Waist (cm) | Hips (cm) | Shoulders (cm) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Slim | 175 | 86 | 68 | 92 | 40 |
+| Broad, same height | 175 | 116 | 108 | 120 | 49 |
+| Tall | 195 | 104 | 88 | 108 | 45 |
+
+Normal Release and unsigned iPhone-SDK builds passed. The Release app was also installed, launched without fixture flags and visually inspected. A separate scene-render smoke captured example/slim/broad/205-cm-tall models from front, three-quarter, side and back, plus anatomical close-ups; its temporary test source was removed after capture. Physical-device LiDAR capture and personal likeness were not validated by this work.
+
+Evidence is outside Git at `/Users/anshbalusa/onyou-smooth-avatar-artifacts-20261113/`: `FinalRegression.xcresult`, `FinalReleaseBuild.xcresult`, `FinalDeviceBuild.xcresult`, `FinalEvidence/` (unedited UI screenshots and manifest), `LimbVolume.xcresult` / `LimbEvidence/` (scene renders), `release-avatar.png`, `verified-measurement-comparison.png` and `verified-avatar-angles.png`. The comparison images only resize and arrange actual captures; each view auto-fits the body, so equal on-screen height is not equal model-space height. Earlier bundles in that directory record intermediate findings, not the final result.
 
 The imported project documented Bitrig rejecting `test` for standard `Project.json` projects (exit 78). The current native build/test workflow uses XcodeGen and Xcode directly; it does not require Bitrig.
 
