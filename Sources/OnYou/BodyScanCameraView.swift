@@ -125,11 +125,16 @@ struct BodyScanCameraView<Camera: View>: View {
   private func controls(_ guidance: String, isPortrait: Bool, canAct: Bool, ready: Bool) -> some View {
     let title = status.canCancelStart ? "Cancel start" : status.start == .starting ? "Starting scan…" : "Start scan"
     let start = BodyScanPrimaryButton(title: title, enabled: canAct, action: performAction)
+      .fixedSize(horizontal: false, vertical: true)
       .accessibilityIdentifier("scan.camera.action")
     let showStart = status.mode == .framing
     return VStack(spacing: 0) {
       ScrollView {
         VStack(alignment: .leading, spacing: 10) {
+          if showStart && typeSize.isAccessibilitySize {
+            // Keep the action reachable first; scroll guidance and wrapped labels together.
+            start.padding(.bottom, 6)
+          }
           ZStack(alignment: .topLeading) {
             Text(guidance)
               .font(.headline)
@@ -161,7 +166,7 @@ struct BodyScanCameraView<Camera: View>: View {
       }
       .scrollBounceBehavior(.basedOnSize)
 
-      if showStart {
+      if showStart && !typeSize.isAccessibilitySize {
         start
           .padding(.horizontal, 16)
           .padding(.bottom, 12)

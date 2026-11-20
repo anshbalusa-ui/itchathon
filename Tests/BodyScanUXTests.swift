@@ -144,10 +144,15 @@ final class BodyScanUXTests: XCTestCase {
         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
       context.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
     }
-    let goldPixels = stride(from: 0, to: pixels.count, by: 4).filter {
-      Int(pixels[$0]) > 210 && Int(pixels[$0 + 1]) > 170 &&
-        Int(pixels[$0]) > Int(pixels[$0 + 2]) + 45 && Int(pixels[$0 + 1]) > Int(pixels[$0 + 2]) + 35
-    }.count
+    var goldPixels = 0
+    for index in stride(from: 0, to: pixels.count, by: 4) {
+      let red = Int(pixels[index])
+      let green = Int(pixels[index + 1])
+      let blue = Int(pixels[index + 2])
+      if red > 210 && green > 170 && red > blue + 45 && green > blue + 35 {
+        goldPixels += 1
+      }
+    }
     XCTAssertGreaterThan(goldPixels, 100, "The actual scene must render the confirmed coverage dial.")
     let root = NavigationStack {
       BodyScanCameraView(status: .init(mode: .capturing, completedViews: [.front, .firstSide],
@@ -297,17 +302,25 @@ final class BodyScanUXTests: XCTestCase {
     let portrait = CGSize(width: 393, height: 852)
     let narrow = CGSize(width: 320, height: 568)
     let framing = BodyScanCameraStatus(mode: .framing, calibrationProgress: 0.4)
+    let countdown = BodyScanCameraStatus(mode: .framing, start: .countdown(3))
+    let waiting = BodyScanCameraStatus(mode: .framing, calibrationProgress: 0.4, start: .waitingForFraming)
+    let starting = BodyScanCameraStatus(mode: .framing, start: .starting)
     var standardViewport: CGSize?
     let recovery = BodyScanCameraStatus(mode: .capturing, completedViews: [.front, .firstSide],
-                                        missingAngles: [.pi], instruction: "Show their back.")
+                                        missingAngles: [.pi], instruction: "Show your back to the camera.")
     for (name, size, typeSize, initialStatus) in [
       ("capture-framing", portrait, DynamicTypeSize.large, framing),
+      ("capture-countdown", portrait, .large, countdown),
+      ("capture-waiting-for-framing", portrait, .large, waiting),
+      ("capture-starting", portrait, .large, starting),
       ("capture-ready", portrait, .large, BodyScanCameraStatus(mode: .framing, calibrated: true, calibrationProgress: 1,
                                                                observedAt: ProcessInfo.processInfo.systemUptime,
-                                                               instruction: "Ready. Ask them to keep this pose.")),
+                                                               instruction: "Framing ready. Hold your pose.")),
       ("capture-missing-back", portrait, .large, recovery),
       ("capture-accessible", portrait, .accessibility2, recovery),
       ("capture-narrow-accessible", narrow, .accessibility5, framing),
+      ("capture-countdown-narrow-accessible", narrow, .accessibility5, countdown),
+      ("capture-waiting-narrow-accessible", narrow, .accessibility5, waiting),
       ("capture-landscape", CGSize(width: 852, height: 393), .large, recovery),
       ("capture-finishing", portrait, .large, BodyScanCameraStatus(mode: .finishing, completedViews: Set(BodyCaptureView.allCases)))
     ] {
