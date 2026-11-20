@@ -57,7 +57,7 @@ enum AvatarScanError: LocalizedError {
     switch self {
     case .invalidScale: "The scan’s scale or bounds look wrong. Retake after calibrating with head and feet fully in view."
     case .invalidModel: "The reconstructed model is missing, damaged, or has no photo texture. Retake the scan. Your existing avatar is unchanged."
-    case .insufficientCoverage: "Some usable angles or whole-body photos are missing. Retake one slow, complete circle with the person still."
+    case .insufficientCoverage: "Some usable angles or whole-body photos are missing. Retake while turning slowly in place with iPhone fixed."
     case .unsupported: "Body capture needs a supported iPhone with LiDAR. This device can still view saved avatars and your closet."
     case .unavailableCamera: "Camera access is off. Enable it in Settings to start a scan."
     case .missingDepth: "The photos don’t contain enough depth to establish real-world scale. Retake on a supported LiDAR iPhone."

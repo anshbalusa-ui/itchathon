@@ -128,6 +128,23 @@ final class BodyCaptureTurnTests: XCTestCase {
     XCTAssertFalse(coverage.viewpoints.contains { BodyCaptureCoverage.distance($0.azimuth, radians(30)) < radians(5) })
   }
 
+  func testFastTurnKeepsAcceptedPhotosAndRequiresStableReacquisition() {
+    var turn = BodyCaptureTurn()
+    var coverage = BodyCaptureCoverage()
+    _ = observe(&turn, &coverage, yaw: 0, at: 1, fullBody: true)
+    let originalIDs = Set(coverage.viewpoints.map(\.sampleID))
+    _ = observe(&turn, &coverage, yaw: radians(10), at: 1.1)
+    XCTAssertTrue(turn.turningTooFast)
+    XCTAssertNil(turn.admissibleYaw)
+    XCTAssertEqual(Set(coverage.viewpoints.map(\.sampleID)), originalIDs)
+    _ = observe(&turn, &coverage, yaw: radians(10), at: 1.3)
+    XCTAssertFalse(turn.turningTooFast)
+    XCTAssertEqual(Set(coverage.viewpoints.map(\.sampleID)), originalIDs)
+    _ = observe(&turn, &coverage, yaw: radians(10), at: 1.5)
+    XCTAssertTrue(originalIDs.isSubset(of: Set(coverage.viewpoints.map(\.sampleID))))
+    XCTAssertEqual(coverage.viewpoints.map(\.azimuth), [0, radians(10)])
+  }
+
   func testAlignedPosesMustSurroundSubject() {
     var coverage = BodyCaptureCoverage()
     var poses: [Int: BodyCaptureReconstructedPose] = [:]
@@ -138,29 +155,33 @@ final class BodyCaptureTurnTests: XCTestCase {
       poses[sampleID] = nativePose(degrees: 33 - (sampleID == 1 ? 1 : sampleID * 5))
     }
     XCTAssertTrue(coverage.hasCoverage())
-    if case .complete = coverage.alignedCoverage(poses: poses, rejectedIDs: []) {} else {
-      XCTFail("Nearby native angles should not discard distinct source photos.")
+    guard case .complete(let completeIDs) = coverage.alignedCoverage(poses: poses, rejectedIDs: []) else {
+      return XCTFail("Nearby native angles should not discard distinct source photos.")
     }
-    if case .complete = coverage.alignedCoverage(poses: poses, rejectedIDs: [0]) {} else {
-      XCTFail("The fitted offset should recover frontal zero if the first front sample was rejected.")
+    XCTAssertEqual(completeIDs, Set(poses.keys))
+    guard case .complete(let withoutFirst) = coverage.alignedCoverage(poses: poses, rejectedIDs: [0]) else {
+      return XCTFail("The fitted offset should recover frontal zero if the first front sample was rejected.")
     }
+    XCTAssertEqual(withoutFirst, Set(poses.keys).subtracting([0]))
 
     let rejected = Set(32...39)
     let retainedIDs = Set(poses.keys).subtracting(rejected)
-    let retained = coverage.retaining(sampleIDs: retainedIDs)
-    guard case .missingAngles(let targets) = coverage.alignedCoverage(poses: poses, rejectedIDs: rejected) else {
+    guard case .missingAngles(let targets, sampleIDs: let admittedIDs) = coverage.alignedCoverage(poses: poses, rejectedIDs: rejected) else {
       return XCTFail("An aligned back gap should ask for new back views.")
     }
+    let retained = coverage.retaining(sampleIDs: admittedIDs)
+    XCTAssertEqual(admittedIDs, retainedIDs)
     XCTAssertFalse(targets.isEmpty)
     XCTAssertTrue(targets.allSatisfy { BodyCaptureCoverage.distance($0, .pi) <= radians(25) })
     XCTAssertTrue(targets.allSatisfy { retained.canRecord(azimuth: $0) })
     XCTAssertEqual(Set(retained.viewpoints.map(\.sampleID)), retainedIDs)
 
     let sparse = poses.filter { $0.key.isMultiple(of: 2) || $0.key == 3 }
-    guard case .missingAngles(let extra) = coverage.alignedCoverage(poses: sparse, rejectedIDs: []) else {
+    guard case .missingAngles(let extra, sampleIDs: let sparseIDs) = coverage.alignedCoverage(poses: sparse, rejectedIDs: []) else {
       return XCTFail("Coherent native views below the photo floor should remain recoverable.")
     }
-    let sparseCoverage = coverage.retaining(sampleIDs: Set(sparse.keys))
+    let sparseCoverage = coverage.retaining(sampleIDs: sparseIDs)
+    XCTAssertEqual(sparseIDs, Set(sparse.keys))
     XCTAssertFalse(extra.isEmpty)
     XCTAssertTrue(extra.allSatisfy { sparseCoverage.canRecord(azimuth: $0) })
 
@@ -176,6 +197,36 @@ final class BodyCaptureTurnTests: XCTestCase {
         XCTFail("Invalid or front-only poses must not establish a turn.")
       }
     }
+  }
+
+  func testYawInconsistentNativePosesCannotSupplyThePhotoFloorAndRemainRecoverable() {
+    var coverage = BodyCaptureCoverage()
+    var poses: [Int: BodyCaptureReconstructedPose] = [:]
+    for sampleID in 0..<72 {
+      XCTAssertTrue(coverage.record(sampleID: sampleID, imageURL: imageURL(sampleID),
+                                    azimuth: radians(sampleID * 5), fullBody: sampleID < 4))
+      poses[sampleID] = nativePose(degrees: 33 - sampleID * 5 - (sampleID % 4 == 3 ? 90 : 0))
+    }
+    guard case .missingAngles(let targets, sampleIDs: let admittedIDs) =
+      coverage.alignedCoverage(poses: poses, rejectedIDs: []) else {
+      return XCTFail("Inconsistent native poses must not promote 54 coherent views into a complete scan.")
+    }
+    XCTAssertEqual(admittedIDs, Set((0..<72).filter { $0 % 4 != 3 }))
+    var recovered = coverage.retaining(sampleIDs: admittedIDs)
+    var recoveredPoses = poses.filter { admittedIDs.contains($0.key) }
+    XCTAssertFalse(recovered.hasCoverage())
+    for (index, angle) in targets.enumerated() {
+      let sampleID = 1000 + index
+      XCTAssertTrue(recovered.record(sampleID: sampleID, imageURL: imageURL(sampleID), azimuth: angle, fullBody: false))
+      let rotation = simd_quatf(angle: Float(radians(33) - angle), axis: up)
+      recoveredPoses[sampleID] = BodyCaptureReconstructedPose(
+        translation: SIMD3<Float>(0.1, 0.8, -0.3) + rotation.act(SIMD3(0, 0, 2)), rotation: rotation)
+    }
+    guard case .complete(let recoveredIDs) = recovered.alignedCoverage(poses: recoveredPoses, rejectedIDs: []) else {
+      return XCTFail("Recapturing just the requested gaps should restore coherent coverage.")
+    }
+    XCTAssertEqual(recoveredIDs, Set(recoveredPoses.keys))
+    XCTAssertTrue(admittedIDs.isSubset(of: recoveredIDs))
   }
 
   private func bodyYaw(_ degrees: Int, translation: SIMD3<Float> = .zero) -> Double? {
