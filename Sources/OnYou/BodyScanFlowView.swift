@@ -1,5 +1,4 @@
 import AVFoundation
-import RealityKit
 import SwiftUI
 
 struct BodyScanFlowView: View {
@@ -8,20 +7,25 @@ struct BodyScanFlowView: View {
   @State private var confirmingDiscard = false
   @State private var confirmingRetake = false
   @State private var previousIdleTimerSetting: Bool?
+  @State private var started = false
+  @AppStorage("on-you.capture-haptics") private var haptics = true
   @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
 
   var body: some View {
     NavigationStack {
       Group {
-        switch model.phase {
-        case .setup: setup
-        case .preparing: preparing
-        case .capturing:
-          if let capture = model.capture { captureView(capture) }
-        case .reconstructing: reconstruction
-        case .review: review
-        case .failed(let message): failure(message)
+        if !BodyCaptureModel.isSupported {
+          unavailable
+        } else {
+          switch model.phase {
+          case .setup, .preparing: preparing
+          case .capturing:
+            if let directory = model.captureDirectory { captureView(directory) }
+          case .reconstructing: reconstruction
+          case .review: review
+          case .failed(let message): failure(message)
+          }
         }
       }
       .navigationTitle(title)
@@ -30,30 +34,47 @@ struct BodyScanFlowView: View {
         if model.phase != .capturing {
           ToolbarItem(placement: .cancellationAction) {
             Button("Close scan", systemImage: "xmark", action: requestClose)
+              .labelStyle(.iconOnly)
               .accessibilityIdentifier("scan.close")
           }
         }
       }
-      .toolbar(model.phase == .capturing ? .hidden : .visible, for: .navigationBar)
     }
     .interactiveDismissDisabled()
+    .task {
+      guard !started else { return }
+      started = true
+      await model.start()
+    }
     .onChange(of: scenePhase) { _, phase in if phase == .background { model.suspend() } }
     .onAppear {
       previousIdleTimerSetting = UIApplication.shared.isIdleTimerDisabled
       updateIdleTimer()
     }
-    .onChange(of: model.phase) { _, _ in updateIdleTimer() }
+    .onChange(of: model.phase) { _, phase in
+      updateIdleTimer()
+      if phase == .review {
+        AccessibilityNotification.Announcement("Ready to review. Hand the phone back.").post()
+      } else if phase == .reconstructing {
+        AccessibilityNotification.Announcement("Checking your scan.").post()
+      }
+    }
+    .sensoryFeedback(.success, trigger: model.phase) { old, new in haptics && old != .review && new == .review }
     .onDisappear {
       model.cancel()
       if let previousIdleTimerSetting { UIApplication.shared.isIdleTimerDisabled = previousIdleTimerSetting }
       previousIdleTimerSetting = nil
     }
-    .onChange(of: confirmingDiscard) { _, visible in model.setCapturePromptVisible(visible) }
-    .confirmationDialog("Discard this scan?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+    .alert("Discard this scan?", isPresented: $confirmingDiscard) {
       Button("Discard scan", role: .destructive) { model.cancel(); dismiss() }
-      Button("Keep going", role: .cancel) {}
+      Button("Keep scanning", role: .cancel) {}
     } message: {
       Text("This capture will be removed. Your saved avatar will stay as it is.")
+    }
+    .confirmationDialog("Retake this scan?", isPresented: $confirmingRetake, titleVisibility: .visible) {
+      Button("Retake", role: .destructive, action: restartCapture)
+    } message: {
+      Text("This capture will be removed. Your saved avatar stays as it is.")
     }
     .alert("Avatar couldn’t be saved", isPresented: Binding(get: { model.saveError != nil }, set: { if !$0 { model.clearSaveError() } })) {
       Button("OK", role: .cancel) { model.clearSaveError() }
@@ -62,46 +83,19 @@ struct BodyScanFlowView: View {
 
   private var title: String {
     switch model.phase {
-    case .review: "Your avatar"
-    case .reconstructing: "Building your avatar"
-    default: "Scan your body"
+    case .review: "Review scan"
+    default: "Scan body"
     }
   }
 
-  private var setup: some View {
-    ScrollView {
-      VStack(spacing: 28) {
-        Image(systemName: "figure.arms.open")
-          .font(.system(size: 120, weight: .ultraLight))
-          .foregroundStyle(.tint).padding(.vertical, 24)
-          .accessibilityHidden(true)
-        Text("Stand still, arms apart.").font(.largeTitle.bold())
-          .multilineTextAlignment(.center)
-        Text("Ask a helper to hold your iPhone.")
-          .font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center)
-        Label("Even light, with room to walk around you.", systemImage: "sun.max")
-          .font(.callout).multilineTextAlignment(.center)
-      }
-      .padding(24)
-      .frame(maxWidth: .infinity, alignment: .leading)
+  private var unavailable: some View {
+    ContentUnavailableView {
+      Label("Body scan unavailable", systemImage: "camera")
+    } description: {
+      Text("Body capture needs a supported LiDAR iPhone.")
     }
-    .safeAreaInset(edge: .bottom) {
-      VStack(spacing: 10) {
-        if !BodyCaptureModel.isSupported {
-          Text("Body capture needs a LiDAR iPhone.")
-            .font(.footnote).foregroundStyle(.secondary)
-            .accessibilityIdentifier("scan.unsupported")
-        }
-        BodyScanPrimaryButton(title: "Open camera", enabled: BodyCaptureModel.isSupported) {
-          Task { await model.start() }
-        }
-        .accessibilityIdentifier("scan.start")
-        Text("Processed on this iPhone").font(.caption).foregroundStyle(.secondary)
-      }
-      .padding(.horizontal, 24).padding(.vertical, 16)
-      .background(.bar)
-    }
-    .background(Color(uiColor: .systemBackground))
+    .accessibilityElement(children: .combine)
+    .accessibilityIdentifier("scan.unsupported")
   }
 
   private var preparing: some View {
@@ -109,139 +103,115 @@ struct BodyScanFlowView: View {
       Spacer()
       ProgressView().controlSize(.large)
       Text("Getting the camera ready").font(.title2.weight(.semibold))
-      Text("Keep your helper nearby and the space around you clear.")
+      Text("Ask a helper to hold iPhone and keep the space around you clear.")
         .foregroundStyle(.secondary).multilineTextAlignment(.center)
       Spacer()
     }
     .padding(24)
   }
 
-  private func captureView(_ session: ObjectCaptureSession) -> some View {
-    BodyScanCameraView(status: model.cameraStatus, startedAt: model.captureStartedAt,
-                       position: model.positionFeedback, torsoViews: model.torsoViews, legViews: model.legViews,
-                       close: { model.cancel(); dismiss() }, performAction: model.performCameraAction,
-                       reframe: model.resetSelection, pauseForCancel: model.setCapturePromptVisible) {
-      // Keep native selection handles and coverage; replace the ready-state reticle with a quiet framing guide.
-      ObjectCaptureView(session: session).hideObjectReticle()
+  private func captureView(_ directory: URL) -> some View {
+    let captureID = model.captureID
+    return BodyScanCameraView(status: model.cameraStatus, position: model.position,
+                             close: requestClose, performAction: model.performCameraAction,
+                             paused: confirmingDiscard, pauseCapture: model.setCapturePromptVisible) {
+      BodyCaptureCamera(directory: directory, seed: model.captureSeed, missingAngles: model.requestedAngles,
+        onReady: { model.cameraReady($0, directory: directory, captureID: captureID) },
+        onUpdate: { model.cameraUpdated($0, directory: directory, captureID: captureID) },
+        onFinished: { model.cameraFinished($0, directory: directory, captureID: captureID) },
+        onFailure: { model.cameraFailed($0, directory: directory, captureID: captureID) })
+      .id(captureID)
     }
-    .onChange(of: session.state, initial: true) { _, state in
-      if model.capture === session { model.stateChanged(state) }
-    }
-    .onChange(of: session.userCompletedScanPass, initial: true) { _, _ in
-      if model.capture === session { model.captureProgressChanged() }
-    }
-    .onChange(of: session.numberOfShotsTaken) { _, _ in
-      if model.capture === session { model.captureProgressChanged() }
-    }
-    .task(id: session.numberOfShotsTaken) {
-      guard session.numberOfShotsTaken > 0 else { return }
-      // Retry once after the SDK finishes writing the newest photo.
-      do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
-      if model.capture === session { model.captureProgressChanged() }
-    }
-    .onChange(of: model.cameraStatus.awaitsNextStep) { _, waiting in
-      if waiting {
-        AccessibilityNotification.Announcement("\(model.cameraStatus.title). \(model.cameraStatus.instruction)").post()
-      }
-    }
-    .task(id: model.pendingAction) {
-      guard let action = model.pendingAction else { return }
-      do {
-        try await Task.sleep(for: .seconds(8))
-        model.actionTimedOut(action)
-      } catch { }
-    }
-    .sensoryFeedback(.success, trigger: model.completedPasses)
   }
 
   private var reconstruction: some View {
-    VStack(spacing: 24) {
-      BodyScanJourneyView(step: .build)
-      Spacer(minLength: 12)
-      ZStack {
-        Circle().stroke(.quaternary, lineWidth: 6)
+    ScrollView {
+      VStack(alignment: .leading, spacing: 16) {
+        Text("Checking your scan…")
+          .font(.title2.weight(.semibold))
+          .accessibilityAddTraits(.isHeader)
         if model.hasBuildProgress {
-          Circle().trim(from: 0, to: model.progress)
-            .stroke(.tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-            .rotationEffect(.degrees(-90))
-        }
-        Image(systemName: "figure.stand")
-          .font(.system(size: 76, weight: .light)).foregroundStyle(.tint)
-      }
-      .frame(width: 180, height: 180)
-      .accessibilityHidden(true)
-      VStack(spacing: 10) {
-        Text(model.stage).font(.title2.weight(.semibold))
-          .accessibilityIdentifier("scan.build.stage")
-        Text(BodyScanTiming.remaining(model.estimatedRemainingTime))
-          .foregroundStyle(.secondary)
-          .accessibilityIdentifier("scan.build.time")
-      }
-      .multilineTextAlignment(.center)
-      if model.hasBuildProgress {
-        ProgressView(value: model.progress)
-          .accessibilityLabel("Avatar build progress")
+          ProgressView(value: model.progress) {
+            Text(model.stage).accessibilityIdentifier("scan.build.stage")
+          } currentValueLabel: {
+            Text(BodyScanTiming.remaining(model.estimatedRemainingTime))
+              .accessibilityIdentifier("scan.build.time")
+          }
           .accessibilityIdentifier("scan.build.progress")
-      } else {
-        ProgressView("Checking your capture…")
+        } else {
+          ProgressView(model.stage)
+            .accessibilityIdentifier("scan.build.stage")
+        }
+        Text("Keep On You open while we check the scan.")
+          .font(.callout).foregroundStyle(.secondary)
       }
-      Text("You can relax your pose. Keep On You open while we bring your photos together.")
-        .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-      Spacer(minLength: 12)
-      Label("Processed on this iPhone", systemImage: "lock")
-        .font(.footnote).foregroundStyle(.secondary)
+      .frame(maxWidth: 440, alignment: .leading)
+      .padding(24)
+      .frame(maxWidth: .infinity)
     }
-    .padding(28)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .defaultScrollAnchor(.center, for: .alignment)
+    .scrollBounceBehavior(.basedOnSize)
   }
 
-  private var review: some View {
-    GeometryReader { geometry in
-      ZStack(alignment: .bottom) {
-        if let url = model.modelURL, let calibration = model.calibration {
-          ScannedAvatarPreview(url: url, referenceHeightCM: calibration.referenceHeightCM, preparedScene: model.preparedScene)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, min(240, geometry.size.height * 0.32))
-        }
-        VStack(alignment: .leading, spacing: 12) {
-          Text("Take a look around.").font(.title2.weight(.semibold))
-          Text("Drag to turn. Check head, feet, and arms. The scan includes the clothes you wore.")
-            .font(.callout).foregroundStyle(.secondary)
-          if let calibration = model.calibration {
-            Text("Depth-derived height: \(calibration.referenceHeightCM.formatted(.number.precision(.fractionLength(0)))) cm")
-              .font(.caption).foregroundStyle(.secondary)
-          }
-          BodyScanPrimaryButton(title: "Use this avatar") { if model.save(to: store) { dismiss() } }
-          Button("Retake scan") { confirmingRetake = true }.frame(maxWidth: .infinity, minHeight: 44)
-        }
-        .padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 30))
-        .padding(16)
+  @ViewBuilder private var review: some View {
+    if let url = model.modelURL, let calibration = model.calibration {
+      BodyScanReviewView(url: url, referenceHeightCM: calibration.referenceHeightCM,
+                         preparedScene: model.preparedScene, retake: requestRetake) {
+        if model.save(to: store) { dismiss() }
       }
     }
-    .confirmationDialog("Retake your scan?", isPresented: $confirmingRetake, titleVisibility: .visible) {
-      Button("Retake scan", role: .destructive) { model.cancel() }
-    } message: { Text("This capture will be removed. Your saved avatar stays as it is.") }
   }
 
   private func failure(_ message: String) -> some View {
-    ContentUnavailableView {
-      Label("Let’s try that again", systemImage: "camera")
+    let needsViews: Bool
+    if case .missingViews = model.recovery { needsViews = true } else { needsViews = false }
+    return ContentUnavailableView {
+      Label(needsViews ? "More views needed" : "Scan couldn’t continue", systemImage: "camera")
     } description: {
-      Text(message)
-    } actions: {
-      if AVCaptureDevice.authorizationStatus(for: .video) == .denied {
-        Link("Open Settings", destination: URL(string: UIApplication.openSettingsURLString)!)
+      if let angle = model.requestedAngles.first, let direction = model.captureSeed?.direction {
+        Text("\(BodyCaptureView.nearest(to: angle, direction: direction).title) needed. Other views are kept.")
+      } else {
+        Text(message)
       }
-      Button("Try again") { model.cancel() }
-        .buttonStyle(.borderedProminent)
+    } actions: {
+      switch model.recovery {
+      case .missingViews:
+        Button("Capture missing views", action: model.captureMissingViews)
+          .buttonStyle(.borderedProminent)
+          .accessibilityIdentifier("scan.recovery.capture")
+      case .retryProcessing:
+        Button("Retry processing", action: model.retryProcessing)
+          .buttonStyle(.borderedProminent)
+          .accessibilityIdentifier("scan.recovery.retry")
+        Button("Retake", action: requestRetake)
+      case .retake, nil:
+        if AVCaptureDevice.authorizationStatus(for: .video) == .denied,
+           let settings = URL(string: UIApplication.openSettingsURLString) {
+          Link("Open Settings", destination: settings).buttonStyle(.borderedProminent)
+          Button("Retake", action: requestRetake)
+        } else {
+          Button("Retake", action: requestRetake).buttonStyle(.borderedProminent)
+        }
+      }
     }
   }
 
   private func requestClose() {
-    switch model.phase {
-    case .setup, .preparing, .failed: model.cancel(); dismiss()
-    default: confirmingDiscard = true
+    if model.hasUnsavedCapture {
+      confirmingDiscard = true
+    } else {
+      model.cancel()
+      dismiss()
     }
+  }
+
+  private func requestRetake() {
+    if model.hasUnsavedCapture { confirmingRetake = true }
+    else { restartCapture() }
+  }
+
+  private func restartCapture() {
+    Task { await model.start() }
   }
 
   private func updateIdleTimer() {

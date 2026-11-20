@@ -48,7 +48,69 @@ final class ClosetTests: XCTestCase {
     let visible = GarmentPlaneProjection.viewportBounds(fromPortrait: portrait, displayTransform: crop)
     XCTAssertLessThan(visible.minX, 0)
     XCTAssertGreaterThan(visible.maxX, 1)
-    XCTAssertEqual(ScanPositionFeedback.shirt(meters: 1, target: 1, bounds: visible, level: 1).direction, .farther)
+    var tracker = ScanGuidanceTracker()
+    let feedback = tracker.update(ScanGuidanceSample(meters: 1, targetMeters: 1, bounds: visible, observedAt: 1), now: 1)
+    XCTAssertEqual(feedback.direction, .farther)
+  }
+
+  func testGarmentGuidanceSeparatesOffCenterFromOversizedCropping() {
+    var small = ScanGuidanceTracker()
+    let aim = small.update(ScanGuidanceSample(meters: nil, targetMeters: nil,
+                                               bounds: CGRect(x: -0.05, y: 0.3, width: 0.4, height: 0.4),
+                                               observedAt: 30), now: 30)
+    XCTAssertEqual(aim.direction, .left)
+
+    var oversized = ScanGuidanceTracker()
+    let back = oversized.update(ScanGuidanceSample(meters: nil, targetMeters: nil,
+                                                    bounds: CGRect(x: -0.05, y: 0.3, width: 1.4, height: 0.4),
+                                                    observedAt: 30), now: 30)
+    XCTAssertEqual(back.direction, .farther)
+  }
+
+  func testGarmentGuidanceUsesViewportCoordinatesAndSignedOverheadTilt() throws {
+    let points = [CGPoint(x: -10, y: 20), CGPoint(x: 110, y: 20),
+                  CGPoint(x: 110, y: 180), CGPoint(x: -10, y: 180)]
+    let bounds = try XCTUnwrap(GarmentCaptureGuidanceGeometry.viewportBounds(from: points, size: CGSize(width: 100, height: 200)))
+    XCTAssertEqual(bounds.minX, -0.1, accuracy: 0.00001)
+    XCTAssertEqual(bounds.maxX, 1.1, accuracy: 0.00001)
+    XCTAssertEqual(bounds.minY, 0.1, accuracy: 0.00001)
+    XCTAssertEqual(bounds.maxY, 0.9, accuracy: 0.00001)
+
+    let display = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 1, ty: 0)
+    let expectedUV = CGPoint(x: 0.23, y: 0.67)
+    let viewportPoint = expectedUV.applying(display)
+    let nativeUV = try XCTUnwrap(GarmentCaptureGuidanceGeometry.nativeCameraUV(
+      fromViewportPoint: viewportPoint, displayTransform: display))
+    XCTAssertEqual(nativeUV.x, expectedUV.x, accuracy: 0.00001)
+    XCTAssertEqual(nativeUV.y, expectedUV.y, accuracy: 0.00001)
+
+    let level = simd_float4x4(SIMD4<Float>(1, 0, 0, 0), SIMD4<Float>(0, 0, -1, 0),
+                              SIMD4<Float>(0, 1, 0, 0), SIMD4<Float>(0, 0, 0, 1))
+    let levelTilt = GarmentCaptureGuidanceGeometry.overheadTilt(transform: level)
+    XCTAssertEqual(levelTilt.x, 0, accuracy: 0.00001)
+    XCTAssertEqual(levelTilt.y, 0, accuracy: 0.00001)
+    let angle = Float(0.2), cosine = cos(angle), sine = sin(angle)
+    let rightTilt = simd_float4x4(SIMD4<Float>(cosine, -sine, 0, 0), SIMD4<Float>(0, 0, -1, 0),
+                                  SIMD4<Float>(sine, cosine, 0, 0), SIMD4<Float>(0, 0, 0, 1))
+    XCTAssertGreaterThan(GarmentCaptureGuidanceGeometry.overheadTilt(transform: rightTilt).x, 0)
+    let downTilt = simd_float4x4(SIMD4<Float>(1, 0, 0, 0), SIMD4<Float>(0, sine, -cosine, 0),
+                                 SIMD4<Float>(0, cosine, sine, 0), SIMD4<Float>(0, 0, 0, 1))
+    XCTAssertGreaterThan(GarmentCaptureGuidanceGeometry.overheadTilt(transform: downTilt).y, 0)
+  }
+
+  func testLostAndStaleGarmentFramingNeverReportsReady() {
+
+    var tracker = ScanGuidanceTracker()
+    let centered = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
+    XCTAssertEqual(tracker.update(ScanGuidanceSample(meters: 1, targetMeters: 1, bounds: centered,
+                                                      observedAt: 20), now: 20).direction, .hold)
+    let lost = tracker.update(ScanGuidanceSample(meters: 1, targetMeters: 1, bounds: nil,
+                                                  observedAt: 20.1), now: 20.1)
+    XCTAssertNotEqual(lost.direction, .hold)
+    let stale = tracker.update(ScanGuidanceSample(meters: 1, targetMeters: 1, bounds: centered,
+                                                   observedAt: 20.1), now: 20.8)
+    XCTAssertEqual(stale.direction, .searching)
+    XCTAssertNil(stale.meters)
   }
 
   func testMetricProjectionUsesDepthAndRejectsInvalidRays() throws {
@@ -253,8 +315,10 @@ final class ClosetTests: XCTestCase {
     XCTAssertEqual(store.reference?.id, scanned.id)
     let reopened = ClosetStore(directory: root)
     XCTAssertEqual(reopened.garments, store.garments)
-    XCTAssertNil(reopened.garments.first(where: { $0.id == photo.id })?.dimensions)
     let previousImage = reopened.imageURL(for: photo)
+    XCTAssertThrowsError(try reopened.replaceCapture(for: photo, with: GarmentCaptureResult(image: Data("invalid".utf8), dimensions: base)))
+    XCTAssertEqual(reopened.garments, store.garments)
+    XCTAssertEqual(try Data(contentsOf: previousImage), data)
     try reopened.replaceCapture(for: photo, with: GarmentCaptureResult(image: data, dimensions: base))
     let updated = try XCTUnwrap(reopened.garments.first(where: { $0.id == photo.id }))
     XCTAssertEqual(updated.name, photo.name)
@@ -294,16 +358,31 @@ final class ClosetTests: XCTestCase {
 
   #if !targetEnvironment(simulator)
   // Vision's foreground inference context is unavailable in the iOS simulator.
-  func testRecognizedPhotoSurvivesTheCaptureToTryOnImageContract() throws {
+  func testRecognizedPhotoSurvivesTheCaptureToTryOnImageContract() async throws {
     let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "GarmentIQ-Shirt", withExtension: "jpg"))
     let image = try GarmentImageProcessor.normalized(Data(contentsOf: url))
     let points = try GarmentLandmarkDetector().detect(in: image)
     let foreground = try GarmentImageProcessor.foreground(image)
     let mask = try GarmentImageProcessor.smallMask(foreground.mask)
     let outline = try GarmentOutline.detect(mask: mask.bytes, width: mask.width, height: mask.height)
-    let evidence = try GarmentPatternEvidence.validate(image: foreground.cutout, points: points, outline: outline)
-    XCTAssertTrue(evidence.matches(foreground.cutout))
-    let stored = try GarmentImageProcessor.normalized(foreground.cutout)
+    let dimensions = GarmentScanDimensions(bodyWidthM: 0.5, lengthM: 0.7, sleeveSpanM: 0.8)
+    func candidate(_ frame: Double) -> GarmentCaptureCandidate {
+      GarmentCaptureCandidate(cutout: foreground.cutout, points: points, outline: outline, dimensions: dimensions,
+                              worldCorners: [], worldCenter: .zero,
+                              timings: GarmentAnalysisTimings(foregroundSeconds: frame))
+    }
+    var consensus = GarmentCaptureConsensus()
+    XCTAssertNil(consensus.add(candidate(1), at: 1))
+    XCTAssertNil(consensus.add(candidate(2), at: 2))
+    let accepted = try XCTUnwrap(consensus.add(candidate(3), at: 3))
+    XCTAssertEqual(accepted.candidate.timings.foregroundSeconds, 3)
+    XCTAssertEqual(accepted.dimensions, dimensions)
+
+    let result = try await GarmentDepthAnalyzer().finalize(accepted.candidate, dimensions: accepted.dimensions)
+    let evidence = try XCTUnwrap(result.pattern)
+    XCTAssertTrue(evidence.matches(result.image))
+    XCTAssertFalse(evidence.matches(Data("another frame".utf8)))
+    let stored = try GarmentImageProcessor.normalized(result.image)
     let pattern = try TryOnBuilder.pattern(stored, landmarks: points.map { SIMD2(Float($0.x), Float($0.y)) })
     XCTAssertEqual(pattern.points.count, 25)
   }

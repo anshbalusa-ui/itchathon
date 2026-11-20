@@ -3,7 +3,6 @@ import Foundation
 import Observation
 import OSLog
 import RealityKit
-import SwiftUI
 
 @MainActor @Observable
 final class BodyCaptureModel {
@@ -11,30 +10,27 @@ final class BodyCaptureModel {
     case setup, preparing, capturing, reconstructing, review, failed(String)
   }
 
+  enum Recovery: Equatable {
+    case retake, retryProcessing, missingViews([Double])
+  }
+
+  private(set) var recovery: Recovery?
   private(set) var phase = Phase.setup
-  private(set) var capture: ObjectCaptureSession?
+  private var capture: BodyCaptureController?
   private(set) var progress: Double = 0
   private(set) var completedPasses = 0
   private(set) var calibration: AvatarScanCalibration?
   private(set) var modelURL: URL?
   private(set) var preparedScene: PreparedAvatarScene?
   private(set) var imageCount = 0
-  private(set) var trackingInterrupted = false
-  private(set) var captureStartedAt: Date?
-  private(set) var pendingAction: BodyScanCameraStatus.Action?
-  private(set) var selectionHint: String?
+  private(set) var cameraStatus = BodyScanCameraStatus(mode: .initializing)
+  private(set) var position = ScanPositionFeedback()
   private(set) var estimatedRemainingTime: TimeInterval?
   private(set) var hasBuildProgress = false
   private(set) var saveError: String?
   private static let logger = Logger(subsystem: "app.onyou", category: "BodyCapture")
-  private var recordedCurrentPass = false
-  private var evidenceReader = BodyCaptureEvidence()
-  private var evidenceTask: Task<Void, Never>?
-  private(set) var lastDistance: Double?
-  private(set) var lastDistanceAt: Date?
-  private(set) var torsoViews = 0
-  private(set) var legViews = 0
-  private(set) var fullBodyViews = 0
+  private static var activeWork = Set<URL>()
+  private var archive: BodyCaptureArchive?
   var stage = "Aligning images"
   private var work: URL?
   private var reconstruction: PhotogrammetrySession?
@@ -44,112 +40,94 @@ final class BodyCaptureModel {
   private var diagnosticStartedAt: ContinuousClock.Instant?
 
 
-  static var isSupported: Bool { ObjectCaptureSession.isSupported && PhotogrammetrySession.isSupported }
-
-  var canFinish: Bool {
-    guard let capture else { return false }
-    return capture.state == .capturing
-      && Self.hasCoverage(images: capture.numberOfShotsTaken, passes: completedPasses)
-      && !trackingInterrupted && fullBodyViews >= 3
+  static var isSupported: Bool { BodyCaptureController.supported && PhotogrammetrySession.isSupported }
+  var captureDirectory: URL? { work?.appendingPathComponent("Images", isDirectory: true) }
+  var captureID: UUID { generation }
+  var captureSeed: BodyCaptureArchive? { archive }
+  var requestedAngles: [Double] {
+    if case .missingViews(let angles) = recovery { return angles }
+    return []
+  }
+  var hasUnsavedCapture: Bool {
+    archive != nil || phase == .review || cameraStatus.mode == .capturing
+      || cameraStatus.mode == .finishing || cameraStatus.pendingStart
   }
 
-  var cameraStatus: BodyScanCameraStatus {
-    guard let capture else { return BodyScanCameraStatus(mode: .initializing) }
-    let mode: BodyScanCameraStatus.Mode
-    switch capture.state {
-    case .ready: mode = .framing
-    case .detecting: mode = .selecting
-    case .capturing: mode = .capturing
-    case .finishing, .completed: mode = .finishing
-    default: mode = .initializing
+  func cameraReady(_ controller: BodyCaptureController, directory: URL, captureID: UUID) {
+    guard phase == .capturing, captureDirectory == directory, generation == captureID else {
+      controller.stop()
+      return
     }
-    let nativeFeedback = capture.feedback
-    var feedback = Set<BodyScanCameraStatus.Feedback>()
-    if nativeFeedback.contains(.environmentTooDark) { feedback.insert(.environmentTooDark) }
-    if nativeFeedback.contains(.environmentLowLight) { feedback.insert(.environmentLowLight) }
-    if nativeFeedback.contains(.movingTooFast) { feedback.insert(.movingTooFast) }
-    if nativeFeedback.contains(.outOfFieldOfView) { feedback.insert(.outOfFieldOfView) }
-    if nativeFeedback.contains(.objectTooClose) { feedback.insert(.objectTooClose) }
-    if nativeFeedback.contains(.objectTooFar) { feedback.insert(.objectTooFar) }
-    if nativeFeedback.contains(.objectNotDetected) { feedback.insert(.objectNotDetected) }
-    let trackingNormal = capture.cameraTracking == .normal
-    let issue = mode == .finishing ? nil : BodyScanCameraStatus.guidance(
-      for: feedback, mode: mode, capturePaused: capture.isPaused, trackingNormal: trackingNormal)?.message
-    return BodyScanCameraStatus(mode: mode, completedPasses: completedPasses,
-                               shots: capture.numberOfShotsTaken, passComplete: capture.userCompletedScanPass,
-                               trackingNormal: trackingNormal, issue: issue,
-                               selectionHint: selectionHint, pendingAction: pendingAction,
-                               maximumShots: capture.maximumNumberOfInputImages, fullBodyViews: fullBodyViews)
+    capture = controller
+    cameraStatus.mode = .framing
   }
 
-  func positionFeedback(now: Date) -> ScanPositionFeedback {
-    guard let capture, capture.cameraTracking == .normal, !capture.isPaused,
-          capture.state == .capturing || capture.state == .ready || capture.state == .detecting else {
-      return ScanPositionFeedback(source: "Distance unavailable while paused")
+  func cameraUpdated(_ update: BodyCaptureUpdate, directory: URL, captureID: UUID) {
+    guard phase == .capturing, captureDirectory == directory, generation == captureID,
+          cameraStatus.mode != .finishing else { return }
+    position = update.position
+    cameraStatus.calibrated = update.calibrated
+    cameraStatus.calibrationProgress = update.calibrationProgress
+    cameraStatus.observedAt = update.observedAt
+    cameraStatus.completedViews = update.completedViews
+    cameraStatus.missingAngles = update.missingAngles
+    cameraStatus.direction = update.direction
+    cameraStatus.instruction = update.instruction
+    if update.captureComplete {
+      cameraStatus.mode = .finishing
+      position = ScanPositionFeedback()
+      beginDiagnosticStage(.captureFinalization)
+      capture?.finishCapture()
     }
-    let feedback = capture.feedback
-    // Object Capture exposes qualitative live feedback, not its camera's live depth buffer.
-    return .body(meters: lastDistance, capturedAt: lastDistanceAt, now: now,
-                 tooClose: feedback.contains(.objectTooClose), tooFar: feedback.contains(.objectTooFar),
-                 framed: !feedback.contains(.outOfFieldOfView) && !feedback.contains(.objectNotDetected) && capture.state == .capturing)
   }
 
-  private func updatePhotoEvidence() {
-    guard evidenceTask == nil, let work, (capture?.numberOfShotsTaken ?? 0) > 0 else { return }
-    let token = generation, reader = evidenceReader
-    let images = work.appendingPathComponent("Images", isDirectory: true)
-    evidenceTask = Task { [weak self] in
-      let observation = await reader.latest(in: images)
-      guard let self, generation == token, !Task.isCancelled else { return }
-      evidenceTask = nil
-      guard let observation else { return }
-      lastDistance = observation.meters
-      lastDistanceAt = observation.capturedAt
-      if observation.torsoVisible { torsoViews += 1 }
-      if observation.legsVisible { legViews += 1 }
-      if observation.fullBodyVisible { fullBodyViews += 1 }
-      captureProgressChanged()
+  func cameraFinished(_ captured: BodyCaptureArchive, directory: URL, captureID: UUID) {
+    guard phase == .capturing, captureDirectory == directory, generation == captureID else { return }
+    guard captured.hasCoverage() else { fail(AvatarScanError.insufficientCoverage); return }
+    capture?.stop()
+    capture = nil
+    archive = captured
+    imageCount = captured.sampleCount
+    completedPasses = 1
+    position = ScanPositionFeedback()
+    endDiagnosticStage()
+    reconstruct()
+  }
+
+  func cameraFailed(_ error: Error, directory: URL, captureID: UUID) {
+    guard phase == .capturing, captureDirectory == directory, generation == captureID else { return }
+    if error as? BodyCaptureCameraError == .interrupted, archive != nil, !requestedAngles.isEmpty {
+      fail(error, recovery: .missingViews(requestedAngles))
+      return
     }
+    fail(error)
   }
 
   func performCameraAction() {
-    guard let capture, cameraStatus.actionEnabled, let action = cameraStatus.action else { return }
-    Self.logger.info("Capture action: \(String(describing: action), privacy: .public)")
-    selectionHint = nil
-    switch action {
-    case .findPerson:
-      pendingAction = .findPerson
-      if !capture.startDetecting() {
-        pendingAction = nil
-        selectionHint = "Move slowly over the floor, then try again."
+    guard cameraStatus.canStart(now: ProcessInfo.processInfo.systemUptime), let capture else { return }
+    let token = generation
+    cameraStatus.pendingStart = true
+    Task { [weak self] in
+      let started = await capture.startScanning()
+      guard let self, generation == token, phase == .capturing, cameraStatus.mode == .framing else { return }
+      cameraStatus.pendingStart = false
+      guard started else {
+        cameraStatus.calibrated = false
+        cameraStatus.instruction = "Keep iPhone steady."
+        return
       }
-    case .startCapture:
-      pendingAction = .startCapture
-      capture.startCapturing()
-    case .nextPass: nextPass()
-    case .buildAvatar: finish()
-    case .retakeScan: cancel()
+      cameraStatus.mode = .capturing
+      cameraStatus.instruction = "Hold there."
+      beginDiagnosticStage(.bodyPass)
     }
-  }
-
-  func resetSelection() {
-    guard phase == .capturing, let capture, capture.state == .detecting, pendingAction == nil else { return }
-    if capture.resetDetection() { selectionHint = nil }
-  }
-
-  func actionTimedOut(_ action: BodyScanCameraStatus.Action) {
-    guard phase == .capturing, pendingAction == action, action != .buildAvatar else { return }
-    pendingAction = nil
-    selectionHint = "Hold still, include the floor, then try again."
   }
 
   func clearSaveError() { saveError = nil }
 
-  static func hasCoverage(images: Int, passes: Int) -> Bool { AvatarScanInput.hasCoverage(images: images, passes: passes) }
 
   func start() async {
-    guard Self.isSupported else { phase = .failed(AvatarScanError.unsupported.localizedDescription); return }
     cancel()
+    guard Self.isSupported else { fail(AvatarScanError.unsupported); return }
     phase = .preparing
     let token = generation
     let permission: Bool
@@ -158,112 +136,62 @@ final class BodyCaptureModel {
     case .notDetermined: permission = await AVCaptureDevice.requestAccess(for: .video)
     default: permission = false
     }
-    guard generation == token else { return }
-    guard permission else { phase = .failed(AvatarScanError.unavailableCamera.localizedDescription); return }
+    guard generation == token, !Task.isCancelled else { return }
+    guard permission else { fail(AvatarScanError.unavailableCamera); return }
     do {
       let root = URL.applicationSupportDirectory.appendingPathComponent("OnYouCaptureWork", isDirectory: true)
       try AvatarScanStore.prepareDirectory(root)
       let capacity = try FileManager.default.attributesOfFileSystem(forPath: root.path)[.systemFreeSize] as? NSNumber
       guard let capacity, capacity.int64Value >= 2_000_000_000 else { throw AvatarScanError.insufficientSpace }
-      // No capture is active here. Remove only this subsystem's abandoned UUID attempts.
-      for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
-        where UUID(uuidString: url.lastPathComponent) != nil {
-        try FileManager.default.removeItem(at: url)
+      // Do not remove another scan's directory while a canceled native build is unwinding.
+      for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        where UUID(uuidString: url.lastPathComponent) != nil && !Self.activeWork.contains(url.standardizedFileURL) {
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        if values.isDirectory == true && values.isSymbolicLink != true { try FileManager.default.removeItem(at: url) }
       }
       let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
       try AvatarScanStore.prepareDirectory(directory)
       work = directory
+      Self.activeWork.insert(directory.standardizedFileURL)
       let images = directory.appendingPathComponent("Images", isDirectory: true)
       try AvatarScanStore.prepareDirectory(images)
-      let checkpoints = directory.appendingPathComponent("Checkpoints", isDirectory: true)
-      try AvatarScanStore.prepareDirectory(checkpoints)
-      var configuration = ObjectCaptureSession.Configuration()
-      configuration.checkpointDirectory = checkpoints
-      configuration.isOverCaptureEnabled = false
-      let session = ObjectCaptureSession()
-      session.shouldPlayHaptics = false // Guidance haptics share the camera UI’s mute control.
-      capture = session
+      cameraStatus = BodyScanCameraStatus(mode: .initializing)
       phase = .capturing
       beginDiagnosticStage(.framing)
-      session.start(imagesDirectory: images, configuration: configuration)
     } catch { fail(error) }
   }
 
-  func stateChanged(_ state: ObjectCaptureSession.CaptureState) {
-    guard phase == .capturing else { return }
-    Self.logger.info("Capture state: \(String(describing: self.cameraStatus.mode), privacy: .public); photos: \(self.capture?.numberOfShotsTaken ?? 0); passes: \(self.completedPasses)")
-    selectionHint = nil
-    switch state {
-    case .ready:
-      beginDiagnosticStage(.framing)
-    case .detecting:
-      pendingAction = nil
-      beginDiagnosticStage(.selection)
-    case .capturing:
-      pendingAction = nil
-      if captureStartedAt == nil { captureStartedAt = Date() }
-      beginDiagnosticStage(completedPasses == 0 ? .bodyPass : .detailPass)
-    case .finishing:
-      pendingAction = nil
-      beginDiagnosticStage(.captureFinalization)
-    case .completed:
-      endDiagnosticStage()
-      imageCount = capture?.numberOfShotsTaken ?? 0
-      capture = nil
-      guard Self.hasCoverage(images: imageCount, passes: completedPasses), fullBodyViews >= 3, !trackingInterrupted else {
-        fail(AvatarScanError.insufficientCoverage); return
-      }
-      reconstruct()
-    case .failed(let error): fail(error)
-    default: break
-    }
-  }
-
-  func captureProgressChanged() {
-    guard phase == .capturing, let capture, capture.state == .capturing else { return }
-    updatePhotoEvidence()
-    // Reconcile current SDK values; SwiftUI may deliver the photo and ring observers in either order.
-    if capture.userCompletedScanPass && !recordedCurrentPass {
-      recordedCurrentPass = true
-      completedPasses += 1
-      beginDiagnosticStage(.passCheckpoint)
-    } else if !capture.userCompletedScanPass && pendingAction == .nextPass {
-      recordedCurrentPass = false
-      pendingAction = nil
-    }
-    guard pendingAction != .nextPass, cameraStatus.awaitsNextStep,
-          !cameraStatus.exhaustedCaptureCapacity, !capture.isPaused else { return }
-    // Stop taking extra photos while the person reads the next-step guidance.
-    capture.pause()
-    Self.logger.info("Capture paused at checkpoint; photos: \(capture.numberOfShotsTaken); passes: \(self.completedPasses)")
-  }
-
-  func nextPass() {
-    guard let capture, capture.state == .capturing, capture.userCompletedScanPass else { return }
-    pendingAction = .nextPass
-    beginDiagnosticStage(completedPasses == 0 ? .bodyPass : .detailPass)
-    selectionHint = nil
-    capture.beginNewScanPass()
-    capture.resume()
-    captureProgressChanged()
-  }
 
   func setCapturePromptVisible(_ visible: Bool) {
-    guard phase == .capturing, let capture, capture.state == .capturing else { return }
-    if visible { capture.pause() }
-    else if !cameraStatus.awaitsNextStep { capture.resume() }
+    guard phase == .capturing else { return }
+    capture?.setPaused(visible)
+    if visible { position = ScanPositionFeedback() }
   }
 
-  func finish() {
-    guard canFinish, pendingAction == nil else { return }
-    pendingAction = .buildAvatar
-    capture?.finish()
+  func retryProcessing() {
+    guard case .failed = phase, recovery == .retryProcessing, archive != nil, work != nil else { return }
+    reconstruct()
+  }
+
+  func captureMissingViews() {
+    guard case .failed = phase, case .missingViews = recovery, let archive, work != nil else { return }
+    invalidateWork()
+    cameraStatus = BodyScanCameraStatus(mode: .initializing)
+    cameraStatus.direction = archive.direction
+    cameraStatus.missingAngles = requestedAngles
+    cameraStatus.completedViews = BodyCaptureTurn(direction: archive.direction, recoveringAngles: requestedAngles)
+      .feedback(coverage: archive.coverage).completedViews
+    phase = .capturing
+    beginDiagnosticStage(.framing)
   }
 
   func suspend() {
-    if phase == .capturing || phase == .preparing || phase == .reconstructing {
-      trackingInterrupted = true
-      fail(CaptureInterrupted())
+    switch phase {
+    case .reconstructing: fail(CaptureInterrupted(), recovery: .retryProcessing)
+    case .capturing where archive != nil && !requestedAngles.isEmpty:
+      fail(CaptureInterrupted(), recovery: .missingViews(requestedAngles))
+    case .capturing, .preparing: fail(CaptureInterrupted())
+    default: break
     }
   }
 
@@ -280,75 +208,123 @@ final class BodyCaptureModel {
   }
 
   func cancel() {
-    endDiagnosticStage()
-    generation = UUID()
-    task?.cancel()
+    invalidateWork()
+    let pending = task
     task = nil
-    evidenceTask?.cancel(); evidenceTask = nil
-    evidenceReader = BodyCaptureEvidence()
-    lastDistance = nil; lastDistanceAt = nil
-    torsoViews = 0; legViews = 0; fullBodyViews = 0
-    capture?.cancel()
-    capture = nil
-    reconstruction?.cancel()
-    reconstruction = nil
-    if let work { try? FileManager.default.removeItem(at: work) }
+    if let work {
+      if let pending {
+        Task { await pending.value; Self.removeWork(work) }
+      } else {
+        Self.removeWork(work)
+      }
+    }
+    archive = nil
+    recovery = nil
     work = nil
     modelURL = nil
     calibration = nil
     preparedScene = nil
     completedPasses = 0
     imageCount = 0
-    trackingInterrupted = false
-    captureStartedAt = nil
-    pendingAction = nil
-    selectionHint = nil
+    cameraStatus = BodyScanCameraStatus(mode: .initializing)
+    position = ScanPositionFeedback()
     estimatedRemainingTime = nil
     hasBuildProgress = false
     saveError = nil
-    recordedCurrentPass = false
     progress = 0
     phase = .setup
   }
 
-  private func fail(_ error: Error) {
+  private static func removeWork(_ url: URL) {
+    try? FileManager.default.removeItem(at: url)
+    activeWork.remove(url.standardizedFileURL)
+  }
+
+  private func invalidateWork() {
+    endDiagnosticStage()
+    generation = UUID()
+    task?.cancel()
+    reconstruction?.cancel()
+    reconstruction = nil
+    capture?.stop()
+    capture = nil
+    position = ScanPositionFeedback()
+  }
+
+  private func fail(_ error: Error, recovery: Recovery = .retake) {
     Self.logger.error("Capture failed: \(error.localizedDescription, privacy: .private)")
-    cancel()
+    invalidateWork()
+    self.recovery = recovery
     phase = .failed(error.localizedDescription)
   }
 
+  private func missingViews(_ angles: [Double], in archive: BodyCaptureArchive, keeping ids: Set<Int>) {
+    self.archive = archive.retaining(sampleIDs: ids)
+    fail(AvatarScanError.insufficientCoverage, recovery: .missingViews(angles))
+  }
+
   private func reconstruct() {
-    guard let work else { fail(AvatarScanError.invalidModel); return }
+    guard let work, let archive, archive.hasCoverage() else { fail(AvatarScanError.insufficientCoverage); return }
+    let previous = task
+    invalidateWork()
+    recovery = nil
     phase = .reconstructing
+    progress = 0
+    hasBuildProgress = false
+    estimatedRemainingTime = nil
+    stage = "Preparing your photos"
     let token = generation
+    let build = work.appendingPathComponent("Build-\(token.uuidString)", isDirectory: true)
     task = Task { [weak self] in
-      guard let self else { return }
+      await previous?.value
+      guard !Task.isCancelled, let self, generation == token else { return }
+      var keepModel = false
+      defer {
+        if !keepModel { try? FileManager.default.removeItem(at: build) }
+        if generation == token {
+          task = nil
+          reconstruction = nil
+        }
+      }
       do {
-        // Metric scale must come from captured depth, never a guessed height.
-        stage = "Checking your capture"
+        let checkpoints = build.appendingPathComponent("Checkpoints", isDirectory: true)
+        try AvatarScanStore.prepareDirectory(checkpoints)
         beginDiagnosticStage(.photoPreflight)
-        let images = work.appendingPathComponent("Images")
-        let files = try FileManager.default.contentsOfDirectory(at: images, includingPropertiesForKeys: nil)
-          .filter { ["heic", "heif"].contains($0.pathExtension.lowercased()) }.map(\.standardizedFileURL)
-        try Task.checkCancellation()
-        guard generation == token else { return }
-        let input = try await AvatarScanInput.preflight(files: files)
-        try Task.checkCancellation()
-        guard generation == token else { return }
+        let input = AvatarScanInput(imageURLs: archive.imageURLs, depthImageURLs: archive.depthImageURLs)
         imageCount = try input.validate(passes: completedPasses)
+        let photos = try archive.makePhotogrammetryInput()
+        try Task.checkCancellation()
+        guard generation == token else { return }
         beginDiagnosticStage(.reconstruction)
         var configuration = PhotogrammetrySession.Configuration()
-        configuration.checkpointDirectory = work.appendingPathComponent("Checkpoints")
+        configuration.checkpointDirectory = checkpoints
         configuration.isObjectMaskingEnabled = true
         configuration.featureSensitivity = .high
-        configuration.sampleOrdering = .sequential
-        let session = try PhotogrammetrySession(input: work.appendingPathComponent("Images"), configuration: configuration)
+        configuration.sampleOrdering = .unordered
+        let setup = Task.detached(priority: .userInitiated) {
+          try Task.checkCancellation()
+          let session = try PhotogrammetrySession(input: photos.samples, configuration: configuration)
+          do {
+            try photos.validateReads()
+            try Task.checkCancellation()
+          } catch {
+            session.cancel()
+            throw error
+          }
+          return session
+        }
+        let session = try await withTaskCancellationHandler {
+          try await setup.value
+        } onCancel: { setup.cancel() }
+        guard generation == token, !Task.isCancelled else { session.cancel(); return }
         reconstruction = session
-        let destination = work.appendingPathComponent("avatar.usdz")
+        let destination = build.appendingPathComponent("avatar.usdz")
         let modelRequest = PhotogrammetrySession.Request.modelFile(url: destination, detail: .reduced)
         try session.process(requests: [modelRequest, .poses])
         var rejected = Set<Int>()
         var producedFile = false
+        var incomplete = false
+        var processingError: Error?
         var usedPoses: PhotogrammetrySession.Poses?
         for try await output in session.outputs {
           try Task.checkCancellation()
@@ -369,21 +345,40 @@ final class BodyCaptureModel {
               == destination.resolvingSymlinksInPath().standardizedFileURL
           case .requestComplete(_, .poses(let poses)): usedPoses = poses
           case .invalidSample(let id, _), .skippedSample(let id): rejected.insert(id)
-          case .stitchingIncomplete: throw AvatarScanError.insufficientCoverage
-          case .requestError(_, let error): throw error
+          case .stitchingIncomplete: incomplete = true
+          case .requestError(_, let error): processingError = processingError ?? error
           case .processingCancelled: throw CancellationError()
           case .processingComplete:
-            guard producedFile, let usedPoses else {
-              throw AvatarScanError.insufficientCoverage
+            try photos.validateReads()
+            guard let usedPoses else {
+              if let processingError { throw processingError }
+              fail(CaptureAlignmentFailed())
+              return
             }
+            let poses = usedPoses.posesBySample.mapValues {
+              BodyCaptureReconstructedPose(translation: $0.translation, rotation: $0.rotation)
+            }
+            switch archive.alignedCoverage(poses: poses, rejectedIDs: rejected) {
+            case .missingAngles(let angles):
+              missingViews(angles, in: archive, keeping: Set(poses.keys).subtracting(rejected))
+              return
+            case .invalid:
+              fail(CaptureAlignmentFailed())
+              return
+            case .complete:
+              guard !incomplete else { fail(CaptureAlignmentFailed()); return }
+            }
+            if let processingError { throw processingError }
+            guard producedFile else { fail(CaptureAlignmentFailed()); return }
             imageCount = try input.validate(usedSampleIDs: Set(usedPoses.posesBySample.keys),
-                                            urlsBySample: usedPoses.urlsBySample, rejectedIDs: rejected,
-                                            passes: completedPasses)
+                                            urlsBySample: archive.urlsBySample, rejectedIDs: rejected,
+                                            fullBodyImageURLs: archive.fullBodyImageURLs, passes: completedPasses)
             endDiagnosticStage()
             stage = "Checking your avatar"
             let prepared = try await PreparedAvatarScene.load(url: destination)
             try Task.checkCancellation()
             guard generation == token else { return }
+            keepModel = true
             if let timings = prepared.loadTimings {
               BodyScanTiming.record(.textureValidation,duration: timings.validation)
               BodyScanTiming.record(.avatarLoading,duration: timings.scene)
@@ -393,10 +388,12 @@ final class BodyCaptureModel {
             modelURL = destination
             reconstruction = nil
             progress = 1
+            self.archive = nil
+            recovery = nil
+            // A usable draft needs only its validated model, not private source images.
+            if let images = captureDirectory { try? FileManager.default.removeItem(at: images) }
+            try? FileManager.default.removeItem(at: checkpoints)
             phase = .review
-            // Keep only the reconstruction for review; raw photos and checkpoints are temporary.
-            try? FileManager.default.removeItem(at: work.appendingPathComponent("Images"))
-            try? FileManager.default.removeItem(at: work.appendingPathComponent("Checkpoints"))
             return
           default: break
           }
@@ -404,7 +401,8 @@ final class BodyCaptureModel {
         if phase != .review { throw AvatarScanError.invalidModel }
       } catch {
         guard generation == token else { return }
-        fail(error)
+        let needsRetake = error is BodyCaptureArchiveError || error is AvatarScanError
+        fail(error, recovery: needsRetake ? .retake : .retryProcessing)
       }
     }
   }
@@ -437,5 +435,9 @@ final class BodyCaptureModel {
 }
 
 private struct CaptureInterrupted: LocalizedError {
-  var errorDescription: String? { "The scan was interrupted. Start again so all views share the same tracking and scale." }
+  var errorDescription: String? { "The scan was interrupted. Return to On You to continue." }
+}
+
+private struct CaptureAlignmentFailed: LocalizedError {
+  var errorDescription: String? { "The views didn’t align. Keep arms and torso together while turning." }
 }

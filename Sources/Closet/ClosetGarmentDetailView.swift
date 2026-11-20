@@ -8,10 +8,11 @@ struct ClosetGarmentDetailView: View {
   @State private var deleting = false
   @State private var scanning = false
   @State private var scanningBody = false
+  @State private var reviewingCapture = false
+  @State private var capture: GarmentCaptureResult?
   @State private var tryingOn = false
+  @State private var tryOnModel = TryOnModel()
   @State private var tryOnAvatar: AvatarScanAsset?
-  @State private var captureError: String?
-
   private var current: ClosetGarment { store.garments.first(where: { $0.id == garment.id }) ?? garment }
 
   var body: some View {
@@ -75,23 +76,69 @@ struct ClosetGarmentDetailView: View {
     .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(isPresented: $tryingOn) {
       if let asset = tryOnAvatar {
-        TryOnView(avatar: asset,garment: current,photoURL: store.imageURL(for: current))
+        TryOnView(avatar: asset,garment: current,photoURL: store.imageURL(for: current),model: tryOnModel)
       }
     }
-    .fullScreenCover(isPresented: $scanning) {
+    .fullScreenCover(isPresented: $scanning, onDismiss: {
+      if capture != nil { reviewingCapture = true }
+    }) {
       NavigationStack {
-        AutomaticGarmentScanView { capture in
-          do { try store.replaceCapture(for: current, with: capture) }
-          catch { captureError = error.localizedDescription }
-        }
+        AutomaticGarmentScanView { result in capture = result }
+      }
+    }
+    .fullScreenCover(isPresented: $reviewingCapture, onDismiss: { capture = nil }) {
+      if let capture {
+        GarmentCaptureReviewView(
+          capture: capture,
+          onCancel: { reviewingCapture = false; self.capture = nil },
+          onSave: {
+            do {
+              try store.replaceCapture(for: current, with: capture)
+              reviewingCapture = false
+              self.capture = nil
+              return nil
+            } catch { return error.localizedDescription }
+          }
+        )
       }
     }
     .fullScreenCover(isPresented: $scanningBody) { BodyScanFlowView(store: scans) }
-    .alert("Capture couldn’t be saved", isPresented: Binding(get: { captureError != nil }, set: { if !$0 { captureError = nil } })) {
-      Button("OK", role: .cancel) { captureError = nil }
-    } message: { Text(captureError ?? "") }
     .confirmationDialog("Delete this garment?", isPresented: $deleting, titleVisibility: .visible) {
       Button("Delete garment", role: .destructive) { store.delete(current); if store.error == nil { dismiss() } }
+    }
+  }
+}
+
+private struct GarmentCaptureReviewView: View {
+  var capture: GarmentCaptureResult
+  var onCancel: () -> Void
+  var onSave: () -> String?
+  @State private var saveError: String?
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section {
+          if let image = UIImage(data: capture.image) {
+            Image(uiImage: image).resizable().scaledToFit().frame(maxWidth: .infinity).frame(height: 280)
+              .accessibilityLabel("Retaken shirt photo")
+          }
+        }
+        Section("Estimated dimensions") {
+          GarmentDimensionsView(dimensions: capture.dimensions)
+          Text("Dimensions use checked garment landmarks and depth. Estimates do not measure fabric stretch or drape.")
+            .foregroundStyle(.secondary)
+        }
+        if let saveError { Section { Text(saveError).foregroundStyle(.red) } }
+      }
+      .navigationTitle("Review shirt")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onCancel) }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Save") { saveError = onSave() }.accessibilityIdentifier("garment.retake.save")
+        }
+      }
     }
   }
 }

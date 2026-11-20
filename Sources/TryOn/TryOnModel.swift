@@ -41,11 +41,17 @@ final class TryOnModel {
     }
   }
 
-  func cancel() {
-    generation = UUID(); result = nil; failure = nil
-    work?.cancel(); work = nil
-    let owner = builder
-    Task { await owner.clear() }
+  func cancelPending() {
+    generation = UUID()
+    work?.cancel()
+    work = nil
   }
+
+  func cancel() {
+    cancelPending()
+    result = nil
+    failure = nil
+  }
+
   private func update(stage: String, token: UUID) { if generation == token { self.stage = stage } }
 }

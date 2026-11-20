@@ -13,12 +13,23 @@ final class OnYouUITests: XCTestCase {
     XCTAssertFalse(app.segmentedControls.buttons["Front"].exists)
     XCTAssertFalse(app.tabBars.buttons["Scan"].exists)
     app.buttons["scan.open"].tap()
-    XCTAssertTrue(app.navigationBars["Scan your body"].waitForExistence(timeout: 5))
+    #if !targetEnvironment(simulator)
+    let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons["Allow"].firstMatch
+    if allow.waitForExistence(timeout: 3) { allow.tap() }
+    #endif
+    let outcome = app.descendants(matching: .any).matching(
+      NSPredicate(format: "identifier == %@ OR identifier == %@", "scan.unsupported", "scan.camera.action")
+    ).firstMatch
+    XCTAssertTrue(outcome.waitForExistence(timeout: 15))
     XCTAssertFalse(app.textFields["scan.height"].exists)
-    XCTAssertTrue(app.staticTexts["Stand still, arms apart."].exists)
-    XCTAssertFalse(app.otherElements["scan.journey"].exists)
     XCTAssertFalse(app.tabBars.firstMatch.isHittable)
-    XCTAssertTrue(app.buttons["scan.start"].exists)
+    let start = app.buttons["scan.camera.action"]
+    if app.descendants(matching: .any)["scan.unsupported"].exists {
+      XCTAssertFalse(start.exists)
+    } else {
+      XCTAssertEqual(start.label, "Start scan")
+      XCTAssertTrue(app.staticTexts["scan.camera.guidance"].exists)
+    }
     app.buttons["scan.close"].tap()
     XCTAssertTrue(app.descendants(matching: .any)["body.scene"].waitForExistence(timeout: 5))
   }

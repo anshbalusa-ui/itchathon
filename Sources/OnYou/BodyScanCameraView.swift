@@ -2,169 +2,224 @@ import SwiftUI
 
 struct BodyScanCameraView<Camera: View>: View {
   var status: BodyScanCameraStatus
-  var startedAt: Date?
-  var position: (Date) -> ScanPositionFeedback = { _ in ScanPositionFeedback() }
-  var torsoViews = 0
-  var legViews = 0
+  var position = ScanPositionFeedback()
   var close: () -> Void
   var performAction: () -> Void
-  var reframe: () -> Void = {}
-  var pauseForCancel: (Bool) -> Void = { _ in }
+  var paused = false
+  var pauseCapture: (Bool) -> Void = { _ in }
   @ViewBuilder var camera: () -> Camera
   @AppStorage("on-you.capture-haptics") private var haptics = true
-  @State private var cancelExpanded = false
   @State private var showingHelp = false
-  @State private var panelHeight: CGFloat = 150
-  @Namespace private var closeTransition
+  @State private var expiredObservation: TimeInterval?
+  @ScaledMetric(relativeTo: .body) private var controlsHeight: CGFloat = 184
+  @Environment(\.dynamicTypeSize) private var typeSize
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var scenePhase
+
+  private var promptsVisible: Bool { paused || showingHelp }
+
+  private var guidanceActive: Bool {
+    !promptsVisible && scenePhase == .active && (status.mode == .framing || status.mode == .capturing)
+  }
+
+  private var readyObservation: TimeInterval? {
+    status.mode == .framing && status.calibrated && !status.pendingStart ? status.observedAt : nil
+  }
+
+  private func instruction(isPortrait: Bool) -> String {
+    switch status.mode {
+    case .initializing: "Getting the camera ready…"
+    case .finishing: "Checking your scan…"
+    case .framing, .capturing:
+      if !isPortrait { "Hold iPhone upright." }
+      else if status.pendingStart { "Starting scan…" }
+      else { status.instruction }
+    }
+  }
 
   var body: some View {
     GeometryReader { geometry in
-      VStack(spacing: 0) {
+      let isPortrait = geometry.size.height > geometry.size.width
+      let guidance = instruction(isPortrait: isPortrait)
+      let canStart = isPortrait && guidanceActive && status.observedAt != expiredObservation
+        && status.canStart(now: ProcessInfo.processInfo.systemUptime)
+      let layout = isPortrait ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+      layout {
         camera()
-          .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+          .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
           .overlay {
-            if status.mode == .framing { BodyScanFloorGuide().allowsHitTesting(false).accessibilityHidden(true) }
-          }
-          .overlay(alignment: .top) { header.padding(16) }
-          .clipped()
-        ScrollView {
-          VStack(spacing: 12) {
-            if status.awaitsNextStep {
-              Text(status.title).font(.headline).accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("scan.camera.title")
-            }
-            Text(status.instruction)
-              .font(.callout.weight(.medium)).multilineTextAlignment(.center)
-              .fixedSize(horizontal: false, vertical: true)
-              .accessibilityIdentifier("scan.camera.guidance")
-            if status.mode != .initializing && status.mode != .finishing && !status.awaitsNextStep {
-              TimelineView(.periodic(from: .now, by: 1)) { context in
-                ScanPositionIndicator(position: position(context.date), active: !cancelExpanded && !showingHelp)
+            if isPortrait {
+              ZStack {
+                BodyScanFramingGuide(showOutline: true)
+                  .stroke(.white.opacity(0.48), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                  .opacity(status.mode == .framing ? 1 : 0)
+                  .accessibilityElement(children: .ignore)
+                  .accessibilityLabel("Full-body framing guide")
+                  .accessibilityIdentifier("scan.framing-outline")
+                  .accessibilityHidden(status.mode != .framing)
+                BodyScanFramingGuide(showOutline: false)
+                  .stroke(.white.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                  .opacity(status.mode == .capturing ? 1 : 0)
+                  .accessibilityHidden(true)
               }
+              .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: status.mode)
+              .allowsHitTesting(false)
             }
-            actionRow.disabled(cancelExpanded)
           }
-          .padding(20).frame(maxWidth: .infinity)
-          .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
-        }
-        .frame(height: min(panelHeight, geometry.size.height * 0.44))
-        .scrollBounceBehavior(.basedOnSize)
-        .background(.regularMaterial)
+          .overlay { ScanWarningOverlay(position: position, active: isPortrait && guidanceActive) }
+          .overlay(alignment: .bottom) {
+            if isPortrait && !reduceTransparency {
+              LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: 28)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+          }
+          .clipped()
+        // Instructions can wrap or scroll without moving the calibrated camera viewport.
+        controls(guidance, isPortrait: isPortrait, canStart: canStart)
+          .frame(width: isPortrait ? nil : geometry.size.width * 0.44,
+                 height: isPortrait ? min(controlsHeight, geometry.size.height / 2) : nil)
+          .background(.black)
       }
+      .onChange(of: guidance) { _, instruction in
+        if !promptsVisible && scenePhase == .active && status.mode != .finishing {
+          AccessibilityNotification.Announcement(instruction).post()
+        }
+      }
+      .sensoryFeedback(.success, trigger: canStart) { old, new in haptics && !old && new }
     }
-    .background(.black).tint(.blue).preferredColorScheme(.dark)
-    .onChange(of: cancelExpanded || showingHelp) { _, value in pauseForCancel(value) }
+    .background(.black)
+    .preferredColorScheme(.dark)
+    .toolbarColorScheme(.dark, for: .navigationBar)
+    .toolbarBackground(.hidden, for: .navigationBar)
+    .toolbar { captureToolbar }
+    .onChange(of: promptsVisible) { _, visible in pauseCapture(visible) }
     .sheet(isPresented: $showingHelp) { help }
+    .task(id: readyObservation) {
+      guard let observedAt = readyObservation else { return }
+      let now = ProcessInfo.processInfo.systemUptime
+      guard status.canStart(now: now) else {
+        expiredObservation = observedAt
+        return
+      }
+      // Leave the exact 0.6-second boundary valid, then disable without polling.
+      let delay = (observedAt + 0.6).nextUp - now
+      do { try await Task.sleep(for: .seconds(max(0, delay))) } catch { return }
+      guard !Task.isCancelled else { return }
+      expiredObservation = observedAt
+    }
   }
 
-  private var header: some View {
-    HStack(alignment: .top) {
+  private func controls(_ guidance: String, isPortrait: Bool, canStart: Bool) -> some View {
+    let start = BodyScanPrimaryButton(title: "Start scan", enabled: canStart, action: performAction)
+      .accessibilityIdentifier("scan.camera.action")
+    let showStart = status.mode == .framing
+    return VStack(spacing: 0) {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 10) {
+          ZStack(alignment: .topLeading) {
+            Text(guidance)
+              .font(.headline)
+              .fixedSize(horizontal: false, vertical: true)
+              .id(guidance)
+              .transition(.opacity)
+              .accessibilityAddTraits(.isHeader)
+              .accessibilityIdentifier("scan.camera.guidance")
+          }
+          .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: guidance)
+          if status.mode == .framing && isPortrait && !canStart && !status.pendingStart {
+            ProgressView(value: status.calibrationProgress)
+              .accessibilityLabel("Steady position calibration")
+              .accessibilityIdentifier("scan.calibration")
+          } else if status.mode == .initializing || status.mode == .finishing {
+            ProgressView().accessibilityHidden(true)
+          }
+          if typeSize.isAccessibilitySize && (status.mode == .capturing || status.mode == .finishing || !status.completedViews.isEmpty || !status.missingAngles.isEmpty) {
+            viewProgress
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+      }
+      .scrollBounceBehavior(.basedOnSize)
+
+      if showStart {
+        start
+          .padding(.horizontal, 16)
+          .padding(.bottom, 12)
+      } else if !typeSize.isAccessibilitySize && (status.mode == .capturing || status.mode == .finishing) {
+        viewProgress
+          .padding(.horizontal, 16)
+          .padding(.bottom, 20)
+      }
+    }
+  }
+
+  @ToolbarContentBuilder private var captureToolbar: some ToolbarContent {
+    ToolbarItem(placement: .cancellationAction) {
+      Button("Close scan", systemImage: "xmark", action: close)
+        .labelStyle(.iconOnly)
+        .accessibilityIdentifier("scan.close")
+    }
+    ToolbarItem(placement: .topBarTrailing) {
       Menu {
         Button("Scan help", systemImage: "info") { showingHelp = true }
         Toggle("Guidance haptics", isOn: $haptics)
       } label: {
         Label("Scan options", systemImage: "ellipsis").labelStyle(.iconOnly)
-          .frame(width: 44, height: 44)
-          .glassEffect(.regular.interactive(), in: .circle)
       }
-      .buttonStyle(.plain)
       .accessibilityIdentifier("scan.options")
-      Spacer()
-      GlassEffectContainer(spacing: 12) {
-        HStack(spacing: 12) {
-          if cancelExpanded {
-            Button("Keep scanning", systemImage: "checkmark") { setCancelExpanded(false) }
-              .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-              .accessibilityIdentifier("scan.keep")
+    }
+  }
+
+  private var viewProgress: some View {
+    let layout = typeSize.isAccessibilitySize
+      ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+      : AnyLayout(HStackLayout(alignment: .top, spacing: 8))
+    let needed = status.neededView
+    return layout {
+      ForEach(BodyCaptureView.allCases, id: \.rawValue) { view in
+        let targeted = view == needed
+        let captured = status.completedViews.contains(view) && !targeted
+        VStack(alignment: .leading, spacing: 4) {
+          Capsule()
+            .fill(targeted ? Color.clear : captured ? Color.accentColor : Color.secondary.opacity(0.18))
+            .overlay { if targeted { Capsule().strokeBorder(Color.primary, lineWidth: 1.5) } }
+            .frame(height: 4)
+          HStack(alignment: .firstTextBaseline, spacing: 4) {
+            if captured { Image(systemName: "checkmark").font(.caption2.weight(.bold)) }
+            Text(view.title)
+              .font(.caption.weight(captured || targeted ? .semibold : .regular))
+              .fixedSize(horizontal: false, vertical: true)
           }
-          Button {
-            if cancelExpanded { close() } else { setCancelExpanded(true) }
-          } label: {
-            HStack {
-              if cancelExpanded { Text("Cancel scan").font(.subheadline.weight(.semibold)) }
-              else { Image(systemName: "xmark") }
-            }
-            .frame(minWidth: 44, minHeight: 44)
-            .padding(.horizontal, cancelExpanded ? 14 : 0)
-            .glassEffect(.regular.interactive(), in: .capsule)
-          }
-          .buttonStyle(.plain)
-          .glassEffectID("close", in: closeTransition)
-          .glassEffectTransition(.matchedGeometry)
-          .accessibilityLabel(cancelExpanded ? "Cancel scan" : "Close scan")
-          .accessibilityHint(cancelExpanded ? "Discards this attempt. Your saved avatar is kept." : "Shows Cancel scan and Keep scanning.")
-          .accessibilityIdentifier(cancelExpanded ? "scan.cancel" : "scan.close")
+          .foregroundStyle(.primary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
     }
-    .foregroundStyle(.white)
-  }
-
-  private func setCancelExpanded(_ value: Bool) {
-    withAnimation(reduceMotion ? nil : .snappy) { cancelExpanded = value }
-  }
-
-  @ViewBuilder private var actionRow: some View {
-    if status.pendingAction != nil {
-      BodyScanPrimaryButton(title: status.pendingTitle, busy: true, action: {})
-    } else if status.action != nil {
-      ViewThatFits(in: .horizontal) {
-        HStack(spacing: 12) { reframeButton; primaryAction }
-        VStack(spacing: 12) { primaryAction; reframeButton }
-      }
-    } else if status.mode == .initializing || status.mode == .finishing {
-      ProgressView().accessibilityLabel(status.title)
-    } else {
-      HStack(spacing: 8) {
-        Circle().fill(.red).frame(width: 8, height: 8).accessibilityHidden(true)
-        Text(status.progressTitle)
-          .font(.caption.monospacedDigit())
-      }
-      .accessibilityElement(children: .combine).accessibilityIdentifier("scan.capture-progress")
-    }
-  }
-
-  private var primaryAction: some View {
-    BodyScanPrimaryButton(title: status.actionTitle, enabled: status.actionEnabled, action: performAction)
-      .accessibilityIdentifier("scan.camera.action")
-  }
-
-  @ViewBuilder private var reframeButton: some View {
-    if status.mode == .selecting {
-      Button("Reframe", systemImage: "arrow.counterclockwise", action: reframe)
-        .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.large)
-        .accessibilityHint("Clears the selected box so you can select the whole person again.")
-        .accessibilityIdentifier("scan.reframe")
-    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Captured views")
+    .accessibilityValue(status.viewsAccessibilityValue)
+    .accessibilityIdentifier("scan.views")
+    .animation(reduceMotion ? nil : .smooth, value: status.completedViews)
   }
 
   private var help: some View {
     NavigationStack {
       List {
-        Section("Framing") {
-          Text("Step back until the head and feet are visible. Keep the person still, with their arms slightly apart.")
-          Text("Point the center of the camera at the floor beside their feet and tap Set floor. Then lift the camera and drag the box corners to include their head, hands, and feet. Use Reframe if the box selects the wrong area.")
+        Section("Frame") {
+          Text("Ask a helper to hold iPhone. Fit the whole person inside the camera view, from head to toe.")
+          Text("Hold iPhone steady. When Start scan is enabled, tap it to lock this viewpoint.")
         }
-        Section("Scanning") {
-          Text("Tap Start scan. Walk slowly around the person and follow the camera ring. We pause after each circle.")
-          Text("The camera needs three photos that clearly show the head, torso, and both ankles, as well as two complete circles and at least 60 photos.")
+        Section("Turn") {
+          Text("Keep iPhone in the same spot. Ask the person to turn slowly with arms slightly away from the body.")
+          Text("The ring fills as clear views are saved. The white marker points to a missing angle; follow the instruction to fill that gap.")
+          Text("Relay the on-screen instruction. If a view is missing, follow the highlighted view. Other views are kept.")
         }
-        Section("This attempt") {
-          if let startedAt {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-              LabeledContent("Time", value: BodyScanTiming.elapsed(since: startedAt, now: context.date))
-            }
-          }
-          LabeledContent("Photos", value: "\(status.shots)")
-          LabeledContent("Circles completed", value: "\(status.completedPasses)")
-          LabeledContent("Whole-body views checked", value: "\(status.fullBodyViews)")
-          LabeledContent("Torso visible in sampled photos", value: "\(torsoViews)")
-          LabeledContent("Legs visible in sampled photos", value: "\(legViews)")
-          Text("Visibility checks do not measure complete surface coverage. Follow the camera ring.").font(.footnote)
-        }
-        Section("Distance") {
-          Text("When available, the number is depth from the last captured photo, not a live distance. Move closer or back when the camera asks.")
+        Section("Review") {
+          Text("Wait for the scan check to finish before handing the phone back. Review the scan before choosing whether to use it.")
         }
       }
       .navigationTitle("Scan help").navigationBarTitleDisplayMode(.inline)

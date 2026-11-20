@@ -16,36 +16,78 @@ final class AvatarScanInputTests: XCTestCase {
     let aliased = Set((0..<60).map { alias.appendingPathComponent("\($0).heic") })
     let input = AvatarScanInput(imageURLs: aliased, depthImageURLs: aliased)
     var mapping = Dictionary(uniqueKeysWithValues: urls.enumerated().map { ($0.offset, $0.element) })
-    XCTAssertEqual(try input.validate(usedSampleIDs: Set(0..<60), urlsBySample: mapping, rejectedIDs: [], passes: 2), 60)
+    let bodyURLs = Set((0..<3).map { alias.appendingPathComponent("\($0).heic") })
+    XCTAssertEqual(try input.validate(usedSampleIDs: Set(0..<60), urlsBySample: mapping, rejectedIDs: [],
+                                      fullBodyImageURLs: bodyURLs, passes: 2), 60)
     mapping[59] = alias.appendingPathComponent("0.heic")
-    XCTAssertThrowsError(try input.validate(usedSampleIDs: Set(0..<60), urlsBySample: mapping, rejectedIDs: [], passes: 2))
+    XCTAssertThrowsError(try input.validate(usedSampleIDs: Set(0..<60), urlsBySample: mapping, rejectedIDs: [],
+                                            fullBodyImageURLs: bodyURLs, passes: 2))
   }
 
   func testOnlySavedAlignedImagesWithRetainedDepthCount() throws {
     let urls = (0..<80).map { URL(fileURLWithPath: "/capture/\($0).heic") }
     let input = AvatarScanInput(imageURLs: Set(urls), depthImageURLs: Set(urls.prefix(40)))
+    let bodyURLs = Set(urls[20..<23])
     XCTAssertEqual(try input.validate(passes: 2), 80)
+    XCTAssertEqual(try input.validate(passes: 1), 80)
     let mapping = Dictionary(uniqueKeysWithValues: urls.enumerated().map { ($0.offset, $0.element) })
     let all = Set(mapping.keys)
-    XCTAssertEqual(try input.validate(usedSampleIDs: all, urlsBySample: mapping, rejectedIDs: [], passes: 2), 80)
-    XCTAssertEqual(try input.validate(usedSampleIDs: Set(0..<60), urlsBySample: mapping, rejectedIDs: [], passes: 2), 60)
+    XCTAssertEqual(try input.validate(usedSampleIDs: all, urlsBySample: mapping, rejectedIDs: [],
+                                      fullBodyImageURLs: bodyURLs, passes: 2), 80)
+    XCTAssertEqual(try input.validate(usedSampleIDs: Set(0..<60), urlsBySample: mapping, rejectedIDs: [],
+                                      fullBodyImageURLs: bodyURLs, passes: 2), 60)
     // Enough RGB images remain, but too many depth-bearing samples were rejected.
     XCTAssertThrowsError(try input.validate(usedSampleIDs: all, urlsBySample: mapping,
-                                            rejectedIDs: Set(0..<20), passes: 2))
+                                            rejectedIDs: Set(0..<20), fullBodyImageURLs: bodyURLs, passes: 2))
     XCTAssertThrowsError(try input.validate(usedSampleIDs: Set(0..<59), urlsBySample: mapping,
-                                            rejectedIDs: [], passes: 2))
+                                            rejectedIDs: [], fullBodyImageURLs: bodyURLs, passes: 2))
     XCTAssertThrowsError(try input.validate(usedSampleIDs: all, urlsBySample: mapping,
-                                            rejectedIDs: [], passes: 1))
+                                            rejectedIDs: [], fullBodyImageURLs: bodyURLs, passes: 0))
     var missing = mapping
     missing[79] = nil
-    XCTAssertThrowsError(try input.validate(usedSampleIDs: all, urlsBySample: missing, rejectedIDs: [], passes: 2))
+    XCTAssertThrowsError(try input.validate(usedSampleIDs: all, urlsBySample: missing, rejectedIDs: [],
+                                            fullBodyImageURLs: bodyURLs, passes: 2))
     var duplicate = mapping
     duplicate[79] = urls[0]
-    XCTAssertThrowsError(try input.validate(usedSampleIDs: all, urlsBySample: duplicate, rejectedIDs: [], passes: 2))
+    XCTAssertThrowsError(try input.validate(usedSampleIDs: all, urlsBySample: duplicate, rejectedIDs: [],
+                                            fullBodyImageURLs: bodyURLs, passes: 2))
     var unknown = mapping
     unknown[79] = URL(fileURLWithPath: "/different/79.heic")
-    XCTAssertThrowsError(try input.validate(usedSampleIDs: all, urlsBySample: unknown, rejectedIDs: [], passes: 2))
+    XCTAssertThrowsError(try input.validate(usedSampleIDs: all, urlsBySample: unknown, rejectedIDs: [],
+                                            fullBodyImageURLs: bodyURLs, passes: 2))
   }
+
+  func testFullBodyEvidenceMustBeAcceptedUniqueAndAligned() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let original = root.appendingPathComponent("Images")
+    let alias = root.appendingPathComponent("alias")
+    try FileManager.default.createDirectory(at: original, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: original)
+    let urls = (0..<61).map { original.appendingPathComponent("\($0).heic") }
+    for url in urls { try Data().write(to: url) }
+    let input = AvatarScanInput(imageURLs: Set(urls), depthImageURLs: Set(urls))
+    let mapping = Dictionary(uniqueKeysWithValues: urls.enumerated().map { ($0.offset, $0.element) })
+    let allIDs = Set(mapping.keys)
+    let bodyURLs = Set(urls.prefix(4))
+
+    XCTAssertEqual(try input.validate(usedSampleIDs: allIDs, urlsBySample: mapping, rejectedIDs: [0],
+                                      fullBodyImageURLs: bodyURLs, passes: 2), 60)
+    XCTAssertThrowsError(try input.validate(usedSampleIDs: allIDs, urlsBySample: mapping, rejectedIDs: [0, 1],
+                                            fullBodyImageURLs: bodyURLs, passes: 2))
+
+    let duplicateAliasesAndUnknown: Set<URL> = [
+      urls[0], alias.appendingPathComponent("0.heic"), urls[1], root.appendingPathComponent("unknown.heic")
+    ]
+    XCTAssertThrowsError(try input.validate(usedSampleIDs: allIDs, urlsBySample: mapping, rejectedIDs: [],
+                                            fullBodyImageURLs: duplicateAliasesAndUnknown, passes: 2))
+    let threeUniqueAliases: Set<URL> = [
+      urls[0], alias.appendingPathComponent("0.heic"), urls[1], urls[2]
+    ]
+    XCTAssertEqual(try input.validate(usedSampleIDs: allIDs, urlsBySample: mapping, rejectedIDs: [],
+                                      fullBodyImageURLs: threeUniqueAliases, passes: 2), 61)
+  }
+
 
   func testMissingSavedPhotosAndMissingDepthCannotPassPreflight() {
     let urls = Set((0..<59).map { URL(fileURLWithPath: "/capture/\($0).heic") })
@@ -86,37 +128,4 @@ final class AvatarScanInputTests: XCTestCase {
     }
   }
 
-  func testDepthPreflightCountsEveryLoadAndStopsAtCancellation() async {
-    actor ReadCount {
-      private(set) var value = 0
-      func increment() { value += 1 }
-    }
-    let reads = ReadCount()
-    let files = (0..<3).map { URL(fileURLWithPath: "/capture/\($0).heic") }
-    do {
-      _ = try await AvatarScanInput.preflight(files: files) { _ in
-        await reads.increment()
-        throw CancellationError()
-      }
-      XCTFail("A cancelled sample load must stop preflight.")
-    } catch is CancellationError {
-    } catch {
-      XCTFail("Expected cancellation, got \(error).")
-    }
-    let readCount = await reads.value
-    XCTAssertEqual(readCount, 1)
-    let completeReads = ReadCount()
-    let fullFiles = (0..<60).map { URL(fileURLWithPath: "/capture/full-\($0).heic") }
-    do {
-      let input = try await AvatarScanInput.preflight(files: fullFiles) { _ in
-        await completeReads.increment()
-        return true
-      }
-      XCTAssertEqual(try input.validate(passes: 2), 60)
-    } catch {
-      XCTFail("Expected 60 accepted test inputs, got \(error).")
-    }
-    let completedCount = await completeReads.value
-    XCTAssertEqual(completedCount, 60)
-  }
 }

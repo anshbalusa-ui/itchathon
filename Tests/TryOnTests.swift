@@ -15,27 +15,35 @@ final class TryOnTests: XCTestCase {
     let result = try await TryOnBuilder().build(avatar: asset, garment: garment, photoURL: fixture.closet.imageURL(for: garment)) { _ in }
     XCTAssertTrue(result.timings.usedCapturedLandmarks)
     XCTAssertTrue(result.shape.mesh.positions.allSatisfy { $0.x.isFinite && $0.y.isFinite && $0.z.isFinite })
+    let originalPositions = result.shape.mesh.positions
+    let originalNeedsRoom = result.shape.needsRoom
+    let originalBelowHips = result.shape.belowHips
     let coordinator = BodySceneView.Coordinator()
     coordinator.updateScan(ScannedBodySource(url: asset.url,scene: result.avatar))
-    coordinator.updateTryOn(result, showing: true)
+    coordinator.updateTryOn(result, showing: true, reduceMotion: true)
     let node = try XCTUnwrap(coordinator.garmentNode)
     XCTAssertTrue(node.parent === coordinator.scene.rootNode)
     let geometry = try XCTUnwrap(node.geometry)
     XCTAssertEqual(geometry.sources(for: .normal).first?.vectorCount, result.shape.mesh.positions.count)
+    let vertexSource = try XCTUnwrap(geometry.sources(for: .vertex).first)
     let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(), options: nil)
     renderer.scene = coordinator.scene; renderer.pointOfView = coordinator.camera
     for (name, angle) in [("front", Float(0)), ("quarter", .pi / 4), ("right-side", .pi / 2), ("left-side", -.pi / 2), ("back", .pi)] {
       coordinator.positionCamera(angle: angle, height: asset.record.heightM)
       let visible = renderer.snapshot(atTime: 0, with: CGSize(width: 480, height: 720), antialiasingMode: .none)
       let visiblePixels = try Self.shirtPixels(visible)
-      coordinator.updateTryOn(result, showing: false)
+      coordinator.updateTryOn(result, showing: false, reduceMotion: true)
       let hidden = renderer.snapshot(atTime: 0, with: CGSize(width: 480, height: 720), antialiasingMode: .none)
       let hiddenPixels = try Self.shirtPixels(hidden)
       XCTAssertGreaterThan(visiblePixels - hiddenPixels, 250, "Actual cloth must be visible from \(name)")
       XCTAssertTrue(coordinator.garmentNode === node, "Visibility must not rebuild/reload or replace the attached node")
-      coordinator.updateTryOn(result, showing: true)
+      coordinator.updateTryOn(result, showing: true, reduceMotion: true)
       let attachment = XCTAttachment(image: visible); attachment.name = "onyou-tryon-\(name)"; attachment.lifetime = .keepAlways; add(attachment)
     }
+    XCTAssertTrue(node.geometry?.sources(for: .vertex).first === vertexSource)
+    XCTAssertEqual(result.shape.mesh.positions, originalPositions)
+    XCTAssertEqual(result.shape.needsRoom, originalNeedsRoom)
+    XCTAssertEqual(result.shape.belowHips, originalBelowHips)
     coordinator.detach()
     XCTAssertNil(node.parent)
     XCTAssertNil(coordinator.garmentNode)

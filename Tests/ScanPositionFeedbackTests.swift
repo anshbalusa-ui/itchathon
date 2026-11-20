@@ -1,43 +1,38 @@
+import CoreHaptics
 import CoreVideo
 import XCTest
 import Vision
 @testable import FitCheck
 
 final class ScanPositionFeedbackTests: XCTestCase {
-  func testDistanceGradientAndMissingDepthStayHonest() {
-    let perfect = ScanPositionFeedback.shirt(meters: 1, target: 1, bounds: nil, level: 1)
-    XCTAssertEqual(perfect.quality, 1)
-    XCTAssertEqual(perfect.direction, .hold)
-    XCTAssertEqual(perfect.intensity, 0)
-    let close = ScanPositionFeedback.shirt(meters: 0.7, target: 1, bounds: nil, level: 1)
-    let closer = ScanPositionFeedback.shirt(meters: 0.4, target: 1, bounds: nil, level: 1)
-    XCTAssertEqual(close.direction, .farther)
-    XCTAssertGreaterThan(close.quality, closer.quality)
-    XCTAssertGreaterThan(closer.intensity, close.intensity)
-    let far = ScanPositionFeedback.shirt(meters: 1.4, target: 1, bounds: nil, level: 1)
-    let farther = ScanPositionFeedback.shirt(meters: 1.8, target: 1, bounds: nil, level: 1)
-    XCTAssertEqual(far.direction, .closer)
-    XCTAssertGreaterThan(far.quality, farther.quality)
-    for meters: Double? in [nil, .nan, .infinity, -1, 0] {
-      let missing = ScanPositionFeedback.shirt(meters: meters, target: 1, bounds: nil, level: 1)
-      XCTAssertEqual(missing.direction, .searching)
-      XCTAssertEqual(missing.distanceText, "—")
-      XCTAssertEqual(missing.intensity, 0)
+  @MainActor
+  func testDeviceWarningLoopStopsOnRecoveryStalenessAndDisabledSettings() async throws {
+    guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+      throw XCTSkip("This check requires real haptic hardware.")
     }
-  }
-
-  func testPositionGuidesPhoneTowardShirtAndToleratesModerateTilt() {
-    for (bounds, direction) in [
-      (CGRect(x: 0.01, y: 0.25, width: 0.4, height: 0.5), ScanPositionFeedback.Direction.left),
-      (CGRect(x: 0.59, y: 0.25, width: 0.4, height: 0.5), .right),
-      (CGRect(x: 0.25, y: 0.01, width: 0.5, height: 0.5), .up),
-      (CGRect(x: 0.25, y: 0.49, width: 0.5, height: 0.5), .down),
-      (CGRect(x: 0, y: 0, width: 0.95, height: 0.95), .farther)
-    ] {
-      XCTAssertEqual(ScanPositionFeedback.shirt(meters: 1, target: 1, bounds: bounds, level: 0.93).direction, direction)
+    let feedback = ScanHapticFeedback()
+    defer { feedback.reset() }
+    let now = ProcessInfo.processInfo.systemUptime
+    let warning = ScanPositionFeedback(meters: 1, direction: .farther, severity: 0.8, observedAt: now)
+    feedback.update(position: warning, active: true, enabled: true, foreground: true, now: now)
+    XCTAssertTrue(feedback.playing, "The device must accept and start the continuous warning.")
+    try await Task.sleep(for: .milliseconds(120))
+    var safe = warning
+    safe.direction = .hold
+    feedback.update(position: safe, active: true, enabled: true, foreground: true, now: ProcessInfo.processInfo.systemUptime)
+    XCTAssertFalse(feedback.playing)
+    feedback.update(position: warning, active: true, enabled: true, foreground: true, now: ProcessInfo.processInfo.systemUptime)
+    XCTAssertTrue(feedback.playing, "Recovery must not prevent a later warning.")
+    feedback.update(position: warning, active: true, enabled: true, foreground: true, now: now + 1)
+    XCTAssertFalse(feedback.playing, "Stale camera data must stop vibration.")
+    for flags in [(false, true, true), (true, false, true), (true, true, false)] {
+      let time = ProcessInfo.processInfo.systemUptime
+      let fresh = ScanPositionFeedback(meters: 1, direction: .closer, severity: 0.8, observedAt: time)
+      feedback.update(position: fresh, active: true, enabled: true, foreground: true, now: time)
+      XCTAssertTrue(feedback.playing)
+      feedback.update(position: fresh, active: flags.0, enabled: flags.1, foreground: flags.2, now: time)
+      XCTAssertFalse(feedback.playing, "Pause, disabled haptics and backgrounding must stop vibration.")
     }
-    XCTAssertEqual(ScanPositionFeedback.shirt(meters: 1, target: 1, bounds: nil, level: 0.91).direction, .hold)
-    XCTAssertEqual(ScanPositionFeedback.shirt(meters: 1, target: 1, bounds: nil, level: 0.89).direction, .level)
   }
 
   func testDepthGuidanceFiltersConfidenceMaskAndInvalidValues() throws {
@@ -48,6 +43,19 @@ final class ScanPositionFeedbackTests: XCTestCase {
     fill(confidence, byte: 2)
     fill(mask, byte: 255)
     XCTAssertEqual(try XCTUnwrap(CaptureDepthSampler.meters(depth, confidence: confidence, mask: mask)), 1.25, accuracy: 0.001)
+
+    fill(depth, left: 1, right: 2)
+    XCTAssertEqual(CaptureDepthSampler.meters(depth), 2)
+    XCTAssertEqual(CaptureDepthSampler.meters(depth, center: CGPoint(x: 0.25, y: 0.5)), 1)
+    for center in [
+      CGPoint(x: CGFloat.nan, y: 0.5), CGPoint(x: 0.5, y: CGFloat.nan),
+      CGPoint(x: CGFloat.infinity, y: 0.5), CGPoint(x: 0.5, y: CGFloat.infinity),
+      CGPoint(x: -0.01, y: 0.5), CGPoint(x: 0.5, y: -0.01),
+      CGPoint(x: 1.01, y: 0.5), CGPoint(x: 0.5, y: 1.01)
+    ] {
+      XCTAssertNil(CaptureDepthSampler.meters(depth, center: center))
+    }
+    fill(depth, float: 1.25)
     let floatMask = try buffer(format: kCVPixelFormatType_OneComponent32Float, size: 16)
     fill(floatMask, float: 1)
     XCTAssertEqual(CaptureDepthSampler.meters(depth, mask: floatMask), 1.25)
@@ -65,19 +73,6 @@ final class ScanPositionFeedbackTests: XCTestCase {
     XCTAssertNil(CaptureDepthSampler.meters(confidence))
   }
 
-  func testBodyReadingsExpireAndLiveNearFarFeedbackTakesPrecedence() {
-    let now = Date()
-    let current = ScanPositionFeedback.body(meters: 1.4, capturedAt: now, now: now, tooClose: false, tooFar: false, framed: true)
-    XCTAssertEqual(current.meters, 1.4)
-    XCTAssertTrue(current.source.contains("Not live"))
-    let stale = ScanPositionFeedback.body(meters: 1.4, capturedAt: now.addingTimeInterval(-6), now: now, tooClose: true, tooFar: false, framed: true)
-    XCTAssertNil(stale.meters)
-    XCTAssertEqual(stale.direction, .farther)
-    XCTAssertEqual(stale.intensity, 1)
-    XCTAssertEqual(ScanPositionFeedback.body(meters: nil, capturedAt: nil, now: now, tooClose: false, tooFar: true, framed: false).direction, .closer)
-    XCTAssertEqual(ScanPositionFeedback.body(meters: nil, capturedAt: nil, now: now, tooClose: false, tooFar: false, framed: false).direction, .searching)
-    XCTAssertNil(ScanPositionFeedback.body(meters: 1.4, capturedAt: now.addingTimeInterval(1), now: now, tooClose: false, tooFar: false, framed: true).meters)
-  }
 
   func testBodyVisibilityNeverCallsMissingJointsCovered() {
     XCTAssertFalse(BodyCaptureEvidence.visible([.leftShoulder, .rightShoulder], in: [:]))
@@ -103,7 +98,7 @@ final class ScanPositionFeedbackTests: XCTestCase {
     XCTAssertTrue(BodyCaptureEvidence.fullyVisible(points))
     points[.leftEar] = CGPoint(x: 0.5, y: 0.3)
     XCTAssertFalse(BodyCaptureEvidence.fullyVisible(points))
-    points[.leftEar] = CGPoint(x: .nan, y: 0.91)
+    points[.leftEar] = CGPoint(x: CGFloat.nan, y: 0.91)
     XCTAssertFalse(BodyCaptureEvidence.fullyVisible(points))
   }
 
@@ -124,5 +119,14 @@ final class ScanPositionFeedbackTests: XCTestCase {
     CVPixelBufferLockBaseAddress(buffer, [])
     defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
     memset(CVPixelBufferGetBaseAddress(buffer)!, Int32(byte), CVPixelBufferGetDataSize(buffer))
+  }
+  private func fill(_ buffer: CVPixelBuffer, left: Float, right: Float) {
+    CVPixelBufferLockBaseAddress(buffer, [])
+    defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+    let width = CVPixelBufferGetWidth(buffer)
+    for y in 0..<CVPixelBufferGetHeight(buffer) {
+      let row = CVPixelBufferGetBaseAddress(buffer)!.advanced(by: y * CVPixelBufferGetBytesPerRow(buffer)).assumingMemoryBound(to: Float.self)
+      for x in 0..<width { row[x] = x < width / 2 ? left : right }
+    }
   }
 }

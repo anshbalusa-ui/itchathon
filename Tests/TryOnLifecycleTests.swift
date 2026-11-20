@@ -21,9 +21,28 @@ final class TryOnLifecycleTests: XCTestCase {
     let expected = try await TryOnBuilder().build(avatar: avatar,garment: coral,photoURL: fixture.closet.imageURL(for: coral)) { _ in }
     XCTAssertEqual(shown.shape.mesh.positions,expected.shape.mesh.positions)
     XCTAssertNil(model.failure)
+    model.cancelPending()
+    XCTAssertEqual(model.result?.id, shown.id, "Backgrounding must retain the completed garment preview.")
     model.cancel()
     XCTAssertNil(model.result)
     XCTAssertEqual(try AvatarScanStore.digest(avatar.url),avatar.record.sha256)
+  }
+
+  func testDismissedPreviewRetainsItsDetailOwnedBuilderCache() async throws {
+    let fixture = try OnYouTryOnFixtures.make()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+    let avatar = try XCTUnwrap(fixture.scans.asset)
+    let garment = try XCTUnwrap(fixture.closet.garments.first { $0.name.contains("Tide") })
+    let model = TryOnModel()
+    await model.load(avatar: avatar,garment: garment,photoURL: fixture.closet.imageURL(for: garment))
+    let first = try XCTUnwrap(model.result)
+    XCTAssertFalse(first.timings.preparedSceneCacheHit)
+    model.cancel()
+    await model.load(avatar: avatar,garment: garment,photoURL: fixture.closet.imageURL(for: garment))
+    let reopened = try XCTUnwrap(model.result)
+    XCTAssertTrue(reopened.timings.preparedSceneCacheHit)
+    XCTAssertEqual(reopened.shape.mesh.positions,first.shape.mesh.positions)
+    model.cancel()
   }
 
   func testFailedPhotoCanBeRetakenAndRetriedWithoutChangingSavedAvatar() async throws {
@@ -35,6 +54,9 @@ final class TryOnLifecycleTests: XCTestCase {
     await model.load(avatar: avatar,garment: old,photoURL: fixture.closet.imageURL(for: old))
     XCTAssertNil(model.result)
     XCTAssertNotNil(model.failure)
+    let failure = model.failure
+    model.cancelPending()
+    XCTAssertEqual(model.failure, failure, "Backgrounding must not discard an actionable failure.")
     let url = try XCTUnwrap(Bundle.main.url(forResource: "synthetic-shirt",withExtension: "png",subdirectory: "OnYouTryOnFixtures"))
     let data = try Data(contentsOf: url)
     let capture = GarmentCaptureResult(image: data,dimensions: try XCTUnwrap(old.dimensions),pattern: old.pattern)

@@ -1,6 +1,5 @@
 import CoreVideo
 import Foundation
-import RealityKit
 
 struct AvatarScanInput: Sendable {
   private var imageURLs: Set<URL>
@@ -11,17 +10,22 @@ struct AvatarScanInput: Sendable {
     self.depthImageURLs = Set(depthImageURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL })
   }
 
-  static func hasCoverage(images: Int, passes: Int) -> Bool { images >= 60 && passes >= 2 }
+  static let minimumImages = 60
+  static let minimumFullBodyViews = 3
+  static func hasCoverage(images: Int, passes: Int) -> Bool { images >= minimumImages && passes >= 1 }
 
   func validate(passes: Int) throws -> Int {
     try validate(usedImages: imageURLs, passes: passes)
   }
 
-  func validate(usedSampleIDs: Set<Int>, urlsBySample: [Int: URL], rejectedIDs: Set<Int>, passes: Int) throws -> Int {
+  func validate(usedSampleIDs: Set<Int>, urlsBySample: [Int: URL], rejectedIDs: Set<Int>,
+                fullBodyImageURLs: Set<URL>, passes: Int) throws -> Int {
     let acceptedIDs = usedSampleIDs.subtracting(rejectedIDs)
     let urls = acceptedIDs.compactMap { urlsBySample[$0]?.resolvingSymlinksInPath().standardizedFileURL }
     let used = Set(urls)
     guard used.count == acceptedIDs.count else { throw AvatarScanError.insufficientCoverage }
+    let fullBodyURLs = Set(fullBodyImageURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL })
+    guard fullBodyURLs.intersection(used).count >= Self.minimumFullBodyViews else { throw AvatarScanError.insufficientCoverage }
     return try validate(usedImages: used, passes: passes)
   }
 
@@ -36,31 +40,6 @@ struct AvatarScanInput: Sendable {
   }
 
 
-  static func preflight(files: [URL]) async throws -> Self {
-    try await preflight(files: files) { file in
-      let sample = try await PhotogrammetrySample(contentsOf: file)
-      return containsFiniteDepth(sample.depthDataMap)
-    }
-  }
-
-  static func preflight(files: [URL],
-                        hasDepth: @escaping @Sendable (URL) async throws -> Bool) async throws -> Self {
-    let inspection = Task.detached(priority: .userInitiated) {
-      var depthImages = Set<URL>()
-      for file in files {
-        try Task.checkCancellation()
-        let containsDepth = try await hasDepth(file)
-        try Task.checkCancellation()
-        if containsDepth { depthImages.insert(file) }
-      }
-      return Self(imageURLs: Set(files), depthImageURLs: depthImages)
-    }
-    return try await withTaskCancellationHandler {
-      try await inspection.value
-    } onCancel: {
-      inspection.cancel()
-    }
-  }
   static func containsFiniteDepth(_ buffer: CVPixelBuffer?) -> Bool {
     guard let buffer,
           [kCVPixelFormatType_DepthFloat32, kCVPixelFormatType_DisparityFloat32].contains(CVPixelBufferGetPixelFormatType(buffer)),

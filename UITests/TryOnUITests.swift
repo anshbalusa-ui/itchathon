@@ -117,13 +117,25 @@ final class TryOnUITests: XCTestCase {
     XCTAssertTrue(scene("body.scene").waitForExistence(timeout: 10))
     capture("10-clean-return-to-body")
     tap("scan.open")
-    XCTAssertTrue(app.navigationBars["Scan your body"].waitForExistence(timeout: 10))
-    XCTAssertTrue(scene("scan.journey").exists)
-    XCTAssertFalse(app.buttons["scan.start"].isEnabled, "Simulator guidance must not invent camera capture support")
-    capture("17-body-scan-introduction")
+    #if !targetEnvironment(simulator)
+    let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons["Allow"].firstMatch
+    if allow.waitForExistence(timeout: 3) { allow.tap() }
+    #endif
+    let outcome = app.descendants(matching: .any).matching(
+      NSPredicate(format: "identifier == %@ OR identifier == %@", "scan.unsupported", "scan.camera.action")
+    ).firstMatch
+    XCTAssertTrue(outcome.waitForExistence(timeout: 15))
+    let start = app.buttons["scan.camera.action"]
+    if scene("scan.unsupported").exists {
+      XCTAssertFalse(start.exists)
+    } else {
+      XCTAssertEqual(start.label, "Start scan")
+      XCTAssertTrue(app.staticTexts["scan.camera.guidance"].exists)
+    }
+    capture("17-body-scan-entry")
     tap("scan.close")
     XCTAssertTrue(scene("body.scene").waitForExistence(timeout: 10))
-    capture("18-return-after-scan-introduction")
+    capture("18-return-after-scan-entry")
   }
 
   func testRapidDismissalNewGarmentAndBackgroundDoNotResurrectOldScene() throws {

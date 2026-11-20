@@ -16,7 +16,7 @@ enum GarmentImageProcessor {
     return image
   }
 
-  static func foreground(_ image: CGImage) throws -> (mask: CVPixelBuffer, cutout: Data) {
+  static func foreground(_ image: CGImage) throws -> (mask: CVPixelBuffer, cutout: CVPixelBuffer) {
     let request = VNGenerateForegroundInstanceMaskRequest()
     let handler = VNImageRequestHandler(cgImage: image, orientation: .up)
     try handler.perform([request])
@@ -24,10 +24,17 @@ enum GarmentImageProcessor {
     let mask = try observation.generateScaledMaskForImage(forInstances: observation.allInstances, from: handler)
     // Retained keypoints, mask and stored photo must share the same canvas.
     let cutout = try observation.generateMaskedImage(ofInstances: observation.allInstances, from: handler, croppedToInstancesExtent: false)
+    guard CVPixelBufferGetWidth(cutout) == image.width, CVPixelBufferGetHeight(cutout) == image.height else {
+      throw GarmentCaptureError.image
+    }
+    return (mask, cutout)
+  }
+
+  static func cutoutPNG(_ cutout: CVPixelBuffer) throws -> Data {
     let ciImage = CIImage(cvPixelBuffer: cutout)
     guard let rendered = context.createCGImage(ciImage, from: ciImage.extent),
           let data = UIImage(cgImage: rendered).pngData() else { throw GarmentCaptureError.image }
-    return (mask, data)
+    return data
   }
 
   static func importedPhoto(_ data: Data) throws -> Data {

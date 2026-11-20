@@ -1,6 +1,7 @@
 @preconcurrency import ARKit
 import AVFoundation
 import SceneKit
+import simd
 import SwiftUI
 
 struct GarmentCaptureCamera: UIViewControllerRepresentable {
@@ -99,6 +100,12 @@ struct GarmentCaptureConsensus {
     return nil
   }
 
+  mutating func add(_ candidate: GarmentCaptureCandidate, at time: TimeInterval = ProcessInfo.processInfo.systemUptime)
+    -> (candidate: GarmentCaptureCandidate, dimensions: GarmentScanDimensions)? {
+    guard let dimensions = add(candidate.dimensions, at: time) else { return nil }
+    return (candidate, dimensions)
+  }
+
   mutating func miss(at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
     guard time.isFinite else { reset(); return }
     candidates.removeAll { time < $0.time || time - $0.time > 12 }
@@ -108,6 +115,43 @@ struct GarmentCaptureConsensus {
   mutating func reset() {
     candidates.removeAll()
     count = 0
+  }
+}
+
+enum GarmentCaptureGuidanceGeometry {
+  static func viewportBounds(from points: [CGPoint], size: CGSize) -> CGRect? {
+    guard points.count == 4, size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0,
+          points.allSatisfy({ $0.x.isFinite && $0.y.isFinite }), let first = points.first else { return nil }
+    var minX = first.x, minY = first.y, maxX = first.x, maxY = first.y
+    for point in points.dropFirst() {
+      minX = min(minX, point.x); minY = min(minY, point.y)
+      maxX = max(maxX, point.x); maxY = max(maxY, point.y)
+    }
+    return CGRect(x: minX / size.width, y: minY / size.height,
+                  width: (maxX - minX) / size.width, height: (maxY - minY) / size.height)
+  }
+
+
+  static func nativeCameraUV(fromViewportPoint point: CGPoint, displayTransform: CGAffineTransform) -> CGPoint? {
+    let determinant = displayTransform.a * displayTransform.d - displayTransform.b * displayTransform.c
+    guard point.x.isFinite, point.y.isFinite, determinant.isFinite, abs(determinant) > 0.000001 else { return nil }
+    let uv = point.applying(displayTransform.inverted())
+    guard uv.x.isFinite, uv.y.isFinite, (0...1).contains(uv.x), (0...1).contains(uv.y) else { return nil }
+    return uv
+  }
+
+  static func overheadTilt(transform: simd_float4x4) -> CGPoint {
+    let right = SIMD3(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z)
+    let up = SIMD3(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z)
+    let forward = -SIMD3(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z)
+    guard [right.x, right.y, right.z, up.x, up.y, up.z, forward.x, forward.y, forward.z].allSatisfy(\.isFinite) else {
+      return CGPoint(x: CGFloat.nan, y: CGFloat.nan)
+    }
+    let down = SIMD3<Float>(0, -1, 0)
+    let vertical = simd_dot(down, forward)
+    let horizontal = -up
+    return CGPoint(x: CGFloat(atan2(simd_dot(down, right), vertical)),
+                   y: CGFloat(atan2(simd_dot(down, horizontal), vertical)))
   }
 }
 
@@ -126,9 +170,13 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
   private var orientationInvalid = false
   private var needsRestart = false
   private var cameraRequest: UInt64 = 0
-  private var lastPositionAt: TimeInterval = -.infinity
-  private var framing: (bounds: CGRect, at: TimeInterval)?
-  private var targetDistance = 0.9
+  private var lastGuidanceAt = -Double.infinity
+  private var framing: (corners: [SIMD3<Float>], center: SIMD3<Float>)?
+  private var targetDistance: Double?
+  private var targetLocked = false
+  private var alignedSince: TimeInterval?
+  private var guidanceTracker = ScanGuidanceTracker()
+  private var currentPosition = ScanPositionFeedback()
 
   static var supported: Bool {
     #if targetEnvironment(simulator)
@@ -174,8 +222,7 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
         preview = scene
       }
       consensus.reset()
-      framing = nil; targetDistance = 0.9; lastPositionAt = -.infinity
-      onProgress?(0)
+      resetGuidance(reacquireTarget: true)
       scheduler.start()
       onGuidance?("Searching: center the whole shirt in view, collar at the top, camera directly overhead.")
       let config = ARWorldTrackingConfiguration()
@@ -196,44 +243,64 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
     preview?.session.pause()
     preview?.removeFromSuperview(); preview = nil
     consensus.reset()
+    trackingAvailable = false
+    resetGuidance(reacquireTarget: true)
+  }
+  private func resetGuidance(reacquireTarget: Bool) {
+    framing = nil
+    guidanceTracker.reset()
+    alignedSince = nil
+    if reacquireTarget { targetDistance = nil; targetLocked = false }
+    lastGuidanceAt = -Double.infinity
+    currentPosition = ScanPositionFeedback()
+    onPosition?(currentPosition)
   }
 
   nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
     MainActor.assumeIsolated {
       guard active, !needsRestart, session === preview?.session else { return }
+      let now = ProcessInfo.processInfo.systemUptime
       guard view.window?.windowScene?.effectiveGeometry.interfaceOrientation == .portrait else {
         if !orientationInvalid {
           consensus.reset()
           scheduler.stop()
           analysis?.cancel(); analysis = nil
           orientationInvalid = true
-          onPosition?(ScanPositionFeedback()); onProgress?(0)
+          trackingAvailable = false
+          resetGuidance(reacquireTarget: true)
+          onProgress?(0)
         }
-        onGuidance?("Searching: turn the iPhone upright in portrait, collar toward the top.")
+        if now - lastGuidanceAt >= 0.1 {
+          var orientationWarning = ScanPositionFeedback()
+          orientationWarning.direction = .level
+          orientationWarning.severity = 1
+          orientationWarning.source = "Phone orientation"
+          orientationWarning.observedAt = now
+          currentPosition = orientationWarning
+          onPosition?(orientationWarning)
+          lastGuidanceAt = now
+        }
+        onGuidance?("Turn the iPhone upright in portrait, with the collar toward the top.")
         return
       }
       if orientationInvalid {
         orientationInvalid = false
         consensus.reset()
+        resetGuidance(reacquireTarget: true)
         scheduler.start()
         onGuidance?("Searching: portrait restored. Center the whole shirt with the collar at the top.")
       }
       guard case .normal = frame.camera.trackingState else {
-        consensus.miss(); onProgress?(consensus.count); onPosition?(ScanPositionFeedback())
+        if trackingAvailable {
+          trackingAvailable = false
+          resetGuidance(reacquireTarget: true)
+        }
+        consensus.miss(at: now); onProgress?(consensus.count)
         onGuidance?("Move slowly while camera tracking settles.")
         return
       }
-      if frame.timestamp - lastPositionAt >= 0.2 {
-        lastPositionAt = frame.timestamp
-        let depth = frame.sceneDepth
-        let meters = CaptureDepthSampler.meters(depth?.depthMap, confidence: depth?.confidenceMap)
-        let bounds = framing.flatMap { sample -> CGRect? in
-          guard frame.timestamp - sample.at < 3 else { return nil }
-          return GarmentPlaneProjection.viewportBounds(fromPortrait: sample.bounds,
-            displayTransform: frame.displayTransform(for: .portrait, viewportSize: view.bounds.size))
-        }
-        onPosition?(.shirt(meters: meters, target: targetDistance, bounds: bounds, level: Double(abs(frame.camera.transform.columns.2.y))))
-      }
+      trackingAvailable = true
+      if now - lastGuidanceAt >= 0.1 { updateGuidance(frame: frame, now: now) }
       guard let ticket = scheduler.admit(timestamp: frame.timestamp) else { return }
       onGuidance?("Recognizing: checking the shirt outline, collar, sleeves, and landmarks.")
       let started = ProcessInfo.processInfo.systemUptime
@@ -244,7 +311,7 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
           if completed { analysis = nil }
         }
         do {
-          let result = try await analyzer.analyze(frame, onStage: { stage in
+          let candidate = try await analyzer.analyze(frame, onStage: { stage in
             Task { @MainActor [weak self] in
               guard let self, scheduler.owns(ticket), active, !needsRestart else { return }
               switch stage {
@@ -254,32 +321,31 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
               case .projecting: onGuidance?("Checking: projecting visible edges onto the metric surface.")
               }
             }
-          }, onFraming: { bounds in
-            let meters = CaptureDepthSampler.meters(frame.sceneDepth?.depthMap, confidence: frame.sceneDepth?.confidenceMap)
-            Task { @MainActor [weak self] in
-              guard let self, scheduler.owns(ticket), active, !needsRestart else { return }
-              framing = (bounds, frame.timestamp)
-              // Include the preview's actual aspect-fill crop, not a model-specific FOV constant.
-              let visible = GarmentPlaneProjection.viewportBounds(fromPortrait: bounds,
-                displayTransform: frame.displayTransform(for: .portrait, viewportSize: view.bounds.size))
-              if let meters { targetDistance = min(2.5, max(0.35, meters * max(visible.width / 0.82, visible.height / 0.72))) }
-            }
           })
           guard scheduler.owns(ticket), active, !needsRestart, !Task.isCancelled else { return }
-          if let dimensions = consensus.add(result.dimensions) {
-            var accepted = result
-            accepted.dimensions = dimensions
+          let observedAt = ProcessInfo.processInfo.systemUptime
+          guard let liveFrame = preview?.session.currentFrame else { return }
+          updateGuidance(frame: liveFrame, now: observedAt, candidate: candidate)
+          guard targetLocked, currentPosition.direction == .hold else {
+            onProgress?(consensus.count)
+            onGuidance?("Center the whole shirt, hold the phone overhead, and follow the distance guide.")
+            return
+          }
+          if let accepted = consensus.add(candidate, at: observedAt) {
+            onProgress?(consensus.count)
+            let result = try await analyzer.finalize(accepted.candidate, dimensions: accepted.dimensions)
+            guard scheduler.owns(ticket), active, !needsRestart, !Task.isCancelled else { return }
             let completion = onResult
             analysis = nil
             stop()
-            completion?(accepted)
+            completion?(result)
           } else {
             onProgress?(consensus.count)
-            onGuidance?("Stabilizing: \(consensus.count) of 3 distinct frames agree. Hold still.")
+            onGuidance?("Stabilizing: \(consensus.count) of 3 distinct views agree. Hold steady.")
           }
         } catch {
           guard scheduler.owns(ticket), active, !needsRestart, !Task.isCancelled else { return }
-          consensus.miss()
+          consensus.miss(at: ProcessInfo.processInfo.systemUptime)
           onProgress?(consensus.count)
           onGuidance?(error.localizedDescription)
         }
@@ -287,25 +353,97 @@ final class GarmentCaptureController: UIViewController, ARSessionDelegate {
     }
   }
 
+  private var trackingAvailable = false
+
+  private func updateGuidance(frame: ARFrame, now: TimeInterval, candidate: GarmentCaptureCandidate? = nil) {
+    lastGuidanceAt = now
+    let tilt = GarmentCaptureGuidanceGeometry.overheadTilt(transform: frame.camera.transform)
+    if let candidate {
+      framing = (candidate.worldCorners, candidate.worldCenter)
+    }
+    // The shirt stays flat; reproject its world bounds using each live camera frame.
+    guard let framing else {
+      self.framing = nil
+      alignedSince = nil
+      currentPosition = guidanceTracker.update(
+        ScanGuidanceSample(meters: nil, targetMeters: targetDistance, bounds: nil,
+                           tilt: tilt, observedAt: now), now: now)
+      onPosition?(currentPosition)
+      return
+    }
+    let viewportSize = view.bounds.size
+    let camera = frame.camera
+    let viewMatrix = camera.viewMatrix(for: .portrait)
+    var projected: [CGPoint] = []
+    for corner in framing.corners {
+      let cameraPoint = viewMatrix * SIMD4(corner.x, corner.y, corner.z, 1)
+      guard cameraPoint.z.isFinite, cameraPoint.z < -0.05 else {
+        self.framing = nil
+        alignedSince = nil
+        currentPosition = guidanceTracker.update(
+          ScanGuidanceSample(meters: nil, targetMeters: targetDistance, bounds: nil,
+                             tilt: tilt, observedAt: now), now: now)
+        onPosition?(currentPosition)
+        return
+      }
+      projected.append(camera.projectPoint(corner, orientation: .portrait, viewportSize: viewportSize))
+    }
+    guard let bounds = GarmentCaptureGuidanceGeometry.viewportBounds(from: projected, size: viewportSize) else {
+      self.framing = nil
+      alignedSince = nil
+      currentPosition = guidanceTracker.update(
+        ScanGuidanceSample(meters: nil, targetMeters: targetDistance, bounds: nil,
+                           tilt: tilt, observedAt: now), now: now)
+      onPosition?(currentPosition)
+      return
+    }
+    let center = camera.projectPoint(framing.center, orientation: .portrait, viewportSize: viewportSize)
+    let displayTransform = frame.displayTransform(for: .portrait, viewportSize: viewportSize)
+    let nativeCenter = GarmentCaptureGuidanceGeometry.nativeCameraUV(
+      fromViewportPoint: CGPoint(x: center.x / viewportSize.width, y: center.y / viewportSize.height),
+      displayTransform: displayTransform)
+    let depth = frame.sceneDepth
+    let meters = nativeCenter.flatMap {
+      CaptureDepthSampler.meters(depth?.depthMap, confidence: depth?.confidenceMap, center: $0)
+    }
+    if !targetLocked, let meters {
+      targetDistance = min(2.5, max(0.35, meters * max(bounds.width / 0.82, bounds.height / 0.72)))
+    }
+    let sample = ScanGuidanceSample(meters: meters, targetMeters: targetDistance, bounds: bounds,
+                                    tilt: tilt, observedAt: now)
+    currentPosition = guidanceTracker.update(sample, now: now)
+    onPosition?(currentPosition)
+    guard !targetLocked else { return }
+    if currentPosition.direction == .hold {
+      alignedSince = alignedSince ?? now
+      if now - (alignedSince ?? now) >= 0.6 { targetDistance = meters; targetLocked = true }
+    } else {
+      alignedSince = nil
+    }
+  }
+
   nonisolated func sessionWasInterrupted(_ session: ARSession) {
     MainActor.assumeIsolated {
       guard session === preview?.session else { return }
       needsRestart = true
-      onPosition?(ScanPositionFeedback()); onProgress?(0)
+      trackingAvailable = false
       scheduler.stop()
       analysis?.cancel(); analysis = nil
       consensus.reset()
+      resetGuidance(reacquireTarget: true)
+      onProgress?(0)
       onGuidance?(GarmentCaptureError.interrupted.localizedDescription + " Tap Restart scan to try again.")
     }
   }
   nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
     MainActor.assumeIsolated {
-      guard session === preview?.session else { return }
       needsRestart = true
-      onPosition?(ScanPositionFeedback()); onProgress?(0)
+      trackingAvailable = false
       scheduler.stop()
       analysis?.cancel(); analysis = nil
       consensus.reset()
+      resetGuidance(reacquireTarget: true)
+      onProgress?(0)
       onGuidance?("Camera tracking stopped. Tap Restart scan, or close and reopen the scanner.")
     }
   }

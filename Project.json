@@ -88,6 +88,7 @@
       ],
       "settings": {
         "GENERATE_INFOPLIST_FILE": "YES",
+        "PRODUCT_BUNDLE_IDENTIFIER": "app.bitrig.new.0bab6520-e754-44f9-acd8-d1ecceeda6e3.tests",
         "CODE_SIGNING_ALLOWED": "NO",
         "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/On You.app/On You"
       }
@@ -107,6 +108,7 @@
       ],
       "settings": {
         "GENERATE_INFOPLIST_FILE": "YES",
+        "PRODUCT_BUNDLE_IDENTIFIER": "app.bitrig.new.0bab6520-e754-44f9-acd8-d1ecceeda6e3.uitests",
         "CODE_SIGNING_ALLOWED": "NO"
       }
     }

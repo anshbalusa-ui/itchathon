@@ -27,17 +27,15 @@ final class AvatarScanTests: XCTestCase {
   }
 
   @MainActor
-  func testCoverageRequiresBothPassesAndEnoughImages() {
-    XCTAssertFalse(BodyCaptureModel.hasCoverage(images: 59, passes: 2))
-    XCTAssertFalse(BodyCaptureModel.hasCoverage(images: 100, passes: 1))
-    XCTAssertTrue(BodyCaptureModel.hasCoverage(images: 60, passes: 2))
+  func testCoverageRequiresACompletedCircuitAndEnoughImages() {
+    XCTAssertFalse(AvatarScanInput.hasCoverage(images: 59, passes: 1))
+    XCTAssertFalse(AvatarScanInput.hasCoverage(images: 100, passes: 0))
+    XCTAssertTrue(AvatarScanInput.hasCoverage(images: 60, passes: 1))
     let model = BodyCaptureModel()
-    model.captureProgressChanged()
     XCTAssertEqual(model.completedPasses, 0)
     model.cancel()
     XCTAssertEqual(model.phase, .setup)
     XCTAssertNil(model.modelURL)
-    XCTAssertFalse(model.canFinish)
   }
 
   @MainActor

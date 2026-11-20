@@ -62,6 +62,69 @@ final class TryOnSceneTests: XCTestCase {
     }
   }
 
+  @MainActor
+  func testPerOwnerRevealReduceMotionCameraFramingAndAccessibilityRelease() async throws {
+    let fixture = try OnYouTryOnFixtures.make()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+    let avatar = try XCTUnwrap(fixture.scans.asset)
+    let garment = try XCTUnwrap(fixture.closet.garments.first { $0.name.contains("Tide") })
+    let result = try await TryOnBuilder().build(avatar: avatar, garment: garment, photoURL: fixture.closet.imageURL(for: garment)) { _ in }
+    let originalPositions = result.shape.mesh.positions
+    let reduced = BodySceneView.Coordinator()
+    reduced.currentHeight = 1.75
+    reduced.updateTryOn(result, showing: true, reduceMotion: true)
+    let reducedNode = try XCTUnwrap(reduced.garmentNode)
+    XCTAssertFalse(reduced.isSettling)
+    XCTAssertNil(reducedNode.action(forKey: "tryon.settle"))
+
+    let animated = BodySceneView.Coordinator()
+    animated.updateTryOn(result, showing: true)
+    let animatedNode = try XCTUnwrap(animated.garmentNode)
+    let animatedSource = try XCTUnwrap(animatedNode.geometry?.sources(for: .vertex).first)
+    animated.updateTryOn(result, showing: true)
+    XCTAssertTrue(animated.isSettling)
+    XCTAssertNotNil(animatedNode.action(forKey: "tryon.settle"))
+    XCTAssertEqual(reducedNode.position.y, 0, "Another owner's settling must not move this garment.")
+    let source = try XCTUnwrap(reducedNode.geometry?.sources(for: .vertex).first)
+    animated.updateTryOn(result, showing: false)
+    XCTAssertFalse(animated.isSettling)
+    XCTAssertNil(animatedNode.action(forKey: "tryon.settle"))
+    XCTAssertEqual(animatedNode.position.y, 0)
+    XCTAssertTrue(animated.garmentNode === animatedNode)
+    XCTAssertTrue(animatedNode.geometry?.sources(for: .vertex).first === animatedSource)
+    XCTAssertTrue(reducedNode.geometry?.sources(for: .vertex).first === source)
+    XCTAssertEqual(result.shape.mesh.positions, originalPositions)
+
+    let view = SCNView()
+    view.scene = reduced.scene
+    view.pointOfView = reduced.camera
+    reduced.camera.position = SCNVector3(0.75, 1.25, 4.7)
+    reduced.camera.look(at: SCNVector3(0, 1.75 * 0.51, 0.035))
+    let target = SIMD3<Float>(0, 1.75 * 0.51, 0.035)
+    let zoom = simd_length(reduced.camera.simdWorldPosition - target)
+    reduced.inspect(view, angle: .pi, height: 1.75)
+    XCTAssertEqual(simd_length(reduced.camera.simdWorldPosition - target), zoom, accuracy: 0.001)
+    reduced.resetCamera(view, height: 1.75)
+    XCTAssertEqual(sqrt(reduced.camera.position.x * reduced.camera.position.x + pow(reduced.camera.position.z - target.z, 2)),
+                   max(2.8, 1.75 * 1.9), accuracy: 0.001)
+
+    weak var weakView: SCNView?
+    weak var weakCoordinator: BodySceneView.Coordinator?
+    var actions: [UIAccessibilityCustomAction]?
+    autoreleasepool {
+      let sceneView = SCNView()
+      let coordinator = BodySceneView.Coordinator()
+      actions = coordinator.makeAccessibilityActions(for: sceneView)
+      sceneView.accessibilityCustomActions = actions
+      weakView = sceneView
+      weakCoordinator = coordinator
+    }
+    withExtendedLifetime(actions) {
+      XCTAssertNil(weakView)
+      XCTAssertNil(weakCoordinator)
+    }
+  }
+
   private func clothPixels(_ image: UIImage) throws -> Int {
     let cg = try XCTUnwrap(image.cgImage)
     var pixels = [UInt8](repeating: 0,count: cg.width*cg.height*4)

@@ -8,6 +8,7 @@ struct ScannedAvatarPreview: View {
   @State private var failure: String?
   @State private var attempt = UUID()
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private struct Request: Equatable {
     var url: URL
@@ -18,7 +19,8 @@ struct ScannedAvatarPreview: View {
   var body: some View {
     Group {
       if let ready = preparedScene ?? loaded {
-        BodySceneView(measurements: .example,scan: ScannedBodySource(url: url,scene: ready),isActive: scenePhase == .active)
+        BodySceneView(measurements: .example, scan: ScannedBodySource(url: url, scene: ready),
+                      isActive: scenePhase == .active, reduceMotion: reduceMotion)
       } else if let failure {
         ContentUnavailableView {
           Label("Avatar unavailable",systemImage: "figure.stand")
@@ -26,7 +28,7 @@ struct ScannedAvatarPreview: View {
           Button("Retry 3D preview") { attempt = UUID() }
             .accessibilityIdentifier("body.preview.retry")
         }
-      } else { ProgressView("Opening your saved avatar…") }
+      } else { ProgressView("Opening your scan…") }
     }
     .background(Color(uiColor: .secondarySystemGroupedBackground))
     .task(id: Request(url: url,height: referenceHeightCM,attempt: attempt)) {
@@ -39,7 +41,7 @@ struct ScannedAvatarPreview: View {
       } catch is CancellationError { }
       catch {
         guard !Task.isCancelled else { return }
-        failure = "The saved textured model couldn’t be opened. Retry, or retake the scan from the Body tab. Your saved data is unchanged."
+        failure = "The textured model couldn’t be opened. Retry, or retake the scan from the Body tab. Your saved data is unchanged."
       }
     }
     .onDisappear { loaded = nil }

@@ -11,61 +11,53 @@ struct AutomaticGarmentScanView: View {
   @State private var captureID = UUID()
   @State private var position = ScanPositionFeedback()
   @State private var agreeingFrames = 0
-  @State private var panelHeight: CGFloat = 260
   @State private var guidance = "Searching: lay a short-sleeved shirt flat, collar at the top, and hold the iPhone directly overhead."
 
   var body: some View {
     Group {
       if capturing {
-        GeometryReader { geometry in
-          ZStack {
-            GarmentCaptureCamera(onResult: { result in onCapture(result); dismiss() },
-                                 onGuidance: { guidance = $0 }, onPosition: { position = $0 },
-                                 onProgress: { agreeingFrames = $0 })
-              .id(captureID)
-              .ignoresSafeArea()
-            VStack {
-              HStack {
-                Button("Close scanner", systemImage: "xmark") { dismiss() }
-                  .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-                Spacer()
-                Text("Scan a shirt").font(.headline)
-                  .padding(.horizontal, 18).padding(.vertical, 12)
-                  .glassEffect(in: .capsule)
-                Spacer()
-                Menu {
-                  Toggle("Guidance haptics", isOn: $haptics)
-                } label: { Label("Scan options", systemImage: "ellipsis").labelStyle(.iconOnly) }
-                .buttonStyle(.glass).buttonBorderShape(.circle)
-              }
-              Spacer(minLength: 24)
-              ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                  ScanPositionIndicator(position: position)
-                  Text(guidance).font(.callout).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("garment.guidance")
-                  HStack {
-                    Text("\(agreeingFrames) of 3 matching views").font(.caption.weight(.medium))
-                    Spacer()
-                    Button("Restart scan") {
-                      position = ScanPositionFeedback(); agreeingFrames = 0; captureID = UUID()
-                    }
-                    .font(.subheadline).buttonStyle(.bordered)
-                    .accessibilityIdentifier("garment.restart")
-                  }
-                  Text("Keep every edge visible. Brief movement won’t erase matching views.")
-                    .font(.caption).foregroundStyle(.secondary)
-                }
-                .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
-              }
-              .frame(height: min(panelHeight, geometry.size.height * 0.5))
-              .scrollBounceBehavior(.basedOnSize)
-              .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30))
-            }
-            .padding(16)
+        VStack(spacing: 10) {
+          HStack {
+            Button("Close scanner", systemImage: "xmark") { dismiss() }
+              .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
+            Spacer()
+            Text("Scan a shirt").font(.headline)
+              .padding(.horizontal, 18).padding(.vertical, 12)
+              .glassEffect(in: .capsule)
+            Spacer()
+            Menu {
+              Toggle("Guidance haptics", isOn: $haptics)
+            } label: { Label("Scan options", systemImage: "ellipsis").labelStyle(.iconOnly) }
+              .buttonStyle(.glass).buttonBorderShape(.circle)
           }
+          GarmentCaptureCamera(onResult: { result in onCapture(result); dismiss() },
+                               onGuidance: { guidance = $0 }, onPosition: { position = $0 },
+                               onProgress: { agreeingFrames = $0 })
+            .id(captureID)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay { ScanWarningOverlay(position: position, active: capturing && scenePhase == .active) }
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+          VStack(alignment: .leading, spacing: 6) {
+            HStack {
+              ScanPositionIndicator(position: position, active: capturing && scenePhase == .active)
+              Spacer(minLength: 8)
+              Text("\(agreeingFrames) of 3 matching views").font(.caption.weight(.medium))
+              Button("Restart scan") {
+                position = ScanPositionFeedback(); agreeingFrames = 0
+                guidance = "Searching: center the whole shirt, collar at the top, and hold the iPhone overhead."
+                captureID = UUID()
+              }
+              .font(.subheadline).buttonStyle(.bordered)
+              .accessibilityIdentifier("garment.restart")
+            }
+            Text(guidance).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+              .accessibilityIdentifier("garment.guidance")
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(12)
+          .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
         }
+        .padding(12)
         .preferredColorScheme(.dark)
 
       } else {

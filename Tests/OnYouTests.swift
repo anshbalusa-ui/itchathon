@@ -98,4 +98,24 @@ final class OnYouTests: XCTestCase {
     XCTAssertNil(store.current)
     XCTAssertEqual(defaults.data(forKey: "on-you.measurements.v1"), corrupt)
   }
+  @MainActor
+  func testSuccessfulSaveAndDeleteClearStorageErrors() throws {
+    let name = "OnYouTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let store = OnYouStore(defaults: defaults)
+    var invalid = BodyMeasurements.example
+    invalid.height = -10
+    XCTAssertFalse(store.save(invalid))
+    XCTAssertNotNil(store.storageError)
+    XCTAssertTrue(store.save(.example))
+    XCTAssertNil(store.storageError)
+    XCTAssertFalse(store.save(invalid))
+    XCTAssertTrue(store.save(.example))
+    XCTAssertNil(store.storageError)
+    XCTAssertFalse(store.save(invalid))
+    store.delete(IndexSet(integer: 0))
+    XCTAssertNil(store.storageError)
+  }
+
 }

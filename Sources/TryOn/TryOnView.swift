@@ -4,13 +4,14 @@ struct TryOnView: View {
   var avatar: AvatarScanAsset
   var garment: ClosetGarment
   var photoURL: URL
-  @State private var model = TryOnModel()
+  var model: TryOnModel
   @State private var attempt = UUID()
   @State private var showingShirt = true
   @State private var camera: BodySceneCameraRequest?
   @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.dynamicTypeSize) private var typeSize
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     Group {
@@ -19,7 +20,8 @@ struct TryOnView: View {
           VStack(spacing: 0) {
             BodySceneView(measurements: .example,
               scan: ScannedBodySource(url: avatar.url,scene: result.avatar),
-              tryOn: result, showingGarment: showingShirt, cameraRequest: camera, isActive: scenePhase == .active)
+              tryOn: result, showingGarment: showingShirt, cameraRequest: camera,
+              isActive: scenePhase == .active, reduceMotion: reduceMotion)
               .frame(height: typeSize.isAccessibilitySize ? 230 : max(220, geometry.size.height * 0.61))
               .accessibilityIdentifier("tryon.scene")
             ScrollView {
@@ -104,9 +106,15 @@ struct TryOnView: View {
     }
     .task(id: attempt) { await model.load(avatar: avatar, garment: garment, photoURL: photoURL) }
     .onDisappear { model.cancel() }
+    .onChange(of: avatar) { _, _ in attempt = UUID() }
+    .onChange(of: garment) { _, _ in attempt = UUID() }
+    .onChange(of: photoURL) { _, _ in attempt = UUID() }
     .onChange(of: scenePhase) { _, phase in
-      if phase == .active { attempt = UUID() }
-      else { model.cancel() }
+      if phase == .active {
+        if model.result == nil, model.failure == nil { attempt = UUID() }
+      } else {
+        model.cancelPending()
+      }
     }
   }
 

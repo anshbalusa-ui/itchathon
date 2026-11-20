@@ -2,7 +2,7 @@ import OSLog
 
 enum BodyScanTiming {
   enum Stage: String, CaseIterable {
-    case framing, selection, bodyPass, passCheckpoint, detailPass, captureFinalization, photoPreflight, reconstruction, textureValidation, avatarLoading
+    case framing, bodyPass, captureFinalization, photoPreflight, reconstruction, textureValidation, avatarLoading
   }
 
   private static let logger = Logger(subsystem: "app.onyou", category: "BodyScanTiming")

@@ -34,6 +34,16 @@ struct GarmentCaptureResult: Sendable {
     self.timings = timings
   }
 }
+struct GarmentCaptureCandidate: @unchecked Sendable {
+  let cutout: CVPixelBuffer
+  let points: [CGPoint]
+  let outline: GarmentOutline
+  let dimensions: GarmentScanDimensions
+  let worldCorners: [SIMD3<Float>]
+  let worldCenter: SIMD3<Float>
+  let timings: GarmentAnalysisTimings
+}
+
 
 struct ValidatedGarmentLandmarks {
   var left: CGPoint
@@ -60,8 +70,7 @@ enum GarmentLandmarkValidation {
 actor GarmentDepthAnalyzer {
   private let context = CIContext()
 
-  func analyze(_ frame: ARFrame, onStage: @Sendable (GarmentAnalysisStage) -> Void = { _ in },
-               onFraming: @Sendable (CGRect) -> Void = { _ in }) async throws -> GarmentCaptureResult {
+  func analyze(_ frame: ARFrame, onStage: @Sendable (GarmentAnalysisStage) -> Void = { _ in }) async throws -> GarmentCaptureCandidate {
     let started = ProcessInfo.processInfo.systemUptime
     var timings = GarmentAnalysisTimings()
     try Task.checkCancellation()
@@ -82,7 +91,6 @@ actor GarmentDepthAnalyzer {
     let silhouetteStarted = ProcessInfo.processInfo.systemUptime
     let mask = try GarmentImageProcessor.smallMask(foreground.mask)
     var outline = try GarmentOutline.detect(mask: mask.bytes, width: mask.width, height: mask.height)
-    onFraming(outline.bounds)
     timings.silhouetteSeconds = ProcessInfo.processInfo.systemUptime - silhouetteStarted
     onStage(.landmarks)
     try Task.checkCancellation()
@@ -167,8 +175,32 @@ actor GarmentDepthAnalyzer {
                                            sleeveSpanM: try distance(outline.sleeveLeft, outline.sleeveRight))
     guard dimensions.isValid else { throw GarmentCaptureError.shape }
     timings.projectionSeconds = ProcessInfo.processInfo.systemUptime - projectionStarted
-    let pattern = try GarmentPatternEvidence.validate(image: foreground.cutout, points: detection.points, outline: outline)
+    let bounds = outline.bounds
+    let portraitCorners = [
+      CGPoint(x: bounds.minX, y: bounds.minY), CGPoint(x: bounds.maxX, y: bounds.minY),
+      CGPoint(x: bounds.maxX, y: bounds.maxY), CGPoint(x: bounds.minX, y: bounds.maxY)
+    ]
+    let worldCorners = try portraitCorners.map {
+      try projection.project(nativeUV: GarmentPlaneProjection.nativeCameraUV(fromPortrait: $0))
+    }
+    let worldCenter = try projection.project(nativeUV: GarmentPlaneProjection.nativeCameraUV(
+      fromPortrait: CGPoint(x: bounds.midX, y: bounds.midY)))
     timings.totalSeconds = ProcessInfo.processInfo.systemUptime - started
-    return GarmentCaptureResult(image: foreground.cutout, dimensions: dimensions, pattern: pattern, timings: timings)
+    return GarmentCaptureCandidate(cutout: foreground.cutout, points: detection.points, outline: outline,
+                                   dimensions: dimensions, worldCorners: worldCorners,
+                                   worldCenter: worldCenter, timings: timings)
+  }
+
+  func finalize(_ candidate: GarmentCaptureCandidate, dimensions: GarmentScanDimensions) throws -> GarmentCaptureResult {
+    try Task.checkCancellation()
+    guard dimensions.isValid else { throw GarmentCaptureError.shape }
+    let started = ProcessInfo.processInfo.systemUptime
+    let image = try GarmentImageProcessor.cutoutPNG(candidate.cutout)
+    try Task.checkCancellation()
+    let pattern = try GarmentPatternEvidence.validate(image: image, points: candidate.points, outline: candidate.outline)
+    try Task.checkCancellation()
+    var timings = candidate.timings
+    timings.totalSeconds += ProcessInfo.processInfo.systemUptime - started
+    return GarmentCaptureResult(image: image, dimensions: dimensions, pattern: pattern, timings: timings)
   }
 }

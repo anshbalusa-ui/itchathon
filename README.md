@@ -36,7 +36,7 @@ The helper builds unsigned Debug using `Project.json`, rejects Release/device/ol
 ## Screens
 
 - **Body:** a gesture-only viewer. Drag to orbit and pinch to zoom. A saved scan takes priority over the manual measurement model.
-- **Scan:** guided LiDAR/photo capture, reconstruction, scale review, and scan deletion. A helper circles a still person twice; at least 60 input images and two completed passes are required.
+- **Scan:** calibrate with a steady full-body view, tap Start scan, then keep the phone stationary while the person turns. Measured coverage unlocks reconstruction; missing views can be captured without another full turn.
 - **Closet:** scan a flat shirt with its collar at the top and both sleeves visible; review its image and depth-backed dimensions, then save or retake. Imported photographs remain photo-only.
 - **Try on:** open a saved shirt's detail page and choose **Try on**. A saved textured avatar and a metric shirt scan are required. Rotate/inspect front and back, reset the camera, or hide/show the actual garment mesh. Missing prerequisites offer scan/retake recovery rather than a successful bare-avatar preview.
 - **Measurements:** on the example/manual **Body** screen, choose **Measurements** to enter height, chest, waist, hips, and shoulder width in centimeters or inches. The existing preview updates while editing; Cancel discards the draft, and Save updates the separate manual model and History. This illustration does not create a captured scan or authorize saved-scan try-on; captured geometry retains its own height calibration.
@@ -48,11 +48,17 @@ Measurements and history use the separate `on-you.measurements.v1` local storage
 
 ## Body scans
 
-On supported LiDAR iPhones, `ObjectCaptureSession` gathers photos and depth through Apple's native guided-capture UI. `PhotogrammetrySession` reconstructs a textured USDZ using its supported iOS `.reduced` detail level, object masking, high feature sensitivity, and the captured checkpoint data. Skin, face, hair, and clothing come from the photographs. This is captured surface geometry; it is not an inferred unclothed body or a rigged character.
+On supported LiDAR iPhones, a helper frames the whole person and holds iPhone steady. Tap **Start scan** when enabled, keep iPhone in the same spot, and ask the person to turn slowly with arms slightly out. The app tracks usable front, side, back, and other-side views. If a view is missing, it asks for that view instead of another full turn.
 
-Two completed circles and at least 60 images are required. Invalid/skipped inputs reduce the admitted image count. Tracking problems, incomplete stitching, missing textures, invalid dimensions, or a height scale correction outside 0.9–1.1 reject the result. USDZ coordinates are converted to meters and Y-up. The user reviews the textured reconstruction and confirms it before it replaces an existing scan.
+Find **Scan help** in the system toolbar’s options menu. The dark viewfinder keeps its size as instructions change, and **Start scan** stays outside scrolling guidance at larger text sizes. A smooth body guide fades into curved framing marks during capture. An AR halo is locked around the calibrated person: its yellow segments represent saved angular views, and a white marker identifies a missing angle. These are custom SceneKit guides in the existing ARKit session, not Apple’s moving-camera Object Capture workflow. Invalid, stale, and paused tracking hides the spatial guide. Reduce Motion disables decorative transitions. In review, **Retake** and **Use this scan** stay in the bottom safe area, with accessible rotation, zoom, and reset actions on the actual scan.
 
-Actual barefoot height calibrates uniform scale. Matching that single reference does not establish chest/waist accuracy or facial fidelity. A person must hold their pose; motion and loose clothing can compromise reconstruction. Hardware accuracy, repeatability, and likeness have **not** been validated in this workspace. Apple documents the [static-subject and overlapping-photo requirements](https://developer.apple.com/documentation/realitykit/capturing-photographs-for-realitykit-object-capture).
+One ARKit session supplies the preview and matching RGB and LiDAR frames. Vision estimates the person's turning angle and masks the background. `PhotogrammetrySession` reads matched photos, person masks, and confidence-filtered depth lazily. It reconstructs a textured USDZ on iPhone.
+
+Reconstruction requires at least 60 distinct-angle images, 32 of 36 angular sectors, no gap over 20 degrees, and three confidently framed front-region photos. These gates are checked again against the reconstructed camera poses of aligned, non-rejected inputs. Missing textures, invalid dimensions or a height scale correction outside 0.9–1.1 reject the result. Drag and pinch the actual textured result to inspect it. **Use this scan** replaces the saved avatar; **Retake** or closing keeps the previous one.
+
+Body and shirt capture share graded Core Haptics and a red edge vignette. **Scan options → Guidance haptics** controls vibration and completion feedback. Distance warnings begin outside ±18% of the calibrated target and recover inside ±12%; aiming and roll use 12°/8° margins. Safe, paused, stale, backgrounded or disabled guidance stops vibration. Shirt capture calibrates its own fixed distance, tracks the stationary flat shirt through live camera poses, and encodes the cutout only after three measurements agree.
+
+New captures use captured depth for metric scale; older height-calibrated scans retain their saved scale. Neither establishes chest/waist accuracy or facial fidelity. A person must hold their pose; motion and loose clothing can compromise reconstruction. Hardware accuracy, repeatability, and likeness have **not** been validated in this workspace. Apple documents the [static-subject and overlapping-photo requirements](https://developer.apple.com/documentation/realitykit/capturing-photographs-for-realitykit-object-capture).
 
 Scans live in a separate file-protected, backup-excluded Application Support directory. SHA-256 admission checks the saved model before loading. New-model installation writes the active record atomically, preserving the previous scan on failure. Raw photos/checkpoints are removed after successful reconstruction; canceled or abandoned capture work is cleaned separately. The simulator lacks LiDAR and presents an honest unsupported-device state, with no synthetic scan-success path.
 
@@ -61,6 +67,8 @@ Scans live in a separate file-protected, backup-excluded Application Support dir
 The main try-on path uses native **SceneKit**, the actual saved USDZ, the exact shirt image, and admitted garment observations. A continuous surface-aware shell joins the torso, shoulders and sleeves with open neckline, cuffs and hem. The front uses the observed shirt image; the plain rear is explicitly inferred. Pose references come from supported standing mesh geometry, not a required face-detection request. Unsupported surfaces reject without a generic-body substitute.
 
 This is **not verified physical fit, tension or pressure**. A textured scan includes the clothing worn during capture and cannot establish hidden anatomy or fabric behavior. No separate face-photo collection is implemented.
+
+Try-on adds an interruptible one-shot settling animation without rebuilding the garment mesh. Orbit preserves zoom and elevation; Reduce Motion removes settling and camera inertia. The detail screen retains its bounded preparation cache between preview openings. This animation does not simulate cloth physics.
 
 The Debug-only fixture route supplies authored Tide/Coral shirts and two genuinely different body geometries through the real local save/load contracts. It does not prove camera recognition or reconstruction and never marks a personal scan complete. Normal Release excludes this route and its artifacts. Fixture provenance: [`DevelopmentAssets/OnYouTryOnFixtures/PROVENANCE.json`](DevelopmentAssets/OnYouTryOnFixtures/PROVENANCE.json).
 
@@ -81,6 +89,10 @@ This is an approximate body shape from five dimensions. It does not uniquely rec
 `Tests/AvatarScanTests.swift` checks scale admission, minimum coverage, textured USDZ persistence, failed-save preservation, corruption rejection, and deletion isolation. Its textured box is a synthetic fixture, not a human scan.
 
 `Tests/OnYouTests.swift` checks section dimensions, height, normals, invalid inputs, extreme values, history, persistence, and corrupted-storage handling. `UITests/OnYouUITests.swift` checks the clean viewer, scan setup/cancellation and Closet's automatic-capture route. The focused `TryOn…Tests` cover actual saved geometry, surface clearance, UV/index validation, rendered garment pixels, stale-work cancellation, retakes, rapid navigation, backgrounding, recovery and largest-text controls.
+
+The previous ARKit revision built signed for iPhoneOS and launched on an iPhone 17 Pro Max. Its host assertions passed for guidance, calibration and distributed input coverage. The device disconnected before that revision's device tests could start. Receipts are under `/private/tmp/onyou-device-fix-1mmMjj/GuidanceEvidence/`.
+
+Completed human reconstruction, vibration strength and live shirt recognition still require hands-on testing. Authored try-on fixtures do not validate these. Retakes require explicit Save after review; Cancel preserves the saved shirt.
 
 The imported project documented Bitrig rejecting `test` for standard `Project.json` projects (exit 78). The current native build/test workflow uses XcodeGen and Xcode directly; it does not require Bitrig.
 

@@ -3,8 +3,10 @@ import Foundation
 
 enum CaptureDepthSampler {
   /// Small, confidence-filtered ROI for guidance only; scan admission has its own stricter checks.
-  static func meters(_ depth: CVPixelBuffer?, confidence: CVPixelBuffer? = nil, mask: CVPixelBuffer? = nil) -> Double? {
-    guard let depth, CVPixelBufferGetPixelFormatType(depth) == kCVPixelFormatType_DepthFloat32,
+  static func meters(_ depth: CVPixelBuffer?, confidence: CVPixelBuffer? = nil, mask: CVPixelBuffer? = nil,
+                     center: CGPoint = CGPoint(x: 0.5, y: 0.5)) -> Double? {
+    guard center.x.isFinite, center.y.isFinite, (0...1).contains(center.x), (0...1).contains(center.y),
+          let depth, CVPixelBufferGetPixelFormatType(depth) == kCVPixelFormatType_DepthFloat32,
           CVPixelBufferLockBaseAddress(depth, .readOnly) == kCVReturnSuccess else { return nil }
     defer { CVPixelBufferUnlockBaseAddress(depth, .readOnly) }
     guard let base = CVPixelBufferGetBaseAddress(depth) else { return nil }
@@ -35,19 +37,24 @@ enum CaptureDepthSampler {
       }
       return Double(row.assumingMemoryBound(to: UInt8.self)[px])
     }
-    var samples: [Float] = []
-    for row in 0..<9 { for column in 0..<9 {
-      let x = min(width - 1, width * (column + 6) / 20), y = min(height - 1, height * (row + 6) / 20)
-      if let confidence, (sampledValue(confidence, x: x, y: y) ?? 0) < 1 { continue }
-      if let mask {
-        let threshold = CVPixelBufferGetPixelFormatType(mask) == kCVPixelFormatType_OneComponent32Float ? 0.5 : 128.0
-        if (sampledValue(mask, x: x, y: y) ?? 0) < threshold { continue }
-      }
-      let value = base.advanced(by: y * stride).assumingMemoryBound(to: Float.self)[x]
-      if value.isFinite, (0.2...3).contains(value) { samples.append(value) }
-    } }
-    guard samples.count >= 12 else { return nil }
-    samples.sort()
-    return Double(samples[samples.count / 2])
+    return withUnsafeTemporaryAllocation(of: Float.self, capacity: 81) { samples in
+      var count = 0
+      for row in 0..<9 { for column in 0..<9 {
+        let u = center.x + Double(column - 4) / 20, v = center.y + Double(row - 4) / 20
+        guard (0..<1).contains(u), (0..<1).contains(v) else { continue }
+        let x = Int(u * Double(width)), y = Int(v * Double(height))
+        if let confidence, (sampledValue(confidence, x: x, y: y) ?? 0) < 1 { continue }
+        if let mask {
+          let threshold = CVPixelBufferGetPixelFormatType(mask) == kCVPixelFormatType_OneComponent32Float ? 0.5 : 128.0
+          if (sampledValue(mask, x: x, y: y) ?? 0) < threshold { continue }
+        }
+        let value = base.advanced(by: y * stride).assumingMemoryBound(to: Float.self)[x]
+        if value.isFinite, (0.2...3).contains(value) { samples[count] = value; count += 1 }
+      } }
+      guard count >= 12 else { return nil }
+      var valid = UnsafeMutableBufferPointer(start: samples.baseAddress, count: count)
+      valid.sort()
+      return Double(valid[count / 2])
+    }
   }
 }

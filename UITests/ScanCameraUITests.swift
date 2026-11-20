@@ -2,57 +2,40 @@ import XCTest
 
 @MainActor
 final class ScanCameraUITests: XCTestCase {
-  func testBodyCancelExpandsInPlaceAndKeepsTheAttemptUntilConfirmed() throws {
+  func testPhysicalBodyFramingHelpAndCloseWithoutSaving() throws {
     #if targetEnvironment(simulator)
-    throw XCTSkip("Native Object Capture requires a physical iPhone.")
+    throw XCTSkip("Live depth capture requires a physical iPhone.")
     #else
     let app = XCUIApplication()
     app.launchArguments = ["-onyou-tryon-fixture"]
     app.launch()
     defer { app.terminate() }
     app.buttons["scan.open"].tap()
-    let start = app.buttons["scan.start"]
-    XCTAssertTrue(start.waitForExistence(timeout: 10))
-    start.tap()
-    let select = app.buttons["scan.camera.action"]
-    XCTAssertTrue(select.waitForExistence(timeout: 20))
-    XCTAssertTrue(select.isEnabled, "Ready-state feedback must not block Set floor.")
-    XCTAssertFalse(app.staticTexts["Waiting for a depth photo"].exists)
-    XCTAssertFalse(app.buttons["Turn guidance haptics off"].exists)
-    app.buttons["scan.close"].tap()
-    XCTAssertTrue(app.buttons["scan.cancel"].waitForExistence(timeout: 5))
-    XCTAssertTrue(app.buttons["scan.keep"].isHittable)
-    XCTAssertTrue(app.buttons["scan.camera.action"].exists)
-    app.buttons["scan.keep"].tap()
-    XCTAssertTrue(app.buttons["scan.close"].waitForExistence(timeout: 5))
+    let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.buttons["Allow"].firstMatch
+    if allow.waitForExistence(timeout: 3) { allow.tap() }
+    let startScan = app.buttons["scan.camera.action"]
+    XCTAssertTrue(startScan.waitForExistence(timeout: 20))
+    XCTAssertEqual(startScan.label, "Start scan")
+    XCTAssertTrue(app.staticTexts["scan.camera.guidance"].exists)
+    XCTAssertTrue(app.descendants(matching: .any)["scan.framing-outline"].exists)
     let attachment = XCTAttachment(screenshot: app.screenshot())
     attachment.name = "body-framing-and-compact-controls"
     attachment.lifetime = .keepAlways
     add(attachment)
-    select.tap()
-    let reframe = app.buttons["scan.reframe"]
-    if reframe.waitForExistence(timeout: 5) {
-      XCTAssertEqual(select.label, "Start scan")
-      XCTAssertTrue(select.isEnabled)
-      reframe.tap()
-      XCTAssertTrue(select.waitForExistence(timeout: 5))
-      XCTAssertEqual(select.label, "Set floor")
-      select.tap()
-      if reframe.waitForExistence(timeout: 5) {
-        select.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["scan.capture-progress"].waitForExistence(timeout: 10))
-        let capture = XCTAttachment(screenshot: app.screenshot())
-        capture.name = "native-capture-started"
-        capture.lifetime = .keepAlways
-        add(capture)
-      }
-    } else {
-      XCTAssertTrue(select.isEnabled)
-      XCTAssertTrue(app.staticTexts["scan.camera.guidance"].label.contains("floor"))
-    }
-    app.buttons["scan.close"].tap()
-    app.buttons["scan.cancel"].tap()
-    XCTAssertTrue(app.buttons["scan.open"].waitForExistence(timeout: 10))
+    app.buttons["scan.options"].tap()
+    XCTAssertTrue(app.buttons["Scan help"].waitForExistence(timeout: 5))
+    app.buttons["Scan help"].tap()
+    let done = app.buttons["Done"]
+    XCTAssertTrue(done.waitForExistence(timeout: 5))
+    let help = XCTAttachment(screenshot: app.screenshot())
+    help.name = "helper-led-scan-help"
+    help.lifetime = .keepAlways
+    add(help)
+    done.tap()
+    let close = app.buttons["scan.close"]
+    XCTAssertTrue(close.waitForExistence(timeout: 5))
+    close.tap()
+    XCTAssertTrue(app.buttons["scan.open"].wait(for: \.isHittable, toEqual: true, timeout: 10))
     #endif
   }
 

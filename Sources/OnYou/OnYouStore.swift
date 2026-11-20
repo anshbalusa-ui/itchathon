@@ -31,11 +31,12 @@ final class OnYouStore {
       storageError = "Check your measurements before saving."
       return false
     }
-    guard measurements != current else { return true }
+    guard measurements != current else { storageError = nil; return true }
     let records = [BodySnapshot(measurements: measurements)] + history
     guard persist(current: measurements, history: records) else { return false }
     current = measurements
     history = records
+    storageError = nil
     return true
   }
 
@@ -43,8 +44,8 @@ final class OnYouStore {
     let records = history.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
     guard persist(current: current, history: records) else { return }
     history = records
+    storageError = nil
   }
-
   private func persist(current: BodyMeasurements?, history: [BodySnapshot]) -> Bool {
     do {
       let data = try JSONEncoder().encode(SavedMeasurements(current: current, history: history))
