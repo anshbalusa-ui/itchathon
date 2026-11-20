@@ -95,7 +95,46 @@ final class BodyCaptureChecksTests: XCTestCase {
     XCTAssertNil(BodyCaptureDepthPlane.rotateClockwise([1, 2, 3], width: 2, height: 2))
   }
 
+  func testUprightPhotoMaskAndDepthCodecsPreserveAlignmentAndRejectInvalidMasks() throws {
+    try withPortraitArchive { photo, stored, _ in
+      let mask = try BodyCaptureMaskPlane.read(from: stored.maskURL, width: photo.width, height: photo.height)
+      let depth = try BodyCaptureDepthPlane.read(from: stored.depthURL)
+      try assertPortraitPlanes(mask: mask, depth: depth, photo: photo)
+      XCTAssertThrowsError(try BodyCaptureMaskPlane.read(from: stored.maskURL, width: photo.height, height: photo.width))
+      try FileManager.default.removeItem(at: stored.maskURL)
+      XCTAssertThrowsError(try BodyCaptureMaskPlane.read(from: stored.maskURL, width: photo.width, height: photo.height))
+      try Data("not a mask".utf8).write(to: stored.maskURL)
+      XCTAssertThrowsError(try BodyCaptureMaskPlane.read(from: stored.maskURL, width: photo.width, height: photo.height))
+    }
+  }
+
   func testUprightMaskMatchesRotatedPhotoAndFiltersNativeDepth() throws {
+    try XCTSkipUnless(PhotogrammetrySession.isSupported,
+                      "Native photogrammetry input loading requires a supported runtime; the iOS simulator reports unsupported.")
+    try withPortraitArchive { photo, stored, archive in
+      let input = try archive.makePhotogrammetryInput()
+      let loadedSample = input.samples.makeIterator().next()
+      try input.validateReads()
+      let sample = try XCTUnwrap(loadedSample)
+      try assertPortraitPlanes(mask: XCTUnwrap(sample.objectMask), depth: XCTUnwrap(sample.depthDataMap), photo: photo)
+      func assertRejected() throws {
+        let invalid = try archive.makePhotogrammetryInput()
+        XCTAssertNil(invalid.samples.makeIterator().next())
+        XCTAssertThrowsError(try invalid.validateReads())
+      }
+      try FileManager.default.removeItem(at: stored.maskURL)
+      try assertRejected()
+      try Data("not a mask".utf8).write(to: stored.maskURL)
+      try assertRejected()
+      try FileManager.default.removeItem(at: stored.maskURL)
+      let wrongSizeMask = try pixels(kCVPixelFormatType_OneComponent8, photo.height, photo.width)
+      try withPixels(wrongSizeMask) { base, stride in memset(base, 255, stride * photo.width) }
+      try BodyCaptureMaskPlane.write(wrongSizeMask, to: stored.maskURL)
+      try assertRejected()
+    }
+  }
+
+  private func withPortraitArchive(_ inspect: (CGImage, BodyCaptureStoredSample, BodyCaptureArchive) throws -> Void) throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -144,33 +183,23 @@ final class BodyCaptureChecksTests: XCTestCase {
     var coverage = BodyCaptureCoverage()
     XCTAssertTrue(coverage.record(sampleID: 0, imageURL: imageURL, azimuth: 0, fullBody: true))
     let archive = BodyCaptureArchive(samples: [stored], coverage: coverage)
-    let input = try archive.makePhotogrammetryInput()
-    let sample = try XCTUnwrap(input.samples.makeIterator().next())
-    try input.validateReads()
-    let readMask = try XCTUnwrap(sample.objectMask)
-    XCTAssertEqual(CVPixelBufferGetWidth(readMask), photo.width)
-    XCTAssertEqual(CVPixelBufferGetHeight(readMask), photo.height)
-    try withPixels(readMask, flags: .readOnly) { base, _ in
+    try inspect(photo, stored, archive)
+  }
+
+  private func assertPortraitPlanes(mask: CVPixelBuffer, depth: CVPixelBuffer, photo: CGImage) throws {
+    XCTAssertEqual(CVPixelBufferGetWidth(mask), photo.width)
+    XCTAssertEqual(CVPixelBufferGetHeight(mask), photo.height)
+    try withPixels(mask, flags: .readOnly) { base, _ in
       XCTAssertEqual(base.load(as: UInt8.self), 0)
       XCTAssertEqual(base.load(fromByteOffset: photo.width - 1, as: UInt8.self), 255)
     }
-    try withPixels(XCTUnwrap(sample.depthDataMap), flags: .readOnly) { base, stride in
+    XCTAssertEqual(CVPixelBufferGetWidth(depth), 4)
+    XCTAssertEqual(CVPixelBufferGetHeight(depth), 6)
+    try withPixels(depth, flags: .readOnly) { base, stride in
       XCTAssertEqual(base.load(as: Float.self), 0)
       XCTAssertEqual(base.load(fromByteOffset: 12, as: Float.self), 1, accuracy: 0.001)
       XCTAssertEqual(base.load(fromByteOffset: 5 * stride, as: Float.self), 1.23, accuracy: 0.001)
     }
-    func assertRejected() throws {
-      let invalid = try archive.makePhotogrammetryInput()
-      XCTAssertNil(invalid.samples.makeIterator().next())
-      XCTAssertThrowsError(try invalid.validateReads())
-    }
-    try FileManager.default.removeItem(at: maskURL)
-    try assertRejected()
-    try Data("not a mask".utf8).write(to: maskURL)
-    try assertRejected()
-    try FileManager.default.removeItem(at: maskURL)
-    try BodyCaptureMaskPlane.write(BodyCaptureMaskPlane.portrait(mask, width: photo.height, height: photo.width, context: context), to: maskURL)
-    try assertRejected()
   }
 
   private func pixels(_ format: OSType, _ width: Int, _ height: Int) throws -> CVPixelBuffer {

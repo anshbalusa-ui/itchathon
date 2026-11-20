@@ -1,6 +1,6 @@
 # On You — stationary full-body scan refinement
 
-**Status:** targeted implementation on a review branch, not verified end-to-end human scanning or production readiness. No app launch, simulator/device journey, body scan, XCTest suite or benchmark was performed for this assignment. Compilation and an isolated host-side logic observation are distinguished below; neither validates native reconstruction, physical accuracy, spoken-audio usability or the actual capture layout.
+**Status:** targeted implementation on a review branch, not verified end-to-end human scanning or production readiness. Section 9 records the original source-only implementation phase. Its no-testing statements are historical; the user subsequently authorized runtime validation, which must be reported separately from that original handoff.
 
 ## 1. Starting point and work protection
 
@@ -131,7 +131,7 @@ The existing saved-avatar path still validates textures/metric bounds, writes a 
 
 Work remains local, file-protected and backup-excluded. No cloud upload, separate face-photo workflow, body-analysis service, account, payment, retailer integration, microphone recording or personal scan telemetry was introduced.
 
-## 9. Checks performed and tests reviewed, not executed
+## 9. Original implementation checks — before test authorization
 
 ### Compile-only integration
 
@@ -170,11 +170,11 @@ The same isolated observation showed arming allowed before framing but capture r
 - `IntegrationPrivacyManifestTests`: retained declarations/no collection plus the reused DiskSpace assertion.
 - `UITests/ScanCameraUITests.swift`: existing hardware-only framing/help and shirt paths inspected; not executed.
 
-**None of those test cases or suites was executed. No new test is reported passed.** Historical verification from earlier PRs is not evidence for this branch. Physical capture, simulator UI, audio, live camera, native human reconstruction, saved-avatar/try-on runtime journeys and performance benchmarking are deferred.
+**At the original implementation handoff, none of those test cases or suites had been executed.** No new test was reported passed at that time. Historical verification from earlier PRs was not evidence for this branch. Physical capture, simulator UI, audio, live camera, native human reconstruction, saved-avatar/try-on runtime journeys and performance benchmarking were deferred in that phase.
 
-## 10. Future validation requirements — separate phase
+## 10. Original validation handoff — remaining device requirements
 
-No user/device/testing action is required to accept this engineering handoff. Before calling the product validated, a later phase needs:
+The original engineering handoff deferred testing. The requirements below remain the reference for broader product validation; the later scoped simulator evidence in section 11 does not replace the device-dependent portions.
 
 1. Native Start/countdown/wait/cancel behavior with the person initially out of frame; long framing waits must not repeat countdowns or admit early. Help, discard, interruptions and inactive scenes must be exercised in every state, including a native start already in flight.
 2. Actual camera UI/layout at normal and accessibility sizes; fixed viewport, Start/Cancel reachability, stale guidance expiry, Reduce Motion and unsupported-device behavior.
@@ -184,5 +184,50 @@ No user/device/testing action is required to accept this engineering handoff. Be
 6. Actual USDZ anatomy, texture orientation, front/up/ground, calibrated physical scale and repeatability against independent reference measurements used for validation only—not mandatory customer forms.
 7. Speech audibility, routing, speaker/headphones, volume/silent behavior, interruptions, disabled speech, VoiceOver transitions and whether milestones/current instructions stay understandable without backlog.
 8. Cancel/failure/retake/retry/save, old-avatar preservation, file protection/backup exclusion, raw-work cleanup, relaunch/legacy data, closet shirt selection and actual rotatable try-on using the saved native result.
-9. Execute the reviewed regression suites in that future phase; separately measure inference/capture/processing/save latency, memory, retained buffers and cancellation cleanup. No speed claim should precede measurements.
+9. Run the remaining regression/release matrix and device-only cases; separately measure inference/capture/processing/save latency, memory, retained buffers and cancellation cleanup. No speed claim should precede measurements.
 10. Release/resource/privacy/signing checks and review of this draft against latest main. Do not infer production readiness or auto-merge from source inspection, synthetic logic, prior PR evidence or compilation.
+
+## 11. User-authorized runtime validation follow-up
+
+The user subsequently requested **“test and see if it works.”** This authorized test execution after the original no-testing implementation phase. Validation started from published refinement commit **`2e586ee06466b476230c594e3d99cf1bcdea591a`**, on the same feature branch and draft PR [#29](https://github.com/anshbalusa-ui/itchathon/pull/29); no main or teammate branch was modified.
+
+### Failures and limitations exposed
+
+- **Test compilation:** `BodyScanUXTests`' gold-pixel `.filter` expression exceeded the Swift type checker's limit. Replaced it with an allocation-free explicit loop using exactly the same color predicate and assertion. The initial build failure executed zero tests.
+- **Native input unavailable:** the first executable regression run reported a nil native sample. Temporary diagnostic instrumentation established `RealityFoundation.PhotogrammetrySample.InternalError.unsupported` from `PhotogrammetrySample(contentsOf:)` on iOS 26.5 Simulator. The diagnostic build attempts also exposed an omitted enum switch case and a missing test `try`; those compile-blocked attempts executed zero tests and were corrected, not counted as passes. All temporary production diagnostic code was removed, restoring the original private-safe archive reader and errors.
+- **Codec versus native coverage:** split the existing RGB/mask/depth regression into simulator-capable codec checks and the preserved native archive integration check. The codec case verifies upright RGB corners, mask dimensions/pixels, rotated metric depth, foreground filtering and rejection of mismatched, missing or corrupt masks. The native case now explicitly requires `PhotogrammetrySession.isSupported`, and validates remembered read errors before unwrapping. Its unavailable native portion is a reported skip, not a passed reconstruction.
+- **Scene teardown assertion:** the original test required immediate deallocation of an `SCNView`. That timing assumption failed while the coordinator-release assertion did not. Replaced the incidental synchronous-view-release expectation with teardown behavior: clear scene/actions/render target, release the coordinator even while accessibility actions remain retained, and refuse a stale action after release. No production retain-cycle repair is claimed; `BodySceneView` was not changed.
+- **Observed accessibility footer defect:** screenshot review of the passing layout fixtures exposed wrapped “Cancel start” text overflowing its button and guidance being squeezed on a 320×568-point screen at `.accessibility5`. `BodyScanCameraView` now preserves the action's intrinsic vertical size and, at accessibility sizes, places the action first inside the same scrollable panel as the instructions. The normal-size pinned action, fixed camera viewport and capture gates are preserved. At extreme text sizes, reading all guidance requires scrolling rather than clipping the action or shrinking the selected font.
+- **Expanded existing layout observations:** the existing production-chrome rendering case now includes countdown, armed/framing-wait and native-start feedback, including narrow largest-text countdown/wait states. Its gray camera area is a layout fixture, not simulated live capture or a completed scan.
+
+### Physical boundary
+
+The paired phone **anshbalusa** could not establish a live CoreDevice connection; Xcode independently listed it as **Offline**. Cached pairing information is not live capture capability. No authorized full-body photograph/depth input set was available in repository fixtures. No personal photo library, face collection, cloud service, invented scan result or unsupported-lens bypass was used.
+
+Live five-second scheduling/start/cancel interactions, spoken-audio usability, LiDAR/pose/segmentation under real framing and lighting, rotating-human native reconstruction, anatomy, texture orientation, metric scale and try-on accuracy remain unverified. Camera-free chrome, synthetic pose mathematics and explicitly authored saved-avatar fixtures cannot establish those outcomes. No performance benchmark or production-readiness claim follows from these checks.
+
+### Final executed checks
+
+The final combined **Debug** run used the actual `On You.xcodeproj`, scheme `FitCheck`, and iPhone 17 / iOS 26.5 Simulator (`x86_64`), with parallel test execution disabled. `xcodebuild test` completed with exit 0, no failed or expected-failure cases:
+
+| Selected scope | Passed | Failed | Skipped |
+| --- | ---: | ---: | ---: |
+| Capture, rendering, persistence, guidance, closet, try-on and privacy regressions | 74 | 0 | 2 |
+| Actual app UI journeys | 6 | 0 | 0 |
+
+The unit/render selection was `BodyCaptureChecksTests`, `BodyCaptureTurnTests`, `BodyScanUXTests`, `AvatarScanInputTests`, `AvatarScanTests`, `ScanGuidanceTrackerTests`, `ScanPositionFeedbackTests`, `IntegrationPrivacyManifestTests`, `ClosetTests`, `TryOnTests`, `TryOnSceneTests` and `TryOnLifecycleTests`. This includes the inconsistent-native-pose/photo-floor recovery regression, fresh calibration/countdown admission policy, RGB/mask/depth codecs, saved-avatar integrity and failed-save preservation.
+
+The UI selection was both `OnYouUITests` cases and four `TryOnUITests` journeys: saved-avatar/closet rotation, visibility and reopening; rapid dismissal/garment replacement/backgrounding; a distinct body at largest accessibility size; and prerequisite rejection/recovery. These launched the real app. Try-on inputs were explicitly labelled, isolated authored fixtures, not new personal scans. On Simulator, the real scan entry correctly showed unsupported capture and did not expose a fake Start action or measurement form.
+
+The two skips are explicit capability limits:
+
+- `BodyCaptureChecksTests.testUprightMaskMatchesRotatedPhotoAndFiltersNativeDepth`: native photogrammetry is unsupported on this runtime. The independent codec regression passed; native sample loading/reconstruction did not.
+- `ScanPositionFeedbackTests.testDeviceWarningLoopStopsOnRecoveryStalenessAndDisabledSettings`: physical haptics are unavailable on Simulator.
+
+After execution, exported and inspected the production-chrome captures and actual app screenshots. The repaired `capture-countdown-narrow-accessible` and `capture-waiting-narrow-accessible` captures show the full wrapped Cancel label inside its button, without overlaying the guidance. The normal countdown retains its pinned action and camera viewport. The existing render assertions alone did not detect the original overflow; the before/after screenshot review is the direct visual evidence, not a claim of a new automatic clipping detector.
+
+Also launched `On You.app` through `Scripts/launch_onyou.sh` **without** fixture flags (`synthetic fixtures: 0`) and inspected `normal-app.png`: the normal viewer rendered its explicitly labelled **Example body**, scan/measurement actions and Body/Closet/History tabs. This is a launch/render smoke observation, not a captured avatar.
+
+Local receipts are outside Git in `onyou-stationary-validation-20261120/`: `FinalValidation.xcresult`, exported attachments/manifest, `FinalValidation-summary.json`, `FinalValidation-tests.json`, input/source identity JSON and `Validation-report.json`. The final source fingerprint was **`c5cfac04f51dc0e90d31605a215d7968c27112eff5caed6ba5cfbc454fad09fd`** before and after the combined run. It covers `Project.json`, the native verifier, `Sources`, `Tests`, `UITests` and `DevelopmentAssets`; documentation-only edits followed. Earlier failed/compile-blocked receipts were retained, not relabelled as passing.
+
+This was a scoped simulator run, not the full Debug/Release/distribution verification matrix. The remaining physical boundary above still applies.

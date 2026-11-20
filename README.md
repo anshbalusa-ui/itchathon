@@ -88,7 +88,7 @@ This is an approximate body shape from five dimensions. It does not uniquely rec
 
 ## Verification
 
-**Stationary-scan refinement:** [`Docs/ONYOU_STATIONARY_SCAN_REFINEMENT.md`](Docs/ONYOU_STATIONARY_SCAN_REFINEMENT.md) records the current source audit, targeted fixes, compile/isolated-logic observations and deferred validation. No XCTest suites, simulator/device journeys, body scans or benchmarks were run for that assignment. Historical results below do not validate the newer rotating-person scanner or this refinement.
+**Stationary-scan refinement:** [`Docs/ONYOU_STATIONARY_SCAN_REFINEMENT.md`](Docs/ONYOU_STATIONARY_SCAN_REFINEMENT.md) records the source audit, targeted fixes and subsequent user-authorized simulator validation. Scoped unit/render and real-app UI journeys were executed, and the normal app was launched without fixture flags; the handoff lists exact results, hardware-dependent skips and the observed accessibility-footer repair. Live rotating-person capture/reconstruction, audio usability, physical accuracy and performance remain unverified. Historical results below do not validate those outcomes.
 
 `Tests/AvatarScanTests.swift` checks scale admission, minimum coverage, textured USDZ persistence, failed-save preservation, corruption rejection, and deletion isolation. Its textured box is a synthetic fixture, not a human scan.
 
