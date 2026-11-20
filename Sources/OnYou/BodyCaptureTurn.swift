@@ -26,8 +26,8 @@ enum BodyCaptureView: Int, CaseIterable, Sendable {
   fileprivate var request: String {
     switch self {
     case .front: "Face the camera."
-    case .back: "Show their back."
-    case .firstSide, .secondSide: "Show this side."
+    case .back: "Show your back to the camera."
+    case .firstSide, .secondSide: "Turn slowly to show your side."
     }
   }
 }
@@ -65,6 +65,7 @@ struct BodyCaptureTurn {
   private(set) var admissibleYaw: Double?
   private(set) var yawRate: Double?
   private(set) var isRecovering: Bool
+  private(set) var turningTooFast = false
   private var requestedAngles: [Double] = []
   private var admittedRequest = false
   private var lastTimestamp: TimeInterval?
@@ -118,6 +119,7 @@ struct BodyCaptureTurn {
     admissibleYaw = nil
     admittedRequest = false
     yawRate = nil
+    turningTooFast = false
   }
 
   mutating func update(yaw: Double?, observedAt: TimeInterval, now: TimeInterval,
@@ -125,6 +127,7 @@ struct BodyCaptureTurn {
     admissibleYaw = nil
     admittedRequest = false
     yawRate = nil
+    turningTooFast = false
     observe(yaw: yaw, observedAt: observedAt, now: now)
     poseUsable = usable && lastPose != nil
     // Finish can be near front, but leave time to capture the wrap before asking for a missing angle.
@@ -174,7 +177,9 @@ struct BodyCaptureTurn {
     }
     let targets = isRecovering ? recoveryTargets(coverage: coverage) : []
     let instruction: String
-    if let target = targets.first {
+    if turningTooFast {
+      instruction = "Turn more slowly. Hold your pose."
+    } else if let target = targets.first {
       let direction = direction ?? 1
       let view = BodyCaptureView.nearest(to: target, direction: direction)
       if let current = lastPose?.yaw {
@@ -192,11 +197,11 @@ struct BodyCaptureTurn {
     } else if isRecovering {
       instruction = "There aren’t enough clear views. Retake with a slower turn and steady arms."
     } else if lastPose == nil {
-      instruction = "Keep arms slightly away from the body."
+      instruction = "Hold your pose so we can find your angle."
     } else if !poseUsable {
-      instruction = "Hold there."
+      instruction = "Hold that position."
     } else {
-      instruction = direction == nil ? "Turn slowly." : "Keep going."
+      instruction = direction == nil ? "Turn slowly in place." : "Keep turning slowly."
     }
     return BodyCaptureTurnFeedback(completedViews: views, missingAngles: targets, instruction: instruction, captureComplete: false)
   }
@@ -258,7 +263,7 @@ struct BodyCaptureTurn {
     guard let yaw, yaw.isFinite else { losePose(); return }
     let pose = Pose(yaw: BodyCaptureCoverage.normalized(yaw), time: observedAt)
     if let old = lastPose {
-      if let delta = Self.continuousDelta(from: old, to: pose) {
+      if let delta = Self.continuousDelta(from: old, to: pose, tooFast: &turningTooFast) {
         accept(pose, delta: delta, elapsed: pose.time - old.time)
         return
       }
@@ -268,7 +273,7 @@ struct BodyCaptureTurn {
       return
     }
 
-    if var run = candidate, let delta = Self.continuousDelta(from: run.last, to: pose) {
+    if var run = candidate, let delta = Self.continuousDelta(from: run.last, to: pose, tooFast: &turningTooFast) {
       let shift = BodyCaptureCoverage.signed(pose.yaw - run.anchor)
       run.minimum = min(run.minimum, shift)
       run.maximum = max(run.maximum, shift)
@@ -287,11 +292,14 @@ struct BodyCaptureTurn {
     candidate = Reacquisition(anchor: pose.yaw, last: pose)
   }
 
-  private static func continuousDelta(from earlier: Pose, to later: Pose) -> Double? {
+  private static func continuousDelta(from earlier: Pose, to later: Pose, tooFast: inout Bool) -> Double? {
     let elapsed = later.time - earlier.time
     let delta = BodyCaptureCoverage.signed(later.yaw - earlier.yaw)
-    guard elapsed > 0, elapsed <= maximumAge, abs(delta) <= maximumJump + tolerance,
-          abs(delta) <= maximumRate * elapsed + tolerance else { return nil }
+    guard elapsed > 0, elapsed <= maximumAge, abs(delta) <= maximumJump + tolerance else { return nil }
+    guard abs(delta) <= maximumRate * elapsed + tolerance else {
+      tooFast = true
+      return nil
+    }
     return delta
   }
 

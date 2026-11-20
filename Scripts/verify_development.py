@@ -23,6 +23,7 @@ PRIVACY = {
     "NSPrivacyAccessedAPICategorySystemBootTime": ["35F9.1"],
     "NSPrivacyAccessedAPICategoryUserDefaults": ["CA92.1"],
     "NSPrivacyAccessedAPICategoryFileTimestamp": ["C617.1"],
+    "NSPrivacyAccessedAPICategoryDiskSpace": ["E174.1"],
 }
 MARKERS = (
     # The pinned HumanShowcaseAssets loader now powers On You's production body.

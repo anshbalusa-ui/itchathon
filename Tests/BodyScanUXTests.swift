@@ -225,27 +225,41 @@ final class BodyScanUXTests: XCTestCase {
     }
   }
 
-  func testStartRequiresFreshCalibrationAndASeparateTap() {
+  func testStartCanBeArmedBeforeFramingButCaptureRequiresCountdownAndFreshCalibration() {
     var status = BodyScanCameraStatus(mode: .framing)
+    XCTAssertTrue(status.canArmStart)
     XCTAssertFalse(status.canStart(now: 10))
+    status.start = .countdown(5)
     status.calibrated = true
-    XCTAssertFalse(status.canStart(now: 10))
     status.observedAt = 10
+    XCTAssertFalse(status.canArmStart)
+    XCTAssertTrue(status.canCancelStart)
+    XCTAssertFalse(status.canStart(now: 10.5))
+    status.start = .waitingForFraming
     XCTAssertTrue(status.canStart(now: 10.5))
-    XCTAssertEqual(status.mode, .framing)
     XCTAssertFalse(status.canStart(now: 9.99))
     XCTAssertFalse(status.canStart(now: 10.61))
     XCTAssertFalse(status.canStart(now: .nan))
-    status.pendingStart = true
+    status.calibrated = false
+    XCTAssertFalse(status.canStart(now: 10.5))
+    status.calibrated = true
+    status.start = .starting
+    XCTAssertFalse(status.canArmStart)
+    XCTAssertFalse(status.canCancelStart)
+    XCTAssertFalse(status.canStart(now: 10.5))
+    status.start = .idle
+    XCTAssertTrue(status.canArmStart)
     XCTAssertFalse(status.canStart(now: 10.5))
   }
 
   func testFinishingDoesNotEnableStartAndKeepsCompletedViews() {
-    var status = BodyScanCameraStatus(mode: .capturing, calibrated: true, observedAt: 10,
+    var status = BodyScanCameraStatus(mode: .capturing, calibrated: true, start: .waitingForFraming, observedAt: 10,
                                       completedViews: Set(BodyCaptureView.allCases))
     XCTAssertFalse(status.canStart(now: 10))
+    XCTAssertFalse(status.canArmStart)
     status.mode = .finishing
     XCTAssertFalse(status.canStart(now: 10))
+    XCTAssertFalse(status.canArmStart)
     XCTAssertEqual(status.completedViews.count, 4)
     XCTAssertNil(status.neededView)
   }
