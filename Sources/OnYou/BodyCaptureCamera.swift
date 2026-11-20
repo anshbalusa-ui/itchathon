@@ -163,7 +163,7 @@ enum BodyCaptureCameraError: LocalizedError, Equatable {
     switch self {
     case .permission: "Camera access is not authorized."
     case .unsupported: "This device does not support body capture with LiDAR."
-    case .interrupted: "Camera tracking was interrupted. Frame the person again."
+    case .interrupted: "Camera tracking was interrupted. Set iPhone securely and frame yourself again."
     case .insufficientViews: "There aren’t enough clear views. Retake with a slower turn and steady arms."
     }
   }
@@ -442,7 +442,7 @@ private final class BodyCaptureRuntime: NSObject, ARSessionDelegate, @unchecked 
     }
     switch assessment.issue {
     case .multiplePeople: unavailable("Keep only one person in view.", at: now); return
-    case .missingPerson: unavailable("Fit the person from head to toe.", at: now); return
+    case .missingPerson: unavailable("Step into view with your head and feet visible.", at: now); return
     default: break
     }
 
@@ -473,22 +473,22 @@ private final class BodyCaptureRuntime: NSObject, ARSessionDelegate, @unchecked 
         position.severity = 0.2
       }
     }
-    let directed = position.intensity > 0 ? position.direction.instruction + "." : nil
+    let directed = position.intensity > 0 ? positioningInstruction(position.direction) : nil
     let correction: String?
     if !framingOK || !sizeOK {
-      correction = directed ?? "Fit the person from head to toe."
+      correction = directed ?? "Keep your head and feet visible."
     } else if let directed {
       correction = directed
     } else if assessment.meters == nil || assessment.issue == .depth {
-      correction = "Keep the whole person in good light and within reach of the camera."
+      correction = "We need a clearer view. Keep your head and feet visible in even light."
     } else if baseline == nil && !assessment.frontFacing {
-      correction = "Ask them to face the camera."
+      correction = "Face the camera."
     } else if baseline == nil && !assessment.fullBody {
-      correction = "Fit the person from head to toe."
+      correction = "Keep your head and feet visible."
     } else if !assessment.armsApart {
-      correction = "Keep arms slightly away from the body."
+      correction = "Hold your arms slightly away."
     } else if assessment.issue == .pose {
-      correction = "Hold there."
+      correction = "Hold that position."
     } else {
       correction = nil
     }
@@ -522,7 +522,7 @@ private final class BodyCaptureRuntime: NSObject, ARSessionDelegate, @unchecked 
           feedback = turn.feedback(coverage: coverage)
           cue = feedback.instruction
         } else {
-          cue = "Hold there."
+          cue = "Hold that position."
         }
       }
       captureComplete = feedback.captureComplete
@@ -549,8 +549,22 @@ private final class BodyCaptureRuntime: NSObject, ARSessionDelegate, @unchecked 
         candidateGuidePlacement = nil
       }
       let ready = calibration.ready(now: currentTime)
-      publish(instruction: correction ?? (ready ? "Ready. Ask them to keep this pose." : "Keep iPhone steady."),
+      publish(instruction: correction ?? (ready ? "Framing ready. Hold your pose." : "Hold still with your arms slightly away."),
               position: position, at: now)
+    }
+  }
+
+  private func positioningInstruction(_ direction: ScanPositionFeedback.Direction) -> String {
+    switch direction {
+    case .closer: "Move a little closer to iPhone."
+    case .farther: "Move a little farther back."
+    case .left, .right: "Center yourself in the camera view."
+    case .up, .down:
+      baseline == nil ? "Position iPhone so your head and feet fit in view." : "Keep your head and feet visible without moving iPhone."
+    case .level:
+      baseline == nil ? "Set iPhone upright and level on its support." : "Keep iPhone fixed in its original position."
+    case .hold: "Hold that position."
+    case .searching: "Step into view with your head and feet visible."
     }
   }
 

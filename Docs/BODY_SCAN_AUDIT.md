@@ -1,5 +1,7 @@
 # On You scan algorithm audit
 
+> Historical audit of an earlier capture revision, not a current feature inventory. Saved-avatar try-on and stationary-phone/rotating-person capture have since been implemented. See [the stationary-scan refinement](ONYOU_STATIONARY_SCAN_REFINEMENT.md) for the current source classifications, focused repairs and deferred validation. The original findings and test results below are retained as historical evidence.
+
 Reviewed the shipping `OnYouRootView` flow, body capture, reconstruction acceptance, saved mesh calibration, and closet measurement/comparison code. The older scanners and fit engine are not wired into this flow.
 
 ## Remaining product and accuracy gaps

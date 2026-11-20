@@ -35,6 +35,8 @@ final class BodyCaptureModel {
   private var work: URL?
   private var reconstruction: PhotogrammetrySession?
   private var task: Task<Void, Never>?
+  private var startTask: Task<Void, Never>?
+  private var capturePaused = false
   private var generation = UUID()
   private var diagnosticStage: BodyScanTiming.Stage?
   private var diagnosticStartedAt: ContinuousClock.Instant?
@@ -60,6 +62,7 @@ final class BodyCaptureModel {
     }
     capture = controller
     cameraStatus.mode = .framing
+    beginCaptureIfReady()
   }
 
   func cameraUpdated(_ update: BodyCaptureUpdate, directory: URL, captureID: UUID) {
@@ -78,6 +81,8 @@ final class BodyCaptureModel {
       position = ScanPositionFeedback()
       beginDiagnosticStage(.captureFinalization)
       capture?.finishCapture()
+    } else {
+      beginCaptureIfReady()
     }
   }
 
@@ -104,22 +109,63 @@ final class BodyCaptureModel {
   }
 
   func performCameraAction() {
-    guard cameraStatus.canStart(now: ProcessInfo.processInfo.systemUptime), let capture else { return }
+    if cameraStatus.canCancelStart {
+      cancelCameraStart()
+      return
+    }
+    guard phase == .capturing, cameraStatus.canArmStart, capture != nil, !capturePaused else { return }
+    beginCountdown()
+  }
+
+  private func beginCountdown() {
+    guard startTask == nil, !capturePaused else { return }
     let token = generation
-    cameraStatus.pendingStart = true
-    Task { [weak self] in
+    cameraStatus.start = .countdown(5)
+    startTask = Task { [weak self] in
+      for seconds in stride(from: 4, through: 0, by: -1) {
+        do { try await Task.sleep(for: .seconds(1)) }
+        catch { return }
+        guard !Task.isCancelled, let self, generation == token, phase == .capturing, !capturePaused else { return }
+        if seconds > 0 {
+          cameraStatus.start = .countdown(seconds)
+        } else {
+          startTask = nil
+          cameraStatus.start = .waitingForFraming
+          beginCaptureIfReady()
+        }
+      }
+    }
+  }
+
+  private func beginCaptureIfReady() {
+    guard phase == .capturing, !capturePaused, startTask == nil,
+          cameraStatus.canStart(now: ProcessInfo.processInfo.systemUptime), let capture else { return }
+    let token = generation
+    cameraStatus.start = .starting
+    startTask = Task { [weak self] in
       let started = await capture.startScanning()
       guard let self, generation == token, phase == .capturing, cameraStatus.mode == .framing else { return }
-      cameraStatus.pendingStart = false
-      guard started else {
+      startTask = nil
+      // A native start already in flight may succeed just before a prompt pauses
+      // the runtime. Reflect that result; never leave a running camera in framing.
+      if started {
+        cameraStatus.start = .idle
+        cameraStatus.mode = .capturing
+        cameraStatus.instruction = "Turn slowly in place."
+        beginDiagnosticStage(.bodyPass)
+      } else {
+        cameraStatus.start = capturePaused ? .idle : .waitingForFraming
         cameraStatus.calibrated = false
-        cameraStatus.instruction = "Keep iPhone steady."
-        return
+        cameraStatus.instruction = "Keep your head and feet visible. Hold still."
       }
-      cameraStatus.mode = .capturing
-      cameraStatus.instruction = "Hold there."
-      beginDiagnosticStage(.bodyPass)
     }
+  }
+
+  private func cancelCameraStart() {
+    guard cameraStatus.start != .starting else { return }
+    startTask?.cancel()
+    startTask = nil
+    cameraStatus.start = .idle
   }
 
   func clearSaveError() { saveError = nil }
@@ -164,8 +210,12 @@ final class BodyCaptureModel {
 
   func setCapturePromptVisible(_ visible: Bool) {
     guard phase == .capturing else { return }
+    capturePaused = visible
+    if visible {
+      cancelCameraStart()
+      position = ScanPositionFeedback()
+    }
     capture?.setPaused(visible)
-    if visible { position = ScanPositionFeedback() }
   }
 
   func retryProcessing() {
@@ -183,6 +233,7 @@ final class BodyCaptureModel {
       .feedback(coverage: archive.coverage).completedViews
     phase = .capturing
     beginDiagnosticStage(.framing)
+    beginCountdown()
   }
 
   func suspend() {
@@ -243,6 +294,10 @@ final class BodyCaptureModel {
   private func invalidateWork() {
     endDiagnosticStage()
     generation = UUID()
+    startTask?.cancel()
+    startTask = nil
+    cameraStatus.start = .idle
+    capturePaused = false
     task?.cancel()
     reconstruction?.cancel()
     reconstruction = nil
@@ -358,19 +413,21 @@ final class BodyCaptureModel {
             let poses = usedPoses.posesBySample.mapValues {
               BodyCaptureReconstructedPose(translation: $0.translation, rotation: $0.rotation)
             }
+            let alignedSampleIDs: Set<Int>
             switch archive.alignedCoverage(poses: poses, rejectedIDs: rejected) {
-            case .missingAngles(let angles):
-              missingViews(angles, in: archive, keeping: Set(poses.keys).subtracting(rejected))
+            case .missingAngles(let angles, sampleIDs: let sampleIDs):
+              missingViews(angles, in: archive, keeping: sampleIDs)
               return
             case .invalid:
               fail(CaptureAlignmentFailed())
               return
-            case .complete:
+            case .complete(let sampleIDs):
               guard !incomplete else { fail(CaptureAlignmentFailed()); return }
+              alignedSampleIDs = sampleIDs
             }
             if let processingError { throw processingError }
             guard producedFile else { fail(CaptureAlignmentFailed()); return }
-            imageCount = try input.validate(usedSampleIDs: Set(usedPoses.posesBySample.keys),
+            imageCount = try input.validate(usedSampleIDs: alignedSampleIDs,
                                             urlsBySample: archive.urlsBySample, rejectedIDs: rejected,
                                             fullBodyImageURLs: archive.fullBodyImageURLs, passes: completedPasses)
             endDiagnosticStage()
@@ -439,5 +496,5 @@ private struct CaptureInterrupted: LocalizedError {
 }
 
 private struct CaptureAlignmentFailed: LocalizedError {
-  var errorDescription: String? { "The views didn’t align. Keep arms and torso together while turning." }
+  var errorDescription: String? { "The views didn’t align. Turn slowly in place, keeping the same arm position." }
 }
