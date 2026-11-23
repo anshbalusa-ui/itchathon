@@ -45,7 +45,15 @@ struct BodyCaptureCamera: UIViewControllerRepresentable {
 }
 
 @MainActor
-final class BodyCaptureController {
+protocol BodyCaptureControlling: AnyObject {
+  func startScanning() async -> Bool
+  func finishCapture()
+  func setPaused(_ paused: Bool)
+  func stop()
+}
+
+@MainActor
+final class BodyCaptureController: BodyCaptureControlling {
   nonisolated static let supported = ARWorldTrackingConfiguration.isSupported &&
     ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
   nonisolated static let maximumPhotos = 120

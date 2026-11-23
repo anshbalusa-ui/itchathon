@@ -161,9 +161,10 @@ struct BodyScanFlowView: View {
     return BodyScanCameraView(status: model.cameraStatus, position: model.position,
                              close: requestClose, performAction: model.performCameraAction,
                              paused: confirmingDiscard, pauseCapture: { visible in
+                               guard model.captureID == captureID else { return }
                                capturePromptVisible = visible
                                synchronizeVoiceGuidance()
-                               model.setCapturePromptVisible(visible)
+                               model.setCapturePromptVisible(visible, captureID: captureID)
                              }, announceInstruction: { instruction in
                                guard model.cameraStatus.countdown == nil else { return }
                                voiceGuidance.announce(instruction, interrupt: model.position.intensity >= 0.35)

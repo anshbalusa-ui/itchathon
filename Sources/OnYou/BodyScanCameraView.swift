@@ -104,6 +104,8 @@ struct BodyScanCameraView<Camera: View>: View {
     .toolbarColorScheme(.dark, for: .navigationBar)
     .toolbarBackground(.hidden, for: .navigationBar)
     .toolbar { captureToolbar }
+    .onAppear { pauseCapture(promptsVisible || scenePhase != .active) }
+    .onDisappear { pauseCapture(true) }
     .onChange(of: promptsVisible) { _, visible in pauseCapture(visible || scenePhase != .active) }
     .onChange(of: scenePhase) { _, phase in pauseCapture(promptsVisible || phase != .active) }
     .sheet(isPresented: $showingHelp) { help }

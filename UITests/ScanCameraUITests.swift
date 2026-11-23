@@ -2,6 +2,38 @@ import XCTest
 
 @MainActor
 final class ScanCameraUITests: XCTestCase {
+  #if DEBUG && targetEnvironment(simulator)
+  func testConsumerScanEntryCanCloseAndReopenWithoutSaving() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-onyou-tryon-fixture"]
+    app.launch()
+    defer { app.terminate() }
+    let body = app.descendants(matching: .any)["body.scene"]
+    XCTAssertTrue(body.waitForExistence(timeout: 20))
+    for attempt in 1...2 {
+      let openScan = app.buttons["scan.open"]
+      XCTAssertTrue(openScan.wait(for: \.isHittable, toEqual: true, timeout: 10))
+      openScan.tap()
+      let unavailable = app.descendants(matching: .any)["scan.unsupported"]
+      XCTAssertTrue(unavailable.waitForExistence(timeout: 15))
+      XCTAssertFalse(app.buttons["scan.camera.action"].exists)
+      let entry = XCTAttachment(screenshot: app.screenshot())
+      entry.name = "consumer-scan-unsupported-attempt-\(attempt)"
+      entry.lifetime = .keepAlways
+      add(entry)
+      let close = app.buttons["scan.close"]
+      XCTAssertTrue(close.wait(for: \.isHittable, toEqual: true, timeout: 5))
+      close.tap()
+      XCTAssertTrue(body.waitForExistence(timeout: 10))
+      XCTAssertFalse(unavailable.exists)
+    }
+    let returned = XCTAttachment(screenshot: app.screenshot())
+    returned.name = "consumer-body-preserved-after-scan-reentry"
+    returned.lifetime = .keepAlways
+    add(returned)
+  }
+  #endif
+
   func testPhysicalBodyFramingHelpAndCloseWithoutSaving() throws {
     #if targetEnvironment(simulator)
     throw XCTSkip("Live depth capture requires a physical iPhone.")

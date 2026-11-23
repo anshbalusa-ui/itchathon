@@ -25,11 +25,13 @@ Shared interfaces are the versioned records in the architecture document. Implem
 
 ## Goal 1 — Consumer Scanning Integration Hardening
 
-**Objective:** close the source/runtime evidence gap in self-start, pause, recovery and cancellation after integration, without another scanner architecture. This is the recommended next assignment. Physical reconstruction/accuracy remains a separate gate.
+**Objective:** close the source/runtime evidence gap in self-start, pause, recovery and cancellation after integration, without another scanner architecture. Physical reconstruction/accuracy remains a separate gate.
+
+**Status:** the source-level implementation and bounded coordinator/app evidence on this review branch are recorded in [Consumer Scan Hardening](ONYOU_CONSUMER_SCAN_HARDENING.md). Do not repeat the completed countdown/native-start work. Goal 2 is the next major implementation; native human reconstruction and accuracy remain unverified.
 
 **Reuse:** `BodyCaptureModel`, `BodyScanCameraStatus`, `BodyCaptureCamera`/controller, `BodyCaptureArchive`, `BodyCaptureCoverage`, `BodyCaptureTurn`, existing saved-avatar transaction and current scene/capture UI. PR #29 already implements the feature and native-pose filtering; do not implement it again.
 
-**Exact missing work:** current policy tests exercise status/angle decisions, but do not deterministically drive the actual five-second task, native-start continuation, prompt/inactive ordering and generation cancellation. Add only the smallest clock/native-start seam needed to exercise that existing coordinator. Inspect current source first and skip any case already covered on the delivered head. Keep native camera capability and runtime framing checks intact; a test-controlled start result is not a real camera or successful personal scan.
+**Exact missing work:** the original deterministic coordinator gap is addressed in the hardening handoff: actual countdown/wait, native-start completion, pause/generation fences, recovery and failure/unwind behavior now have focused coverage. Physical/native input and reconstruction validation remains outstanding, not a dependency of a standardized-model studio. Keep every capability/framing/quality gate intact; controlled test outcomes are not camera evidence.
 
 **Dependencies:** reviewed consolidation and affected-case execution authorization for this next task; no phone, LiDAR data, new model, backend or studio. Native depth/intrinsics/rotating-human assumptions stay documented, not guessed around.
 
@@ -180,7 +182,9 @@ Shared interfaces are the versioned records in the architecture document. Implem
 - UI work needs actual rendered/interactive surface evidence; mocks or source inspection alone are not UI proof. Synthetic/mannequin assets are labelled and never represent a personal scan.
 - Code/math tests establish code/math only. Real human geometry, metric accuracy, fabric response, pressure, fit and commercial rights each need their own evidence. No performance claim without measurements.
 
-## Ready-to-use next OMP/Codex task — Goal 1 only
+## Historical Goal 1 task scope — do not repeat
+
+The following prompt records the assignment implemented by the hardening branch. Use its handoff for exact verification boundaries; begin the next major development assignment from Goal 2 above, not by re-running this historical scope.
 
 > Continue `anshbalusa-ui/itchathon` from the reviewed foundation consolidation PR/head. Refresh main and the integration head, preserve all existing work and use a new dedicated branch/worktree. Read the consolidation/architecture/roadmap and current `BodyCaptureModel`/`BodyScanCameraStatus` before editing.
 >
