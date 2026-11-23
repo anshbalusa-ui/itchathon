@@ -210,3 +210,11 @@ Remaining physical/platform uncertainty: real countdown/audio/VoiceOver use, lig
 ### Observed existing UI limitation, not an accessibility sign-off
 
 The largest-accessibility-text attachments show the retained Body screen's long measurement-illustration caption clipped beneath the preview and oversized controls overlapping the bottom tab region in the captured viewport. The driver can scroll/reach the relevant controls and the behavior assertions pass; that does **not** establish a polished large-text layout. Normal-size launch was visually inspected separately. The Body screen layout was not redesigned during source consolidation; record this as deferred UI/accessibility work, not a passed release gate.
+
+## 9. GitHub delivery
+
+- Dedicated branch: `integration/onyou-foundation-20261122`, created from verified `origin/main` `b3e0397eb6ac1ce8ab13b84e00a645e1a49a6e8c` in an isolated worktree.
+- [Draft PR #30](https://github.com/anshbalusa-ui/itchathon/pull/30) targets `main`. No automatic merge or modification/closure of PR #28/#29 is authorized or performed.
+- Code/documentation integration commit: [`f7ed7ee0b71f4dfa836c1228ca6c42415c91c40d`](https://github.com/anshbalusa-ui/itchathon/commit/f7ed7ee0b71f4dfa836c1228ca6c42415c91c40d), following the two provenance-preserving PR #29 cherry-picks `23fa37c` and `3983412`.
+- This delivery section is a documentation-only receipt added after the actual PR URL existed. The [PR commits/current head](https://github.com/anshbalusa-ui/itchathon/pull/30/commits) identifies the final publication revision; it does not change the compiled source fingerprint or reclassify historical tests.
+- Main, the reviewed teammate heads and all ten pre-existing worktrees were left intact. Existing uncommitted fitted-shorts work remains separate, not silently imported or overwritten.
