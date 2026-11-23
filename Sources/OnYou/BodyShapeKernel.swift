@@ -1,7 +1,7 @@
 import Foundation
 import simd
 
-struct BodyShapeKernel {
+struct BodyShapeKernel: Sendable {
   private var chest: Float
   private var waist: Float
   private var hips: Float
@@ -26,7 +26,10 @@ struct BodyShapeKernel {
       (1.44, Float(measurements.shoulders / 42)),
       (1.57, heightScale), (1.81, heightScale)
     ]
-    var vertices = mesh.vertices.map { vertex -> RendererVertex in
+    var vertices: [RendererVertex] = []
+    vertices.reserveCapacity(mesh.vertices.count)
+    for (index, vertex) in mesh.vertices.enumerated() {
+      if index.isMultiple(of: 1024) { try Task.checkCancellation() }
       let p = vertex.position
       let interval = zip(anchors, anchors.dropFirst()).first { p.y <= $0.1.0 } ?? (anchors[6], anchors[7])
       let t = min(1, max(0, (p.y - interval.0.0) / (interval.1.0 - interval.0.0)))
@@ -38,9 +41,10 @@ struct BodyShapeKernel {
         + (p.x.sign == .minus ? -1 : 1) * (0.20 * scale + (abs(p.x) - 0.20) * heightScale) * armWeight
       let depthScale = scale * (1 - armWeight) + heightScale * armWeight
       let centerZ: Float = 0.055
-      return RendererVertex(position: SIMD3(x, p.y * heightScale, centerZ + (p.z - centerZ) * depthScale), normal: .zero)
+      vertices.append(RendererVertex(position: SIMD3(x, p.y * heightScale, centerZ + (p.z - centerZ) * depthScale), normal: .zero))
     }
     for face in stride(from: 0, to: mesh.indices.count, by: 3) {
+      if face.isMultiple(of: 3072) { try Task.checkCancellation() }
       let a = Int(mesh.indices[face]), b = Int(mesh.indices[face + 1]), c = Int(mesh.indices[face + 2])
       let normal = simd_cross(vertices[b].position - vertices[a].position, vertices[c].position - vertices[a].position)
       vertices[a].normal += normal
@@ -48,6 +52,7 @@ struct BodyShapeKernel {
       vertices[c].normal += normal
     }
     for i in vertices.indices {
+      if i.isMultiple(of: 1024) { try Task.checkCancellation() }
       let n = vertices[i].normal
       vertices[i].normal = simd_length_squared(n) > 1e-14 ? simd_normalize(n) : mesh.vertices[i].normal
     }

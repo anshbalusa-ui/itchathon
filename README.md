@@ -2,6 +2,12 @@
 
 An offline iPhone tool for capturing textured body scans, exploring measurement-based body models, and illustrating scanned shirts on saved avatars.
 
+## Foundation review and next platform
+
+[Consolidation and feature inventory](Docs/ONYOU_FOUNDATION_CONSOLIDATION.md) · [Consumer/studio/shared architecture](Docs/ONYOU_PLATFORM_ARCHITECTURE.md) · [Executable Goals 1–7](Docs/ONYOU_EXECUTION_ROADMAP.md).
+
+The native consumer app is retained. A local-first T-shirt studio, statistical body completion and garment simulation are specified future work, not shipped features or validated fit. The consolidation report separates historical branch receipts from its own narrowly scoped checks and outstanding physical validation.
+
 ## Run
 
 ```sh
@@ -50,7 +56,7 @@ Measurements and history use the separate `on-you.measurements.v1` local storage
 
 On supported LiDAR iPhones, set iPhone upright on a secure surface with the rear camera facing you. Tap **Start scan**, step into view during the five-second countdown and face the camera with arms slightly away. Capture starts only after the countdown and fresh automatic framing/calibration; no numerical input or helper is required. Keep iPhone fixed and turn slowly in place. **Cancel start**, help or an inactive app cancels pending arming; accepted photos are not reset by an ordinary pause. Choosing **Capture missing views** arms recovery directly, retaining the admitted views rather than asking for another Start tap or an automatic second full turn.
 
-Find **Scan help** in the system toolbar’s options menu. The dark viewfinder keeps its size as instructions change, and **Start scan** stays outside scrolling guidance at larger text sizes. A smooth body guide fades into curved framing marks during capture. An AR halo is locked around the calibrated person: its yellow segments represent saved angular views, and a white marker identifies a missing angle. These are custom SceneKit guides in the existing ARKit session, not Apple’s moving-camera Object Capture workflow. Invalid, stale, and paused tracking hides the spatial guide. Reduce Motion disables decorative transitions. In review, **Retake** and **Use this scan** stay in the bottom safe area, with accessible rotation, zoom, and reset actions on the actual scan.
+Find **Scan help** in the system toolbar’s options menu. The dark viewfinder keeps its size as instructions change. At ordinary text sizes **Start scan** stays pinned; at accessibility sizes Start/Cancel is first inside the same scrolling panel as guidance so wrapped labels retain their full height. A smooth body guide fades into curved framing marks during capture. An AR halo is locked around the calibrated person: its yellow segments represent saved angular views, and a white marker identifies a missing angle. These are custom SceneKit guides in the existing ARKit session, not Apple’s moving-camera Object Capture workflow. Invalid, stale, and paused tracking hides the spatial guide. Reduce Motion disables decorative transitions. In review, **Retake** and **Use this scan** stay in the bottom safe area, with accessible rotation, zoom, and reset actions on the actual scan.
 
 One ARKit session supplies the preview and matching RGB and LiDAR frames. Vision estimates the person's turning angle and masks the background. `PhotogrammetrySession` reads matched photos, person masks, and confidence-filtered depth lazily. It reconstructs a textured USDZ on iPhone.
 
@@ -81,6 +87,8 @@ Simulator backup materials stay outside Git at `/Users/anshbalusa/onyou-tryon-ar
 ## Manual model
 
 The bundled anatomical mesh comes from [MakeHuman](https://github.com/makehumancommunity/makehuman), under CC0. Original provenance and licenses remain in `DevelopmentAssets/HumanShowcase/`. Chest, waist, and hip scale factors come from convex cross-sections of the actual base mesh. Smooth regional deformation changes vertex positions; normals are rebuilt for the new surface. Height and shoulder width also affect geometry. SceneKit supplies native rendering, lighting, orbit, and zoom.
+
+Reference preparation and shaping run through a cached actor. Superseded requests are canceled, and only the current request can publish; installing a saved scan or dismissing the scene invalidates pending manual geometry. This retains the current shape/section rules and does not make a speed or physical-accuracy claim.
 
 This is an approximate body shape from five dimensions. It does not uniquely reconstruct a person or simulate clothing fit. Shoulders use an approximate anatomical reference; unentered proportions are estimated.
 

@@ -61,12 +61,13 @@ struct BodySceneView: UIViewRepresentable {
     let height = scan?.referenceHeightCM ?? measurements.height
     c.currentHeight = Float(height / 100)
     c.isActive = isActive
+    c.wireframe = wireframe
     if let scan {
       if c.loadedScan != scan || c.scannedNode == nil {
         c.updateScan(scan)
         view.pointOfView = c.camera
       }
-    } else if c.measurements != measurements || c.loadedScan != nil {
+    } else if c.requestedMeasurements != measurements || c.loadedScan != nil {
       c.update(measurements)
       view.pointOfView = c.camera
     }
@@ -85,8 +86,16 @@ struct BodySceneView: UIViewRepresentable {
     view.defaultCameraController.inertiaEnabled = !reduceMotion
     view.defaultCameraController.target = SCNVector3(0, c.currentHeight * 0.51, 0.035)
     c.body.geometry?.firstMaterial?.fillMode = wireframe ? .lines : .fill
-    let value = scan != nil ? "Textured body scan. Drag to rotate. Pinch to zoom."
-      : "Height \(measurements.height.formatted()) centimeters, chest \(measurements.chest.formatted()), waist \(measurements.waist.formatted()), hips \(measurements.hips.formatted())"
+    let value: String
+    if scan != nil {
+      value = "Textured body scan. Drag to rotate. Pinch to zoom."
+    } else if c.requestedMeasurements != c.measurements {
+      value = "Updating body model"
+    } else if let current = c.measurements {
+      value = "Height \(current.height.formatted()) centimeters, chest \(current.chest.formatted()), waist \(current.waist.formatted()), hips \(current.hips.formatted())"
+    } else {
+      value = "Updating body model"
+    }
     if view.accessibilityValue != value { view.accessibilityValue = value }
     if c.failure != nil { view.accessibilityValue = c.failure }
   }
@@ -99,6 +108,10 @@ struct BodySceneView: UIViewRepresentable {
     var loadedScan: ScannedBodySource?
     var scannedNode: SCNNode?
     var measurements: BodyMeasurements?
+    private(set) var requestedMeasurements: BodyMeasurements?
+    var wireframe = false
+    private(set) var generationTask: Task<Void, Never>?
+    private var generationID = 0
     var angle: Float = 0
     var loadedTryOnID: UUID?
     var garmentVisible = true
@@ -114,6 +127,7 @@ struct BodySceneView: UIViewRepresentable {
     private var settlementFinished = false
     private var settlementGeneration = UUID()
     private var cameraTransitionGeneration = UUID()
+    private var detached = false
 
     func makeAccessibilityActions(for view: SCNView) -> [UIAccessibilityCustomAction] {
       [
@@ -174,9 +188,6 @@ struct BodySceneView: UIViewRepresentable {
       isCameraTransitioning = false
       renderView?.isPlaying = isActive && isSettling
     }
-    private var attemptedExampleLoad = false
-    private var assets: HumanShowcaseMeshes?
-    private var kernel: BodyShapeKernel?
 
     override init() {
       super.init()
@@ -228,44 +239,55 @@ struct BodySceneView: UIViewRepresentable {
       scene.rootNode.addChildNode(shadowNode)
     }
 
-    private func prepareExampleIfNeeded() {
-      guard !attemptedExampleLoad else { return }
-      attemptedExampleLoad = true
-      do {
-        let loaded = try HumanShowcaseAssets.load()
-        assets = loaded
-        kernel = try BodyShapeKernel(reference: loaded.body)
-      } catch {
-        failure = "The body model couldn’t be opened. Close and reopen this screen to try again."
-        let label = SCNText(string: "Model unavailable", extrusionDepth: 0)
-        label.font = .systemFont(ofSize: 0.08)
-        label.firstMaterial?.diffuse.contents = UIColor.secondaryLabel
-        let node = SCNNode(geometry: label)
-        node.position = SCNVector3(-0.36, 0.9, 0)
-        scene.rootNode.addChildNode(node)
-      }
-    }
 
     func update(_ values: BodyMeasurements) {
-      prepareExampleIfNeeded()
-      guard let assets, let kernel else { return }
-      do {
-        scannedNode?.removeFromParentNode()
-        scannedNode = nil
-        loadedScan = nil
-        body.isHidden = false
-        shorts.isHidden = false
-        failure = nil
-        body.geometry = geometry(try kernel.shape(assets.body, to: values), color: UIColor(red: 0.66, green: 0.57, blue: 0.48, alpha: 1))
-        shorts.geometry = geometry(try kernel.shape(assets.shorts, to: values), color: UIColor(red: 0.22, green: 0.27, blue: 0.29, alpha: 1))
-        measurements = values
-        positionCamera(angle: angle, height: Float(values.height / 100))
-      } catch {
-        failure = "The body model couldn’t be updated. Check your measurements."
+      guard !detached else { return }
+      generationTask?.cancel()
+      generationID += 1
+      let requestID = generationID
+      requestedMeasurements = values
+      scannedNode?.removeFromParentNode()
+      scannedNode = nil
+      loadedScan = nil
+      body.isHidden = true
+      shorts.isHidden = true
+      failure = nil
+      renderView?.accessibilityValue = "Updating body model"
+      generationTask = Task { [weak self] in
+        do {
+          let result = try await BodyModelGenerator.shared.generate(values)
+          try Task.checkCancellation()
+          guard let self, self.generationID == requestID else { return }
+          self.body.geometry = self.geometry(result.body,
+            color: UIColor(red: 0.66, green: 0.57, blue: 0.48, alpha: 1))
+          self.body.geometry?.firstMaterial?.fillMode = self.wireframe ? .lines : .fill
+          self.shorts.geometry = self.geometry(result.shorts,
+            color: UIColor(red: 0.22, green: 0.27, blue: 0.29, alpha: 1))
+          self.body.isHidden = false
+          self.shorts.isHidden = false
+          self.measurements = values
+          self.positionCamera(angle: self.angle, height: Float(values.height / 100))
+          self.renderView?.pointOfView = self.camera
+          self.generationTask = nil
+          self.renderView?.accessibilityValue = "Height \(values.height.formatted()) centimeters, chest \(values.chest.formatted()), waist \(values.waist.formatted()), hips \(values.hips.formatted())"
+        } catch is CancellationError {
+          // Replaced requests and detached scenes must never publish a model.
+        } catch {
+          guard let self, self.generationID == requestID else { return }
+          self.generationTask = nil
+          self.failure = "The body model couldn’t be updated. Check your measurements."
+          self.body.isHidden = true
+          self.shorts.isHidden = true
+          self.renderView?.accessibilityValue = self.failure
+        }
       }
     }
 
     func updateScan(_ source: ScannedBodySource) {
+      generationTask?.cancel()
+      generationTask = nil
+      generationID += 1
+      requestedMeasurements = nil
       scannedNode?.removeFromParentNode()
       // Apply canonical yaw AFTER the saved scene's normalization transform.
       // Rotating the normalized root itself would rotate before its translation.
@@ -280,6 +302,11 @@ struct BodySceneView: UIViewRepresentable {
     }
 
     func detach() {
+      detached = true
+      generationTask?.cancel()
+      generationTask = nil
+      generationID += 1
+      renderView?.accessibilityValue = nil
       settlementGeneration = UUID()
       cameraTransitionGeneration = UUID()
       garmentNode?.removeAction(forKey: "tryon.settle")
