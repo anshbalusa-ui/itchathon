@@ -16,7 +16,7 @@ final class BodyCaptureModel {
 
   private(set) var recovery: Recovery?
   private(set) var phase = Phase.setup
-  private var capture: BodyCaptureController?
+  private var capture: (any BodyCaptureControlling)?
   private(set) var progress: Double = 0
   private(set) var completedPasses = 0
   private(set) var calibration: AvatarScanCalibration?
@@ -40,6 +40,23 @@ final class BodyCaptureModel {
   private var generation = UUID()
   private var diagnosticStage: BodyScanTiming.Stage?
   private var diagnosticStartedAt: ContinuousClock.Instant?
+  private let prepareCapture: @MainActor () async throws -> URL
+  private let countdownTick: @MainActor () async throws -> Void
+  private let uptime: @MainActor () -> TimeInterval
+  private let makeSession: @Sendable (BodyPhotogrammetryInput, PhotogrammetrySession.Configuration) throws -> PhotogrammetrySession
+
+  // Preparation returns a new work directory owned by this attempt, never a saved avatar.
+  init(prepareCapture: @escaping @MainActor () async throws -> URL = BodyCaptureModel.prepareCaptureDirectory,
+       countdownTick: @escaping @MainActor () async throws -> Void = { try await Task.sleep(for: .seconds(1)) },
+       uptime: @escaping @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+       makeSession: @escaping @Sendable (BodyPhotogrammetryInput, PhotogrammetrySession.Configuration) throws -> PhotogrammetrySession = {
+         try PhotogrammetrySession(input: $0.samples, configuration: $1)
+       }) {
+    self.prepareCapture = prepareCapture
+    self.countdownTick = countdownTick
+    self.uptime = uptime
+    self.makeSession = makeSession
+  }
 
 
   static var isSupported: Bool { BodyCaptureController.supported && PhotogrammetrySession.isSupported }
@@ -55,12 +72,13 @@ final class BodyCaptureModel {
       || cameraStatus.mode == .finishing || cameraStatus.pendingStart
   }
 
-  func cameraReady(_ controller: BodyCaptureController, directory: URL, captureID: UUID) {
+  func cameraReady(_ controller: any BodyCaptureControlling, directory: URL, captureID: UUID) {
     guard phase == .capturing, captureDirectory == directory, generation == captureID else {
       controller.stop()
       return
     }
     capture = controller
+    if capturePaused { controller.setPaused(true) }
     cameraStatus.mode = .framing
     beginCaptureIfReady()
   }
@@ -120,10 +138,11 @@ final class BodyCaptureModel {
   private func beginCountdown() {
     guard startTask == nil, !capturePaused else { return }
     let token = generation
+    let waitForTick = countdownTick
     cameraStatus.start = .countdown(5)
     startTask = Task { [weak self] in
       for seconds in stride(from: 4, through: 0, by: -1) {
-        do { try await Task.sleep(for: .seconds(1)) }
+        do { try await waitForTick() }
         catch { return }
         guard !Task.isCancelled, let self, generation == token, phase == .capturing, !capturePaused else { return }
         if seconds > 0 {
@@ -139,7 +158,7 @@ final class BodyCaptureModel {
 
   private func beginCaptureIfReady() {
     guard phase == .capturing, !capturePaused, startTask == nil,
-          cameraStatus.canStart(now: ProcessInfo.processInfo.systemUptime), let capture else { return }
+          cameraStatus.canStart(now: uptime()), let capture else { return }
     let token = generation
     cameraStatus.start = .starting
     startTask = Task { [weak self] in
@@ -173,30 +192,14 @@ final class BodyCaptureModel {
 
   func start() async {
     cancel()
-    guard Self.isSupported else { fail(AvatarScanError.unsupported); return }
     phase = .preparing
     let token = generation
-    let permission: Bool
-    switch AVCaptureDevice.authorizationStatus(for: .video) {
-    case .authorized: permission = true
-    case .notDetermined: permission = await AVCaptureDevice.requestAccess(for: .video)
-    default: permission = false
-    }
-    guard generation == token, !Task.isCancelled else { return }
-    guard permission else { fail(AvatarScanError.unavailableCamera); return }
     do {
-      let root = URL.applicationSupportDirectory.appendingPathComponent("OnYouCaptureWork", isDirectory: true)
-      try AvatarScanStore.prepareDirectory(root)
-      let capacity = try FileManager.default.attributesOfFileSystem(forPath: root.path)[.systemFreeSize] as? NSNumber
-      guard let capacity, capacity.int64Value >= 2_000_000_000 else { throw AvatarScanError.insufficientSpace }
-      // Do not remove another scan's directory while a canceled native build is unwinding.
-      for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-        where UUID(uuidString: url.lastPathComponent) != nil && !Self.activeWork.contains(url.standardizedFileURL) {
-        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-        if values.isDirectory == true && values.isSymbolicLink != true { try FileManager.default.removeItem(at: url) }
+      let directory = try await prepareCapture()
+      guard generation == token, !Task.isCancelled else {
+        Self.removeWork(directory)
+        return
       }
-      let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
-      try AvatarScanStore.prepareDirectory(directory)
       work = directory
       Self.activeWork.insert(directory.standardizedFileURL)
       let images = directory.appendingPathComponent("Images", isDirectory: true)
@@ -204,12 +207,40 @@ final class BodyCaptureModel {
       cameraStatus = BodyScanCameraStatus(mode: .initializing)
       phase = .capturing
       beginDiagnosticStage(.framing)
-    } catch { fail(error) }
+    } catch {
+      guard generation == token, !Task.isCancelled else { return }
+      fail(error)
+    }
+  }
+
+  private static func prepareCaptureDirectory() async throws -> URL {
+    guard isSupported else { throw AvatarScanError.unsupported }
+    let permission: Bool
+    switch AVCaptureDevice.authorizationStatus(for: .video) {
+    case .authorized: permission = true
+    case .notDetermined: permission = await AVCaptureDevice.requestAccess(for: .video)
+    default: permission = false
+    }
+    try Task.checkCancellation()
+    guard permission else { throw AvatarScanError.unavailableCamera }
+    let root = URL.applicationSupportDirectory.appendingPathComponent("OnYouCaptureWork", isDirectory: true)
+    try AvatarScanStore.prepareDirectory(root)
+    let capacity = try FileManager.default.attributesOfFileSystem(forPath: root.path)[.systemFreeSize] as? NSNumber
+    guard let capacity, capacity.int64Value >= 2_000_000_000 else { throw AvatarScanError.insufficientSpace }
+    // Do not remove another scan's directory while a canceled native build is unwinding.
+    for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      where UUID(uuidString: url.lastPathComponent) != nil && !activeWork.contains(url.standardizedFileURL) {
+      let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      if values.isDirectory == true && values.isSymbolicLink != true { try FileManager.default.removeItem(at: url) }
+    }
+    let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try AvatarScanStore.prepareDirectory(directory)
+    return directory
   }
 
 
-  func setCapturePromptVisible(_ visible: Bool) {
-    guard phase == .capturing else { return }
+  func setCapturePromptVisible(_ visible: Bool, captureID: UUID) {
+    guard phase == .capturing, generation == captureID else { return }
     capturePaused = visible
     if visible {
       cancelCameraStart()
@@ -313,7 +344,8 @@ final class BodyCaptureModel {
     phase = .failed(error.localizedDescription)
   }
 
-  private func missingViews(_ angles: [Double], in archive: BodyCaptureArchive, keeping ids: Set<Int>) {
+  func missingViews(_ angles: [Double], in archive: BodyCaptureArchive, keeping ids: Set<Int>, captureID: UUID) {
+    guard phase == .reconstructing, generation == captureID else { return }
     self.archive = archive.retaining(sampleIDs: ids)
     fail(AvatarScanError.insufficientCoverage, recovery: .missingViews(angles))
   }
@@ -356,9 +388,10 @@ final class BodyCaptureModel {
         configuration.isObjectMaskingEnabled = true
         configuration.featureSensitivity = .high
         configuration.sampleOrdering = .unordered
+        let makeSession = self.makeSession
         let setup = Task.detached(priority: .userInitiated) {
           try Task.checkCancellation()
-          let session = try PhotogrammetrySession(input: photos.samples, configuration: configuration)
+          let session = try makeSession(photos, configuration)
           do {
             try photos.validateReads()
             try Task.checkCancellation()
@@ -416,7 +449,7 @@ final class BodyCaptureModel {
             let alignedSampleIDs: Set<Int>
             switch archive.alignedCoverage(poses: poses, rejectedIDs: rejected) {
             case .missingAngles(let angles, sampleIDs: let sampleIDs):
-              missingViews(angles, in: archive, keeping: sampleIDs)
+              missingViews(angles, in: archive, keeping: sampleIDs, captureID: token)
               return
             case .invalid:
               fail(CaptureAlignmentFailed())
