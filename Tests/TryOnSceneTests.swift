@@ -108,20 +108,22 @@ final class TryOnSceneTests: XCTestCase {
     XCTAssertEqual(sqrt(reduced.camera.position.x * reduced.camera.position.x + pow(reduced.camera.position.z - target.z, 2)),
                    max(2.8, 1.75 * 1.9), accuracy: 0.001)
 
-    weak var weakView: SCNView?
-    weak var weakCoordinator: BodySceneView.Coordinator?
-    var actions: [UIAccessibilityCustomAction]?
-    autoreleasepool {
-      let sceneView = SCNView()
-      let coordinator = BodySceneView.Coordinator()
-      actions = coordinator.makeAccessibilityActions(for: sceneView)
-      sceneView.accessibilityCustomActions = actions
-      weakView = sceneView
-      weakCoordinator = coordinator
-    }
-    withExtendedLifetime(actions) {
-      XCTAssertNil(weakView)
-      XCTAssertNil(weakCoordinator)
+    var coordinator: BodySceneView.Coordinator? = BodySceneView.Coordinator()
+    let sceneView = SCNView()
+    let actions = coordinator!.makeAccessibilityActions(for: sceneView)
+    sceneView.scene = coordinator!.scene
+    sceneView.accessibilityCustomActions = actions
+    weak var weakCoordinator = coordinator
+    XCTAssertTrue(sceneView.accessibilityCustomActions?.isEmpty == false)
+    BodySceneView.dismantleUIView(sceneView, coordinator: coordinator!)
+    XCTAssertNil(sceneView.scene)
+    XCTAssertNil(sceneView.accessibilityCustomActions)
+    XCTAssertNil(coordinator!.renderView)
+    coordinator = nil
+    XCTAssertNil(weakCoordinator, "Retained accessibility actions must not retain their coordinator.")
+    try withExtendedLifetime(actions) {
+      XCTAssertFalse(try XCTUnwrap(actions.first?.actionHandler)(actions[0]),
+                     "An accessibility action retained past teardown must not act on a released coordinator.")
     }
   }
 

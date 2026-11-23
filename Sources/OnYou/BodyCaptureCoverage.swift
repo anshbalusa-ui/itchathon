@@ -14,8 +14,8 @@ struct BodyCaptureReconstructedPose {
 }
 
 enum BodyCaptureAlignment {
-  case complete
-  case missingAngles([Double])
+  case complete(sampleIDs: Set<Int>)
+  case missingAngles([Double], sampleIDs: Set<Int>)
   case invalid
 }
 
@@ -85,7 +85,7 @@ struct BodyCaptureCoverage {
   func alignedCoverage(poses: [Int: BodyCaptureReconstructedPose], rejectedIDs: Set<Int>) -> BodyCaptureAlignment {
     guard poses.keys.allSatisfy(sampleIDs.contains), rejectedIDs.isSubset(of: sampleIDs) else { return .invalid }
 
-    var rays: [(position: SIMD3<Double>, bodyAngle: Double, fullBody: Bool)] = []
+    var rays: [(sampleID: Int, position: SIMD3<Double>, bodyAngle: Double, fullBody: Bool)] = []
     rays.reserveCapacity(poses.count)
     var matrix = simd_double3x3(diagonal: .zero)
     var rhs = SIMD3<Double>.zero
@@ -107,7 +107,7 @@ struct BodyCaptureCoverage {
       matrix = matrix + projection
       rhs += projection * position
       up += SIMD3<Double>(rotation.act(SIMD3<Float>(0, 1, 0)))
-      rays.append((position, viewpoint.azimuth, viewpoint.fullBody))
+      rays.append((viewpoint.sampleID, position, viewpoint.azimuth, viewpoint.fullBody))
     }
 
     let trace = matrix[0][0] + matrix[1][1] + matrix[2][2]
@@ -149,15 +149,43 @@ struct BodyCaptureCoverage {
     let forward = fit(sign: 1)
     let backward = fit(sign: -1)
     let best = forward.error <= backward.error ? forward : backward
-    guard best.error <= 25 * .pi / 180 + Self.angleTolerance else { return .invalid }
+    let maximumError = 25 * Double.pi / 180 + Self.angleTolerance
+    guard best.error <= maximumError else { return .invalid }
 
-    // Bin reconstructed angles in the fitted front-relative basis, not by the stored yaw labels.
-    let aligned = Shape(angles: angles.map { Self.normalized(($0 - best.offset) * best.sign) },
-                        fullBodyCount: rays.count(where: { $0.fullBody }))
+    // A small median residual must not let inconsistent poses supply missing
+    // sectors or the photo floor. Refit only the basis offset from coherent
+    // correspondences; the native positions and rotations remain untouched.
+    var sine = 0.0
+    var cosine = 0.0
+    for index in angles.indices {
+      let difference = angles[index] - best.sign * rays[index].bodyAngle
+      guard Self.distance(difference, best.offset) <= maximumError else { continue }
+      sine += sin(difference)
+      cosine += cos(difference)
+    }
+    let offset = atan2(sine, cosine)
+    var alignedAngles: [Double] = []
+    var recordedAngles: [Double] = []
+    var admittedIDs = Set<Int>()
+    var fullBodyCount = 0
+    alignedAngles.reserveCapacity(rays.count)
+    recordedAngles.reserveCapacity(rays.count)
+    admittedIDs.reserveCapacity(rays.count)
+    for index in angles.indices {
+      let ray = rays[index]
+      guard Self.distance(angles[index], best.sign * ray.bodyAngle + offset) <= maximumError else { continue }
+      alignedAngles.append(Self.normalized((angles[index] - offset) * best.sign))
+      recordedAngles.append(ray.bodyAngle)
+      admittedIDs.insert(ray.sampleID)
+      if ray.fullBody { fullBodyCount += 1 }
+    }
+    // Bin native viewpoints, not stored yaw labels, and retain the exact same
+    // admitted IDs for final input validation and missing-view recovery.
+    let aligned = Shape(angles: alignedAngles, fullBodyCount: fullBodyCount)
     guard aligned.maximumGap <= .pi + Self.angleTolerance else { return .invalid }
-    if aligned.complete { return .complete }
-    let missing = aligned.missingAngles(avoiding: rays.map(\.bodyAngle))
-    return missing.isEmpty ? .invalid : .missingAngles(missing)
+    if aligned.complete { return .complete(sampleIDs: admittedIDs) }
+    let missing = aligned.missingAngles(avoiding: recordedAngles)
+    return missing.isEmpty ? .invalid : .missingAngles(missing, sampleIDs: admittedIDs)
   }
 
   static func normalized(_ angle: Double) -> Double {

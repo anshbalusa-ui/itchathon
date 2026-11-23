@@ -2,6 +2,12 @@
 
 An offline iPhone tool for capturing textured body scans, exploring measurement-based body models, and illustrating scanned shirts on saved avatars.
 
+## Foundation review and next platform
+
+[Consolidation and feature inventory](Docs/ONYOU_FOUNDATION_CONSOLIDATION.md) · [Consumer/studio/shared architecture](Docs/ONYOU_PLATFORM_ARCHITECTURE.md) · [Executable Goals 1–7](Docs/ONYOU_EXECUTION_ROADMAP.md).
+
+The native consumer app is retained. A local-first T-shirt studio, statistical body completion and garment simulation are specified future work, not shipped features or validated fit. The consolidation report separates historical branch receipts from its own narrowly scoped checks and outstanding physical validation.
+
 ## Run
 
 ```sh
@@ -36,7 +42,7 @@ The helper builds unsigned Debug using `Project.json`, rejects Release/device/ol
 ## Screens
 
 - **Body:** a gesture-only viewer. Drag to orbit and pinch to zoom. A saved scan takes priority over the manual measurement model.
-- **Scan:** calibrate with a steady full-body view, tap Start scan, then keep the phone stationary while the person turns. Measured coverage unlocks reconstruction; missing views can be captured without another full turn.
+- **Scan:** prop iPhone securely, tap **Start scan**, then step into view during the countdown. Capture waits for fresh whole-body framing; keep iPhone fixed and turn slowly in place. Spoken cues report collected/missing views, and sufficient usable coverage moves to processing automatically.
 - **Closet:** scan a flat shirt with its collar at the top and both sleeves visible; review its image and depth-backed dimensions, then save or retake. Imported photographs remain photo-only.
 - **Try on:** open a saved shirt's detail page and choose **Try on**. A saved textured avatar and a metric shirt scan are required. Rotate/inspect front and back, reset the camera, or hide/show the actual garment mesh. Missing prerequisites offer scan/retake recovery rather than a successful bare-avatar preview.
 - **Measurements:** on the example/manual **Body** screen, choose **Measurements** to enter height, chest, waist, hips, and shoulder width in centimeters or inches. The existing preview updates while editing; Cancel discards the draft, and Save updates the separate manual model and History. This illustration does not create a captured scan or authorize saved-scan try-on; captured geometry retains its own height calibration.
@@ -48,15 +54,17 @@ Measurements and history use the separate `on-you.measurements.v1` local storage
 
 ## Body scans
 
-On supported LiDAR iPhones, a helper frames the whole person and holds iPhone steady. Tap **Start scan** when enabled, keep iPhone in the same spot, and ask the person to turn slowly with arms slightly out. The app tracks usable front, side, back, and other-side views. If a view is missing, it asks for that view instead of another full turn.
+On supported LiDAR iPhones, set iPhone upright on a secure surface with the rear camera facing you. Tap **Start scan**, step into view during the five-second countdown and face the camera with arms slightly away. Capture starts only after the countdown and fresh automatic framing/calibration; no numerical input or helper is required. Keep iPhone fixed and turn slowly in place. **Cancel start**, help or an inactive app cancels pending arming; accepted photos are not reset by an ordinary pause. Choosing **Capture missing views** arms recovery directly, retaining the admitted views rather than asking for another Start tap or an automatic second full turn.
 
-Find **Scan help** in the system toolbar’s options menu. The dark viewfinder keeps its size as instructions change, and **Start scan** stays outside scrolling guidance at larger text sizes. A smooth body guide fades into curved framing marks during capture. An AR halo is locked around the calibrated person: its yellow segments represent saved angular views, and a white marker identifies a missing angle. These are custom SceneKit guides in the existing ARKit session, not Apple’s moving-camera Object Capture workflow. Invalid, stale, and paused tracking hides the spatial guide. Reduce Motion disables decorative transitions. In review, **Retake** and **Use this scan** stay in the bottom safe area, with accessible rotation, zoom, and reset actions on the actual scan.
+Find **Scan help** in the system toolbar’s options menu. The dark viewfinder keeps its size as instructions change. At ordinary text sizes **Start scan** stays pinned; at accessibility sizes Start/Cancel is first inside the same scrolling panel as guidance so wrapped labels retain their full height. A smooth body guide fades into curved framing marks during capture. An AR halo is locked around the calibrated person: its yellow segments represent saved angular views, and a white marker identifies a missing angle. These are custom SceneKit guides in the existing ARKit session, not Apple’s moving-camera Object Capture workflow. Invalid, stale, and paused tracking hides the spatial guide. Reduce Motion disables decorative transitions. In review, **Retake** and **Use this scan** stay in the bottom safe area, with accessible rotation, zoom, and reset actions on the actual scan.
 
 One ARKit session supplies the preview and matching RGB and LiDAR frames. Vision estimates the person's turning angle and masks the background. `PhotogrammetrySession` reads matched photos, person masks, and confidence-filtered depth lazily. It reconstructs a textured USDZ on iPhone.
 
-Reconstruction requires at least 60 distinct-angle images, 32 of 36 angular sectors, no gap over 20 degrees, and three confidently framed front-region photos. These gates are checked again against the reconstructed camera poses of aligned, non-rejected inputs. Missing textures, invalid dimensions or a height scale correction outside 0.9–1.1 reject the result. Drag and pinch the actual textured result to inspect it. **Use this scan** replaces the saved avatar; **Retake** or closing keeps the previous one.
+Reconstruction requires at least 60 distinct-angle images, 32 of 36 angular sectors, no gap over 20 degrees, and three confidently framed front-region photos. The same floors are checked again using the actual native reconstructed viewpoints, excluding rejected inputs and poses inconsistent with the captured yaw. The same admitted IDs feed final input validation and missing-view recovery; a small median alignment error alone cannot let outliers count as valid coverage. Missing textures, invalid dimensions or a height scale correction outside 0.9–1.1 reject the result. Drag and pinch the actual textured result to inspect it. **Use this scan** replaces the saved avatar; **Retake** or closing keeps the previous one.
 
 Body and shirt capture share graded Core Haptics and a red edge vignette. **Scan options → Guidance haptics** controls vibration and completion feedback. Distance warnings begin outside ±18% of the calibrated target and recover inside ±12%; aiming and roll use 12°/8° margins. Safe, paused, stale, backgrounded or disabled guidance stops vibration. Shirt capture calibrates its own fixed distance, tracks the stationary flat shirt through live camera poses, and encodes the cutout only after three measurements agree.
+
+Body **Scan options → Spoken guidance** controls local Apple text-to-speech for setup, countdown, view milestones, missing views, processing and review. VoiceOver uses accessibility announcements instead of a competing synthesizer. Speech stops for help/discard, inactive scenes and dismissal, and keeps only the latest pending instruction. There is no microphone recording, voice-command engine or external service. If head-to-foot framing with usable depth cannot fit in the available space, reposition iPhone or retry in a clearer area; no partial/template avatar is substituted.
 
 New captures use captured depth for metric scale; older height-calibrated scans retain their saved scale. Neither establishes chest/waist accuracy or facial fidelity. A person must hold their pose; motion and loose clothing can compromise reconstruction. Hardware accuracy, repeatability, and likeness have **not** been validated in this workspace. Apple documents the [static-subject and overlapping-photo requirements](https://developer.apple.com/documentation/realitykit/capturing-photographs-for-realitykit-object-capture).
 
@@ -80,11 +88,15 @@ Simulator backup materials stay outside Git at `/Users/anshbalusa/onyou-tryon-ar
 
 The bundled anatomical mesh comes from [MakeHuman](https://github.com/makehumancommunity/makehuman), under CC0. Original provenance and licenses remain in `DevelopmentAssets/HumanShowcase/`. Chest, waist, and hip scale factors come from convex cross-sections of the actual base mesh. Smooth regional deformation changes vertex positions; normals are rebuilt for the new surface. Height and shoulder width also affect geometry. SceneKit supplies native rendering, lighting, orbit, and zoom.
 
+Reference preparation and shaping run through a cached actor. Superseded requests are canceled, and only the current request can publish; installing a saved scan or dismissing the scene invalidates pending manual geometry. This retains the current shape/section rules and does not make a speed or physical-accuracy claim.
+
 This is an approximate body shape from five dimensions. It does not uniquely reconstruct a person or simulate clothing fit. Shoulders use an approximate anatomical reference; unentered proportions are estimated.
 
 [humanoid-kit](https://github.com/jbcom/humanoid-kit) was also reviewed: its web runtime and large morph system were unnecessary for this native MVP. No humanoid-kit software was copied. We reused the CC0 MakeHuman mesh already supplied by the requested itchathon repository.
 
 ## Verification
+
+**Stationary-scan refinement:** [`Docs/ONYOU_STATIONARY_SCAN_REFINEMENT.md`](Docs/ONYOU_STATIONARY_SCAN_REFINEMENT.md) records the source audit, targeted fixes and subsequent user-authorized simulator validation. Scoped unit/render and real-app UI journeys were executed, and the normal app was launched without fixture flags; the handoff lists exact results, hardware-dependent skips and the observed accessibility-footer repair. Live rotating-person capture/reconstruction, audio usability, physical accuracy and performance remain unverified. Historical results below do not validate those outcomes.
 
 `Tests/AvatarScanTests.swift` checks scale admission, minimum coverage, textured USDZ persistence, failed-save preservation, corruption rejection, and deletion isolation. Its textured box is a synthetic fixture, not a human scan.
 
@@ -104,7 +116,7 @@ The current native verification entry reads **`Project.json`**, generates `On Yo
 
 It includes Debug unit/UI, unsigned iPhone-SDK compilation, normal Release, Release isolation and resource/privacy inspection. Test execution uses a noninteractive launcher; no debugger permission is required. `Scripts/benchmark_onyou.sh --help` describes the separate opt-in cold/warm native benchmark. Do not substitute results from PR #25 or the older standalone FitCheck project.
 
-**Final integrated verification:** the complete `Scripts/verify_development.py` matrix passed on the combined PR #25 / PR #26 implementation, including the newly reachable native measurement editor, actual rendered geometry, lifecycle/persistence regressions, unsigned iPhone SDK build, normal Release and resource/privacy isolation. See [the final gap audit](Docs/ONYOU_FINAL_GAP_AUDIT.md) for exact current totals, source fingerprint, inspected simulator screenshots, remaining hardware validation and launch evidence. The PR #26 handoff above remains historical benchmark/implementation evidence, not a substitute for this fresh integrated run.
+**Historical integrated verification (PR #25 / PR #26, before the newer scanner):** the complete `Scripts/verify_development.py` matrix passed on that combined implementation, including its native measurement editor, rendered geometry, lifecycle/persistence regressions, unsigned iPhone SDK build, normal Release and resource/privacy isolation. See [the historical final gap audit](Docs/ONYOU_FINAL_GAP_AUDIT.md) for its exact totals, source fingerprint, screenshots and remaining hardware validation. Those results are not evidence that the latest stationary full-body capture/reconstruction works.
 
 Historical teammate verification on November 6, 2026: nine unit tests and two UI tests passed on the iPhone 17 simulator. The UI tests cover clean viewer controls, scan preparation/cancellation, and manual entry/save/history. Bitrig builds passed for iOS Simulator Debug and physical-iPhone Release. Rendered screens were checked in the Bitrig iPhone preview. These results predate the try-on repair; a real person's capture/reconstruction and measurement accuracy remain untested.
 
