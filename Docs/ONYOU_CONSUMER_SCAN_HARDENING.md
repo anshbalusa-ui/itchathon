@@ -133,3 +133,11 @@ No iPhone, LiDAR device, person scan or new body data is required from the user 
 ## 9. Next milestone
 
 After the focused passing run, no further demonstrated code-level blocker remains in the reviewed coordinator paths. This is not production-readiness or physical scan proof. Native human reconstruction remains a separate validation gate. **Goal 2 — On You Studio Foundation** can proceed independently with labelled, licensed standardized nonpersonal models, without waiting for statistical personal completion or claiming validated fit. Use the existing execution roadmap's Goal 2 scope; do not re-run consolidation or rebuild Goal 1 features.
+
+### GitHub review delivery
+
+- Branch: `feature/onyou-consumer-scan-hardening`.
+- [Draft PR #31](https://github.com/anshbalusa-ui/itchathon/pull/31) targets `integration/onyou-foundation-20261122` at `075db5abdaef95a0ae0fd9adee67c8bee16b1f7f`, because PR #30 remains unmerged.
+- Code/handoff integration commit: [`7ff722599ef03fedc61168de644d06fe8c4f3deb`](https://github.com/anshbalusa-ui/itchathon/commit/7ff722599ef03fedc61168de644d06fe8c4f3deb). The PR contains eight scoped files relative to its foundation base, not the foundation's changes again.
+- This delivery receipt is a documentation-only commit after the real PR URL existed. [PR commits/current head](https://github.com/anshbalusa-ui/itchathon/pull/31/commits) identifies the final publication revision; the verified compiled source fingerprint remains unchanged.
+- Main and existing PRs #28/#29/#30 were not modified, merged or closed. No automatic merge is authorized or performed.
