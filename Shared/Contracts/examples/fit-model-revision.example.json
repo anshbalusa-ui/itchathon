@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "2c2b9358-8c8c-5146-829e-6d9415e86969",
+  "modelId": "a39d1aaa-93fd-51ba-b03f-62215b61b032",
+  "parentRevisionId": null,
+  "name": "Fit Model A",
+  "createdAt": "2026-11-26T00:00:00.000Z",
+  "producer": {
+    "name": "On You Studio",
+    "version": "0.1.0"
+  },
+  "geometryKind": "standardFitModel",
+  "bodyMeshAssetId": "f947e4d0-04b3-5594-b6e7-7a301d837199",
+  "baseGarmentMeshAssetId": "65d09a6a-454f-507f-a73a-15f7a56c1932",
+  "poseId": "authored-standing-v1",
+  "heightM": 1.8,
+  "measurementBasis": "authored-mesh-bounds",
+  "source": {
+    "label": "MakeHuman CC0 body and On You authored garment previews",
+    "uri": "https://github.com/anshbalusa-ui/itchathon/blob/075db5abdaef95a0ae0fd9adee67c8bee16b1f7f/DevelopmentAssets/HumanShowcase/human-showcase-v1.bin",
+    "sha256": "6977bd1aeba54c9f4ef82f9d7f9b8b996d030b2758e226b61dcb9fbccfe4f6e9",
+    "license": "CC0-1.0",
+    "notice": "CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/legalcode. MakeHuman asset only; no AGPL software. Original body OBJ: https://raw.githubusercontent.com/makehumancommunity/makehuman2/3ef8a20dfec873fdf84d3315aeaf98694cad91bf/data/base/hm08/base.obj; SHA256 9e8e529a386823fa0af5aa0cf4f082076f24f0f1a1a904003b2ab2b57b911342. Repository authored shirt, shorts, 2D illustration and derived variants are CC0. Fit Model A preserves the 1.80m canonical source; B applies x1.12/y0.95/z1.08 about z=0.055m. Authored geometry, not personal scans or population percentiles. Garment previews adapt to the reference model; no physical sizing or simulation."
+  },
+  "validationStatus": "illustrative"
+}

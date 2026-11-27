@@ -54,6 +54,8 @@ Shared interfaces are the versioned records in the architecture document. Implem
 
 ## Goal 2 — On You Studio Foundation
 
+**Implementation:** `Studio/` now provides the separately runnable local-first T-shirt workspace, two authored fitting references, revision-backed SVG/Three.js previews, validated shared contracts, atomic browser storage and portable project packages. See [On You Studio foundation](ONYOU_STUDIO_FOUNDATION.md) for the verification receipt, explicit illustrative limitations and Goal 3 prerequisites. Existing shopper/scanning work remains unchanged.
+
 **Objective:** implement a small, usable desktop-browser T-shirt project workspace, independent of personal scanning or completion.
 
 **Reuse:** licensed authored reference geometry and its notices, `GarmentScanDimensions`/finished-garment measurement concepts, explicit `GarmentSizeChart` basis distinctions, immutable geometry and integrity concepts. Reuse semantics/assets through adapters; Swift/SceneKit source is not a browser runtime and 25 image landmarks are not a sewing pattern.

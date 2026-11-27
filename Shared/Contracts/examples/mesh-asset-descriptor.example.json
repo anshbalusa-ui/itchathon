@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "f947e4d0-04b3-5594-b6e7-7a301d837199",
+  "createdAt": "2026-11-26T00:00:00.000Z",
+  "producer": {
+    "name": "On You Studio",
+    "version": "0.1.0"
+  },
+  "format": "onyou-mesh-v1",
+  "sha256": "4225c6137956550957b42029e337588377d7ca8d6ffff107e438dc0347b2b932",
+  "byteLength": 1998904,
+  "vertexCount": 13380,
+  "indexCount": 80268,
+  "topologyVersion": 1,
+  "topologySha256": "813c59ba79d891dabd4f657fe042dbc20bf21518b13a59087bd4b5bf0941f7b3",
+  "units": "m",
+  "coordinates": {
+    "handedness": "right",
+    "up": "+Y",
+    "front": "+Z",
+    "winding": "counter-clockwise",
+    "matrixOrder": "column-major"
+  },
+  "bounds": {
+    "minimum": [
+      -0.5362215042114258,
+      0,
+      -0.1097143292427063
+    ],
+    "maximum": [
+      0.5362215042114258,
+      1.7999999523162842,
+      0.34734946489334106
+    ]
+  },
+  "source": {
+    "label": "MakeHuman CC0 body and On You authored garment previews",
+    "uri": "https://github.com/anshbalusa-ui/itchathon/blob/075db5abdaef95a0ae0fd9adee67c8bee16b1f7f/DevelopmentAssets/HumanShowcase/human-showcase-v1.bin",
+    "sha256": "6977bd1aeba54c9f4ef82f9d7f9b8b996d030b2758e226b61dcb9fbccfe4f6e9",
+    "license": "CC0-1.0",
+    "notice": "CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/legalcode. MakeHuman asset only; no AGPL software. Original body OBJ: https://raw.githubusercontent.com/makehumancommunity/makehuman2/3ef8a20dfec873fdf84d3315aeaf98694cad91bf/data/base/hm08/base.obj; SHA256 9e8e529a386823fa0af5aa0cf4f082076f24f0f1a1a904003b2ab2b57b911342. Repository authored shirt, shorts, 2D illustration and derived variants are CC0. Fit Model A preserves the 1.80m canonical source; B applies x1.12/y0.95/z1.08 about z=0.055m. Authored geometry, not personal scans or population percentiles. Garment previews adapt to the reference model; no physical sizing or simulation."
+  },
+  "sourceToCanonical": {
+    "sourceFrameId": "fitcheck-human-showcase-v1",
+    "canonicalFrameId": "onyou-y-up-m",
+    "matrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1
+    ]
+  },
+  "validationStatus": "illustrative"
+}

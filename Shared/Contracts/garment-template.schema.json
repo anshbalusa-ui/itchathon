@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.onyou.studio/garment-template.schema.json",
+  "title": "On You Studio garment template",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "name", "category", "geometryAdapter", "supportedVisualParameters", "drawing", "previewMeshes", "source"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "version": { "const": "1.0.0" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "category": { "const": "tshirt" },
+    "geometryAdapter": { "const": "authored-preview-v1" },
+    "supportedVisualParameters": { "const": ["color"] },
+    "drawing": { "$ref": "#/definitions/drawing" },
+    "previewMeshes": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["fitModelRevisionId", "meshAssetId"],
+        "properties": { "fitModelRevisionId": { "type": "string", "format": "uuid" }, "meshAssetId": { "type": "string", "format": "uuid" } }
+      }
+    },
+    "source": { "$ref": "#/definitions/source" }
+  },
+  "definitions": {
+    "drawing": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "units", "outline", "neckline"],
+      "properties": {
+        "kind": { "const": "illustrative-outline-v1" }, "units": { "const": "m" },
+        "outline": { "$ref": "#/definitions/points" }, "neckline": { "$ref": "#/definitions/points" }
+      }
+    },
+    "points": {
+      "type": "array", "minItems": 2, "maxItems": 128,
+      "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } }
+    },
+    "producer": {
+      "type": "object", "additionalProperties": false, "required": ["name", "version"],
+      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 80 }, "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" } }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["label", "uri", "sha256", "license", "notice"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 }, "uri": { "type": "string", "format": "uri", "maxLength": 2048 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "license": { "const": "CC0-1.0" }, "notice": { "type": "string", "minLength": 1, "maxLength": 2048 }
+      }
+    }
+  }
+}

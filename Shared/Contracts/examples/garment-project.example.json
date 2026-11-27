@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "080d0445-1c43-4c4c-a21d-a493bead6cf5",
+  "revisionId": "3aa99971-dcc3-4667-bb43-9ef0e1e671d6",
+  "parentRevisionId": null,
+  "name": "Canonical Studio example",
+  "category": "tshirt",
+  "createdAt": "2026-11-26T12:00:00.000Z",
+  "updatedAt": "2026-11-26T12:00:00.000Z",
+  "producer": {
+    "name": "On You Studio",
+    "version": "0.1.0"
+  },
+  "currentGarmentRevisionId": "43b61b8d-73b9-43d4-a890-a8ce2f53d040",
+  "selectedFitModelRevisionId": "2c2b9358-8c8c-5146-829e-6d9415e86969",
+  "previewView": "split",
+  "validationStatus": "illustrative"
+}
