@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "id": "43b61b8d-73b9-43d4-a890-a8ce2f53d040",
+  "garmentId": "62a747ab-7880-49aa-9a50-13fb74c1e0d8",
+  "parentRevisionId": null,
+  "createdAt": "2026-11-26T12:00:00.000Z",
+  "producer": {
+    "name": "On You Studio",
+    "version": "0.1.0"
+  },
+  "name": "Canonical example T-shirt",
+  "category": "tshirt",
+  "templateId": "28c4d1cc-9b09-5e20-8967-d2bd51c4b09e",
+  "templateVersion": "1.0.0",
+  "geometryAdapter": "authored-preview-v1",
+  "visualMaterial": {
+    "color": "#e8e5dc"
+  },
+  "drawing": {
+    "kind": "illustrative-outline-v1",
+    "units": "m",
+    "outline": [
+      [
+        -0.105,
+        1.49
+      ],
+      [
+        -0.22,
+        1.46
+      ],
+      [
+        -0.31,
+        1.34
+      ],
+      [
+        -0.47,
+        1.22
+      ],
+      [
+        -0.39,
+        1.12
+      ],
+      [
+        -0.29,
+        1.22
+      ],
+      [
+        -0.27,
+        0.99
+      ],
+      [
+        0.27,
+        0.99
+      ],
+      [
+        0.29,
+        1.22
+      ],
+      [
+        0.39,
+        1.12
+      ],
+      [
+        0.47,
+        1.22
+      ],
+      [
+        0.31,
+        1.34
+      ],
+      [
+        0.22,
+        1.46
+      ],
+      [
+        0.105,
+        1.49
+      ],
+      [
+        0.08,
+        1.405
+      ],
+      [
+        0,
+        1.38
+      ],
+      [
+        -0.08,
+        1.405
+      ]
+    ],
+    "neckline": [
+      [
+        -0.12,
+        1.48
+      ],
+      [
+        -0.095,
+        1.395
+      ],
+      [
+        0,
+        1.365
+      ],
+      [
+        0.095,
+        1.395
+      ],
+      [
+        0.12,
+        1.48
+      ]
+    ]
+  },
+  "previewMeshes": [
+    {
+      "fitModelRevisionId": "2c2b9358-8c8c-5146-829e-6d9415e86969",
+      "meshAssetId": "868e0830-7199-5d24-88fc-e0d0a74db799"
+    },
+    {
+      "fitModelRevisionId": "b2f0c62c-9938-57ca-bc81-582fb12ba8ff",
+      "meshAssetId": "73dcce2b-051c-51be-996e-018178e3bbc3"
+    }
+  ],
+  "source": {
+    "label": "MakeHuman CC0 body and On You authored garment previews",
+    "uri": "https://github.com/anshbalusa-ui/itchathon/blob/075db5abdaef95a0ae0fd9adee67c8bee16b1f7f/DevelopmentAssets/HumanShowcase/human-showcase-v1.bin",
+    "sha256": "6977bd1aeba54c9f4ef82f9d7f9b8b996d030b2758e226b61dcb9fbccfe4f6e9",
+    "license": "CC0-1.0",
+    "notice": "CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/legalcode. MakeHuman asset only; no AGPL software. Original body OBJ: https://raw.githubusercontent.com/makehumancommunity/makehuman2/3ef8a20dfec873fdf84d3315aeaf98694cad91bf/data/base/hm08/base.obj; SHA256 9e8e529a386823fa0af5aa0cf4f082076f24f0f1a1a904003b2ab2b57b911342. Repository authored shirt, shorts, 2D illustration and derived variants are CC0. Fit Model A preserves the 1.80m canonical source; B applies x1.12/y0.95/z1.08 about z=0.055m. Authored geometry, not personal scans or population percentiles. Garment previews adapt to the reference model; no physical sizing or simulation."
+  },
+  "validationStatus": "illustrative"
+}

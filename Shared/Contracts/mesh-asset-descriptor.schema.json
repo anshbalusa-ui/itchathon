@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.onyou.studio/mesh-asset-descriptor.schema.json",
+  "title": "On You Studio mesh asset descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "createdAt", "producer", "format", "sha256", "byteLength", "vertexCount", "indexCount", "topologyVersion", "topologySha256", "units", "coordinates", "bounds", "source", "sourceToCanonical", "validationStatus"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "producer": { "$ref": "#/definitions/producer" },
+    "format": { "const": "onyou-mesh-v1" },
+    "sha256": { "$ref": "#/definitions/sha256" },
+    "byteLength": { "type": "integer", "minimum": 2, "maximum": 3145728 },
+    "vertexCount": { "type": "integer", "minimum": 3, "maximum": 200000 },
+    "indexCount": { "type": "integer", "minimum": 3, "maximum": 600000, "multipleOf": 3 },
+    "topologyVersion": { "const": 1 },
+    "topologySha256": { "$ref": "#/definitions/sha256" },
+    "units": { "const": "m" },
+    "coordinates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["handedness", "up", "front", "winding", "matrixOrder"],
+      "properties": {
+        "handedness": { "const": "right" }, "up": { "const": "+Y" }, "front": { "const": "+Z" },
+        "winding": { "const": "counter-clockwise" }, "matrixOrder": { "const": "column-major" }
+      }
+    },
+    "bounds": {
+      "type": "object", "additionalProperties": false,
+      "required": ["minimum", "maximum"],
+      "properties": { "minimum": { "$ref": "#/definitions/vec3" }, "maximum": { "$ref": "#/definitions/vec3" } }
+    },
+    "source": { "$ref": "#/definitions/source" },
+    "sourceToCanonical": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceFrameId", "canonicalFrameId", "matrix"],
+      "properties": {
+        "sourceFrameId": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "canonicalFrameId": { "const": "onyou-y-up-m" },
+        "matrix": { "type": "array", "minItems": 16, "maxItems": 16, "items": { "type": "number" } }
+      }
+    },
+    "validationStatus": { "const": "illustrative" }
+  },
+  "definitions": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "vec3": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+    "producer": {
+      "type": "object", "additionalProperties": false, "required": ["name", "version"],
+      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 80 }, "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" } }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "uri", "sha256", "license", "notice"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "uri": { "type": "string", "format": "uri", "maxLength": 2048 },
+        "sha256": { "$ref": "#/definitions/sha256" },
+        "license": { "const": "CC0-1.0" },
+        "notice": { "type": "string", "minLength": 1, "maxLength": 2048 }
+      }
+    }
+  }
+}

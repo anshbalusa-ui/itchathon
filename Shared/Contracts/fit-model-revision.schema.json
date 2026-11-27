@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.onyou.studio/fit-model-revision.schema.json",
+  "title": "On You Studio fit model revision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "modelId", "parentRevisionId", "name", "createdAt", "producer", "geometryKind", "bodyMeshAssetId", "baseGarmentMeshAssetId", "poseId", "heightM", "measurementBasis", "source", "validationStatus"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "modelId": { "type": "string", "format": "uuid" },
+    "parentRevisionId": { "type": ["string", "null"], "format": "uuid" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "producer": { "$ref": "#/definitions/producer" },
+    "geometryKind": { "const": "standardFitModel" },
+    "bodyMeshAssetId": { "type": "string", "format": "uuid" },
+    "baseGarmentMeshAssetId": { "type": "string", "format": "uuid" },
+    "poseId": { "const": "authored-standing-v1" },
+    "heightM": { "type": "number", "exclusiveMinimum": 0.2, "maximum": 3 },
+    "measurementBasis": { "const": "authored-mesh-bounds" },
+    "source": { "$ref": "#/definitions/source" },
+    "validationStatus": { "const": "illustrative" }
+  },
+  "definitions": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "producer": {
+      "type": "object", "additionalProperties": false, "required": ["name", "version"],
+      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 80 }, "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" } }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["label", "uri", "sha256", "license", "notice"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 }, "uri": { "type": "string", "format": "uri", "maxLength": 2048 },
+        "sha256": { "$ref": "#/definitions/sha256" }, "license": { "const": "CC0-1.0" }, "notice": { "type": "string", "minLength": 1, "maxLength": 2048 }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.onyou.studio/catalog.schema.json",
+  "title": "On You Studio maintained catalog",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "template", "fitModels", "meshAssets"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "template": { "$ref": "garment-template.schema.json" },
+    "fitModels": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "fit-model-revision.schema.json" } },
+    "meshAssets": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "$ref": "mesh-asset-descriptor.schema.json" } }
+  }
+}

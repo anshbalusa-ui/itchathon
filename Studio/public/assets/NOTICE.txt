@@ -1,0 +1,11 @@
+On You Studio offline geometry assets
+
+Body geometry derives from the pinned MakeHuman Community base asset and first-party authored shirt/shorts surfaces in
+DevelopmentAssets/HumanShowcase/human-showcase-v1.bin (FCHUMAN1 v1).
+Source payload SHA-256: 6977bd1aeba54c9f4ef82f9d7f9b8b996d030b2758e226b61dcb9fbccfe4f6e9
+Pinned source and license detail: DevelopmentAssets/HumanShowcase/NOTICE.txt.
+Model A preserves the canonical source coordinates. Model B is authored display geometry with affine scales x1.12, y0.95, z1.08 about z=0.055m.
+Both variants are illustrative; B is not a percentile or accurate person. Garment surfaces are fit previews, not size changes.
+No MakeHuman software is included. All derived geometry and this conversion script are CC0-1.0.
+
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/legalcode. MakeHuman asset only; no AGPL software. Original body OBJ: https://raw.githubusercontent.com/makehumancommunity/makehuman2/3ef8a20dfec873fdf84d3315aeaf98694cad91bf/data/base/hm08/base.obj; SHA256 9e8e529a386823fa0af5aa0cf4f082076f24f0f1a1a904003b2ab2b57b911342. Repository authored shirt, shorts, 2D illustration and derived variants are CC0. Fit Model A preserves the 1.80m canonical source; B applies x1.12/y0.95/z1.08 about z=0.055m. Authored geometry, not personal scans or population percentiles. Garment previews adapt to the reference model; no physical sizing or simulation.
