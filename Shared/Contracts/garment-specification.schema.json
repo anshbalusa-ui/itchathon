@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#", "$id": "https://schemas.onyou.studio/garment-specification.schema.json",
+  "title": "Garment specification", "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "id", "revisionId", "garmentRevisionId", "sizeId", "definitionVersion", "units", "values", "tolerancesM", "sources", "validationStatus"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "id": { "type": "string", "format": "uuid" }, "revisionId": { "type": "string", "format": "uuid" },
+    "garmentRevisionId": { "type": "string", "format": "uuid" }, "sizeId": { "type": "string", "format": "uuid" },
+    "definitionVersion": { "const": "tshirt-pom-v1" }, "units": { "const": "m" },
+    "values": { "$ref": "#/definitions/values" },
+    "tolerancesM": { "type": "object", "additionalProperties": false, "properties": { "bodyLength": { "type": "number", "minimum": 0, "maximum": 0.1 }, "chestWidth": { "type": "number", "minimum": 0, "maximum": 0.1 }, "hemWidth": { "type": "number", "minimum": 0, "maximum": 0.1 }, "shoulderWidth": { "type": "number", "minimum": 0, "maximum": 0.1 }, "sleeveLength": { "type": "number", "minimum": 0, "maximum": 0.1 }, "sleeveOpening": { "type": "number", "minimum": 0, "maximum": 0.1 }, "neckWidth": { "type": "number", "minimum": 0, "maximum": 0.1 }, "neckDepth": { "type": "number", "minimum": 0, "maximum": 0.1 } } },
+    "sources": { "type": "object", "additionalProperties": false, "required": ["bodyLength", "chestWidth", "hemWidth", "shoulderWidth", "sleeveLength", "sleeveOpening", "neckWidth", "neckDepth"], "properties": { "bodyLength": { "enum": ["authored-default", "designer-input", "graded"] }, "chestWidth": { "enum": ["authored-default", "designer-input", "graded"] }, "hemWidth": { "enum": ["authored-default", "designer-input", "graded"] }, "shoulderWidth": { "enum": ["authored-default", "designer-input", "graded"] }, "sleeveLength": { "enum": ["authored-default", "designer-input", "graded"] }, "sleeveOpening": { "enum": ["authored-default", "designer-input", "graded"] }, "neckWidth": { "enum": ["authored-default", "designer-input", "graded"] }, "neckDepth": { "enum": ["authored-default", "designer-input", "graded"] } } },
+    "validationStatus": { "const": "provisional-authored" }
+  },
+  "definitions": {
+    "values": { "type": "object", "additionalProperties": false, "required": ["bodyLength", "chestWidth", "hemWidth", "shoulderWidth", "sleeveLength", "sleeveOpening", "neckWidth", "neckDepth"], "properties": {
+      "bodyLength": { "type": "number" }, "chestWidth": { "type": "number" }, "hemWidth": { "type": "number" }, "shoulderWidth": { "type": "number" }, "sleeveLength": { "type": "number" }, "sleeveOpening": { "type": "number" }, "neckWidth": { "type": "number" }, "neckDepth": { "type": "number" } } },
+    "tolerances": { "bodyLength": { "type": "number", "minimum": 0, "maximum": 0.1 }, "chestWidth": { "type": "number", "minimum": 0, "maximum": 0.1 }, "hemWidth": { "type": "number", "minimum": 0, "maximum": 0.1 }, "shoulderWidth": { "type": "number", "minimum": 0, "maximum": 0.1 }, "sleeveLength": { "type": "number", "minimum": 0, "maximum": 0.1 }, "sleeveOpening": { "type": "number", "minimum": 0, "maximum": 0.1 }, "neckWidth": { "type": "number", "minimum": 0, "maximum": 0.1 }, "neckDepth": { "type": "number", "minimum": 0, "maximum": 0.1 } },
+    "sources": { "bodyLength": { "$ref": "#/definitions/source" }, "chestWidth": { "$ref": "#/definitions/source" }, "hemWidth": { "$ref": "#/definitions/source" }, "shoulderWidth": { "$ref": "#/definitions/source" }, "sleeveLength": { "$ref": "#/definitions/source" }, "sleeveOpening": { "$ref": "#/definitions/source" }, "neckWidth": { "$ref": "#/definitions/source" }, "neckDepth": { "$ref": "#/definitions/source" } },
+    "source": { "enum": ["authored-default", "designer-input", "graded"] }
+  }
+}

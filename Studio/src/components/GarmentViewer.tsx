@@ -7,6 +7,7 @@ import {
   DoubleSide,
   Group,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
   Scene,
@@ -15,7 +16,7 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { AdmittedMesh, FitModelRevision, GarmentRevision } from '../domain/types';
-import { createPreviewGeometry, type PreviewGeometrySet } from '../rendering/preview';
+import { createGarmentGeometry, createModelGeometry, type PreviewModelGeometry } from '../rendering/preview';
 
 type View = 'front' | 'side' | 'back';
 interface Runtime {
@@ -26,35 +27,53 @@ interface Runtime {
   bodyMaterial: MeshStandardMaterial;
   shortsMaterial: MeshStandardMaterial;
   garmentMaterial: MeshStandardMaterial;
+  comparisonMaterial: MeshBasicMaterial;
   render: () => void;
-  current?: PreviewGeometrySet;
+  current?: PreviewModelGeometry;
+  bodyMesh?: Mesh;
+  shortsMesh?: Mesh;
+  garmentMesh?: Mesh;
+  comparisonMesh?: Mesh;
 }
 
 export interface GarmentViewerProps {
   revision: GarmentRevision;
   model: FitModelRevision;
   meshes: ReadonlyMap<string, AdmittedMesh>;
+  selectedSizeId?: string | null;
+  comparison?: { revision: GarmentRevision; sizeId: string | null } | null;
 }
 
-export function GarmentViewer({ revision, model, meshes }: GarmentViewerProps) {
+export function GarmentViewer({ revision, model, meshes, selectedSizeId, comparison = null }: GarmentViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtimeRef = useRef<Runtime | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<PreviewGeometrySet | null>(null);
+  const [contextError, setContextError] = useState<string | null>(null);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [garmentError, setGarmentError] = useState<string | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [stats, setStats] = useState<PreviewModelGeometry | null>(null);
+  const [garmentInfo, setGarmentInfo] = useState<{ sizeLabel: string | null; identity: string; warnings: string[] } | null>(null);
+  const error = contextError || modelError || garmentError;
+  const garmentSource = revision.schemaVersion === 1 ? revision.previewMeshes : revision.development;
+  const legacyModelKey = revision.schemaVersion === 1 ? model.id : null;
+  const comparisonSource = comparison?.revision.schemaVersion === 1 ? comparison.revision.previewMeshes : comparison?.revision.development;
+  const comparisonLegacyModelKey = comparison?.revision.schemaVersion === 1 ? model.id : null;
   const [view, setView] = useState<View | null>('front');
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const viewport = canvas.parentElement;
+    if (!viewport) return;
     let runtime: Runtime | undefined;
     let renderer: WebGLRenderer | undefined;
     let resizeObserver: ResizeObserver | undefined;
     let frame = 0;
     const contextLost = (event: Event) => {
       event.preventDefault();
-      setError('The WebGL context was lost. Switch to 2D and back to retry.');
+      setContextError('The WebGL context was lost. Switch to 2D and back to retry.');
     };
-    const contextRestored = () => { setError(null); runtime?.render(); };
+    const contextRestored = () => { setContextError(null); runtime?.render(); };
     try {
       const scene = new Scene();
       scene.background = new Color('#f5f5f0');
@@ -62,7 +81,7 @@ export function GarmentViewer({ revision, model, meshes }: GarmentViewerProps) {
       camera.position.set(0, 0.9, 4.2);
       renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      renderer.setSize(Math.max(canvas.clientWidth, 1), Math.max(canvas.clientHeight, 1), false);
+      renderer.setSize(Math.max(viewport.clientWidth, 1), Math.max(viewport.clientHeight, 1), false);
       renderer.outputColorSpace = 'srgb';
       renderer.setClearColor('#f5f5f0', 1);
       scene.add(new AmbientLight(0xffffff, 1.5));
@@ -77,6 +96,7 @@ export function GarmentViewer({ revision, model, meshes }: GarmentViewerProps) {
       const bodyMaterial = new MeshStandardMaterial({ color: '#c2c1b8', roughness: 0.88, metalness: 0 });
       const shortsMaterial = new MeshStandardMaterial({ color: '#4c5550', roughness: 0.82, metalness: 0 });
       const garmentMaterial = new MeshStandardMaterial({ color: revision.visualMaterial.color, roughness: 0.78, metalness: 0, side: DoubleSide });
+      const comparisonMaterial = new MeshBasicMaterial({ color: '#a26137', wireframe: true, transparent: true, opacity: 0.72, side: DoubleSide });
       const controls = new OrbitControls(camera, canvas);
       controls.enableDamping = false;
       controls.enablePan = false;
@@ -96,23 +116,23 @@ export function GarmentViewer({ revision, model, meshes }: GarmentViewerProps) {
       const changed = () => { setView(null); render(); };
       controls.addEventListener('change', changed);
       resizeObserver = new ResizeObserver(() => {
-        const width = Math.max(canvas.clientWidth, 1);
-        const height = Math.max(canvas.clientHeight, 1);
+        const width = Math.max(viewport.clientWidth, 1);
+        const height = Math.max(viewport.clientHeight, 1);
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer?.setSize(width, height, false);
         render();
       });
-      resizeObserver.observe(canvas);
-      runtime = { camera, renderer, controls, group, bodyMaterial, shortsMaterial, garmentMaterial, render };
+      resizeObserver.observe(viewport);
+      runtime = { camera, renderer, controls, group, bodyMaterial, shortsMaterial, garmentMaterial, comparisonMaterial, render };
       runtimeRef.current = runtime;
       canvas.addEventListener('webglcontextlost', contextLost);
       canvas.addEventListener('webglcontextrestored', contextRestored);
-      setError(null);
+      setContextError(null);
       render();
     } catch (cause) {
       renderer?.dispose();
-      setError(cause instanceof Error ? cause.message : 'WebGL preview could not be started.');
+      setContextError(cause instanceof Error ? cause.message : 'WebGL preview could not be started.');
       return () => resizeObserver?.disconnect();
     }
     return () => {
@@ -124,10 +144,12 @@ export function GarmentViewer({ revision, model, meshes }: GarmentViewerProps) {
       runtime.controls.dispose();
       runtime.current?.body.dispose();
       runtime.current?.shorts.dispose();
-      runtime.current?.garment.dispose();
+      runtime.garmentMesh?.geometry.dispose();
+      runtime.comparisonMesh?.geometry.dispose();
       runtime.bodyMaterial.dispose();
       runtime.shortsMaterial.dispose();
       runtime.garmentMaterial.dispose();
+      runtime.comparisonMaterial.dispose();
       runtime.renderer.dispose();
       runtimeRef.current = null;
     };
@@ -139,24 +161,66 @@ export function GarmentViewer({ revision, model, meshes }: GarmentViewerProps) {
     if (!runtime) return;
     runtime.current?.body.dispose();
     runtime.current?.shorts.dispose();
-    runtime.current?.garment.dispose();
+    if (runtime.bodyMesh) runtime.group.remove(runtime.bodyMesh);
+    if (runtime.shortsMesh) runtime.group.remove(runtime.shortsMesh);
     runtime.current = undefined;
-    runtime.group.clear();
     setStats(null);
     try {
-      const next = createPreviewGeometry(revision, model, meshes);
+      const next = createModelGeometry(model, meshes);
       runtime.current = next;
-      runtime.group.add(new Mesh(next.body, runtime.bodyMaterial));
-      runtime.group.add(new Mesh(next.shorts, runtime.shortsMaterial));
-      runtime.group.add(new Mesh(next.garment, runtime.garmentMaterial));
-      runtime.render();
+      runtime.bodyMesh = new Mesh(next.body, runtime.bodyMaterial);
+      runtime.shortsMesh = new Mesh(next.shorts, runtime.shortsMaterial);
+      runtime.group.add(runtime.bodyMesh, runtime.shortsMesh);
+      if (revision.schemaVersion === 2) runtime.garmentMesh?.position.set(0, model.heightM * (1.5 / 1.8), 0.055);
+      if (comparison?.revision.schemaVersion === 2) runtime.comparisonMesh?.position.set(0, model.heightM * (1.5 / 1.8), 0.055);
       setStats(next);
-      setError(null);
+      setModelError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The selected geometry could not be displayed.');
-      runtime.render();
+      setModelError(cause instanceof Error ? cause.message : 'The selected fitting model could not be displayed.');
     }
-  }, [revision.previewMeshes, model, meshes]);
+    runtime.render();
+  }, [model, meshes]);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    runtime.garmentMesh?.geometry.dispose();
+    if (runtime.garmentMesh) runtime.group.remove(runtime.garmentMesh);
+    runtime.garmentMesh = undefined;
+    setGarmentInfo(null);
+    try {
+      const next = createGarmentGeometry(revision, model, meshes, selectedSizeId);
+      runtime.garmentMesh = new Mesh(next.geometry, runtime.garmentMaterial);
+      runtime.garmentMesh.position.set(...next.offset);
+      runtime.group.add(runtime.garmentMesh);
+      setGarmentInfo({ sizeLabel: next.sizeLabel, identity: next.identity, warnings: next.warnings });
+      setGarmentError(null);
+    } catch (cause) {
+      setGarmentError(cause instanceof Error ? cause.message : 'The selected garment geometry could not be displayed.');
+    }
+    runtime.render();
+  }, [garmentSource, selectedSizeId, meshes, legacyModelKey]);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    runtime.comparisonMesh?.geometry.dispose();
+    if (runtime.comparisonMesh) runtime.group.remove(runtime.comparisonMesh);
+    runtime.comparisonMesh = undefined;
+    setComparisonError(null);
+    if (comparison) {
+      try {
+        const next = createGarmentGeometry(comparison.revision, model, meshes, comparison.sizeId);
+        runtime.comparisonMesh = new Mesh(next.geometry, runtime.comparisonMaterial);
+        runtime.comparisonMesh.position.set(...next.offset);
+        runtime.comparisonMesh.renderOrder = 2;
+        runtime.group.add(runtime.comparisonMesh);
+      } catch (cause) {
+        setComparisonError(cause instanceof Error ? cause.message : 'The compared garment is unsupported.');
+      }
+    }
+    runtime.render();
+  }, [comparisonSource, comparison?.sizeId, meshes, comparisonLegacyModelKey]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -208,7 +272,7 @@ export function GarmentViewer({ revision, model, meshes }: GarmentViewerProps) {
   };
 
   return <section className="preview-panel" aria-label="3D garment preview">
-    <div className="panel-heading viewer-heading"><h2>3D preview</h2><span>{model.name}</span></div>
+    <div className="panel-heading viewer-heading"><h2>3D preview</h2><span>{model.name}{garmentInfo?.sizeLabel ? ` · ${garmentInfo.sizeLabel}` : ''}</span></div>
     <div className="viewer-controls" role="group" aria-label="3D view controls">
       <button type="button" disabled={!!error || !stats} aria-pressed={view === 'front'} onClick={() => setPreset('front')}>Front</button>
       <button type="button" disabled={!!error || !stats} aria-pressed={view === 'side'} onClick={() => setPreset('side')}>Side</button>
@@ -216,11 +280,11 @@ export function GarmentViewer({ revision, model, meshes }: GarmentViewerProps) {
       <button type="button" disabled={!!error || !stats} onClick={reset}>Reset</button>
     </div>
     <div className="drawing-surface viewer-surface">
-      <canvas ref={canvasRef} tabIndex={0} onKeyDown={onKeyDown} aria-label={`3D preview of ${revision.name} on ${model.name}. Drag to orbit, scroll to zoom; focus and use arrow keys to orbit, plus or minus to zoom, Home to reset.`} style={{ display: 'block', width: '100%', height: '100%', outlineOffset: 3 }} />
+      <canvas ref={canvasRef} tabIndex={0} onKeyDown={onKeyDown} aria-label={`3D preview of ${revision.name} on ${model.name}. Drag to orbit, scroll to zoom; focus and use arrow keys to orbit, plus or minus to zoom, Home to reset.`} style={{ display: 'block', width: '100%', height: '100%', minWidth: 0, minHeight: 0, outlineOffset: -3 }} />
       {error && <p role="alert" style={{ position: 'absolute', inset: 'auto 1rem 1rem', padding: '0.75rem', background: '#fff', color: '#8b1e1e' }}>3D preview unavailable: {error}</p>}
       {!error && !stats && <p role="status" style={{ position: 'absolute', inset: '1rem auto auto 1rem' }}>Loading 3D preview…</p>}
     </div>
-    {stats && <div className="panel-caption viewer-caption"><p aria-live="polite">{model.name} · {stats.heightM.toFixed(2)} m · {stats.bodyVertexCount.toLocaleString()} vertices · mesh <code>{stats.bodyHash.slice(0, 12)}</code></p><p>Drag to orbit · Scroll to zoom · Keyboard: arrows, + / −, Home</p></div>}
+    {stats && <div className="panel-caption viewer-caption"><p aria-live="polite">{model.name} · {stats.heightM.toFixed(2)} m · {stats.bodyVertexCount.toLocaleString()} vertices · mesh <code>{stats.bodyHash.slice(0, 12)}</code></p><p>Drag to orbit · Scroll to zoom · Keyboard: arrows, + / −, Home</p>{garmentInfo?.sizeLabel && <p>Garment: {garmentInfo.sizeLabel} · {revision.id.slice(0, 8)} · dimensions independent of model</p>}{comparison && <p className="comparison-key">Wireframe: compared revision / size · same model, rigid anchor and camera</p>}{comparisonError && <p role="alert">Comparison unavailable: {comparisonError}</p>}{garmentInfo && <details><summary>Preview assumptions</summary><ul>{garmentInfo.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul></details>}</div>}
   </section>;
 }
 

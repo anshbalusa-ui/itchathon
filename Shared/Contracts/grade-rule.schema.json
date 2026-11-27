@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#", "$id": "https://schemas.onyou.studio/grade-rule.schema.json",
+  "title": "Explicit per-measurement grade rule", "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "id", "revisionId", "garmentRevisionId", "fromSizeId", "toSizeId", "method", "deltasM"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "id": { "type": "string", "format": "uuid" }, "revisionId": { "type": "string", "format": "uuid" },
+    "garmentRevisionId": { "type": "string", "format": "uuid" }, "fromSizeId": { "type": "string", "format": "uuid" }, "toSizeId": { "type": "string", "format": "uuid" },
+    "method": { "const": "explicit-per-measurement-delta" },
+    "deltasM": { "type": "object", "additionalProperties": false, "required": ["bodyLength", "chestWidth", "hemWidth", "shoulderWidth", "sleeveLength", "sleeveOpening", "neckWidth", "neckDepth"], "properties": {
+      "bodyLength": { "type": "number" }, "chestWidth": { "type": "number" }, "hemWidth": { "type": "number" }, "shoulderWidth": { "type": "number" }, "sleeveLength": { "type": "number" }, "sleeveOpening": { "type": "number" }, "neckWidth": { "type": "number" }, "neckDepth": { "type": "number" } } }
+  }
+}

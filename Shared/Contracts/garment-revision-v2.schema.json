@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.onyou.studio/garment-revision-v2.schema.json",
+  "title": "On You Studio parametric garment revision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "garmentId", "parentRevisionId", "createdAt", "producer", "name", "category", "templateId", "templateVersion", "geometryAdapter", "visualMaterial", "source", "validationStatus", "development"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "id": { "type": "string", "format": "uuid" },
+    "garmentId": { "type": "string", "format": "uuid" },
+    "parentRevisionId": { "type": ["string", "null"], "format": "uuid" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "producer": { "$ref": "garment-revision.schema.json#/definitions/producer" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "category": { "const": "tshirt" },
+    "templateId": { "type": "string", "format": "uuid" },
+    "templateVersion": { "const": "2.0.0" },
+    "geometryAdapter": { "const": "parametric-tshirt-v1" },
+    "visualMaterial": { "$ref": "garment-revision.schema.json#/properties/visualMaterial" },
+    "source": { "$ref": "garment-revision.schema.json#/properties/source" },
+    "validationStatus": { "const": "illustrative" },
+    "development": { "$ref": "development-state.schema.json" },
+    "restoredFromRevisionId": { "type": "string", "format": "uuid" }
+  }
+}

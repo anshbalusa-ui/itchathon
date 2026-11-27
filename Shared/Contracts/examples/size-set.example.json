@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "id": "cb280bf2-032f-4597-83f3-afe1a7ef9bba",
+  "revisionId": "8dee9d49-d854-4756-bfbc-563c6309f511",
+  "garmentRevisionId": "277a9870-b308-4775-b3fd-64466ee57c82",
+  "baseSizeId": "87b2596d-e5e3-48e7-9e34-4e6e7d186d22",
+  "sizes": [
+    {
+      "id": "87b2596d-e5e3-48e7-9e34-4e6e7d186d22",
+      "label": "Base",
+      "specification": {
+        "schemaVersion": 1,
+        "id": "8c5f47fb-fe4d-49df-a07b-5c70e68f664b",
+        "revisionId": "8dee9d49-d854-4756-bfbc-563c6309f511",
+        "garmentRevisionId": "277a9870-b308-4775-b3fd-64466ee57c82",
+        "sizeId": "87b2596d-e5e3-48e7-9e34-4e6e7d186d22",
+        "definitionVersion": "tshirt-pom-v1",
+        "units": "m",
+        "values": {
+          "bodyLength": 0.7,
+          "chestWidth": 0.56,
+          "hemWidth": 0.54,
+          "shoulderWidth": 0.44,
+          "sleeveLength": 0.22,
+          "sleeveOpening": 0.19,
+          "neckWidth": 0.18,
+          "neckDepth": 0.08
+        },
+        "tolerancesM": {},
+        "sources": {
+          "bodyLength": "authored-default",
+          "chestWidth": "authored-default",
+          "hemWidth": "authored-default",
+          "shoulderWidth": "authored-default",
+          "sleeveLength": "authored-default",
+          "sleeveOpening": "authored-default",
+          "neckWidth": "authored-default",
+          "neckDepth": "authored-default"
+        },
+        "validationStatus": "provisional-authored"
+      }
+    },
+    {
+      "id": "9119822e-8a91-4856-9204-90b221bf9f95",
+      "label": "Large",
+      "specification": {
+        "schemaVersion": 1,
+        "id": "26312bcb-a790-4f86-bce3-caa6f0f29f20",
+        "revisionId": "8dee9d49-d854-4756-bfbc-563c6309f511",
+        "garmentRevisionId": "277a9870-b308-4775-b3fd-64466ee57c82",
+        "sizeId": "9119822e-8a91-4856-9204-90b221bf9f95",
+        "definitionVersion": "tshirt-pom-v1",
+        "units": "m",
+        "values": {
+          "bodyLength": 0.7,
+          "chestWidth": 0.56,
+          "hemWidth": 0.54,
+          "shoulderWidth": 0.44,
+          "sleeveLength": 0.22,
+          "sleeveOpening": 0.19,
+          "neckWidth": 0.18,
+          "neckDepth": 0.08
+        },
+        "tolerancesM": {},
+        "sources": {
+          "bodyLength": "graded",
+          "chestWidth": "graded",
+          "hemWidth": "graded",
+          "shoulderWidth": "graded",
+          "sleeveLength": "graded",
+          "sleeveOpening": "graded",
+          "neckWidth": "graded",
+          "neckDepth": "graded"
+        },
+        "validationStatus": "provisional-authored"
+      }
+    }
+  ],
+  "gradeRules": [
+    {
+      "schemaVersion": 1,
+      "id": "b0598a4c-38e0-4373-b9ee-2b5af54e7cab",
+      "revisionId": "8dee9d49-d854-4756-bfbc-563c6309f511",
+      "garmentRevisionId": "277a9870-b308-4775-b3fd-64466ee57c82",
+      "fromSizeId": "87b2596d-e5e3-48e7-9e34-4e6e7d186d22",
+      "toSizeId": "9119822e-8a91-4856-9204-90b221bf9f95",
+      "method": "explicit-per-measurement-delta",
+      "deltasM": {
+        "bodyLength": 0,
+        "chestWidth": 0,
+        "hemWidth": 0,
+        "shoulderWidth": 0,
+        "sleeveLength": 0,
+        "sleeveOpening": 0,
+        "neckWidth": 0,
+        "neckDepth": 0
+      }
+    }
+  ]
+}

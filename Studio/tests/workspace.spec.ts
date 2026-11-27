@@ -7,6 +7,7 @@ async function createProject(page: Page, name = 'Eternal — everyday tee') {
   await page.goto('/');
   await page.getByLabel('Project name', { exact: true }).fill(name);
   await page.getByLabel('Garment name', { exact: true }).fill('Everyday tee');
+  await page.getByRole('combobox', { name: 'Template', exact: true }).selectOption('legacy');
   await page.getByRole('button', { name: 'Create project', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
   await expect(page.getByText('Saved locally', { exact: true })).toBeVisible();
@@ -167,7 +168,7 @@ test('invalid packages cannot replace a saved project or request external assets
   await createProject(page, 'Protected original');
   const original = await downloadPackage(page);
   const externalRequests: string[] = [];
-  page.on('request', request => { if (!request.url().startsWith('http://127.0.0.1:4173/')) externalRequests.push(request.url()); });
+  page.on('request', request => { if (new URL(request.url()).origin !== new URL(page.url()).origin) externalRequests.push(request.url()); });
   const wrongVersion = structuredClone(original.document);
   Object.assign(wrongVersion, { schemaVersion: 999 });
   await importBytes(page, Buffer.from(JSON.stringify(wrongVersion)));
@@ -273,6 +274,7 @@ test('failed first save leaves an editable draft that can be saved on retry', as
   await page.goto('/');
   await page.getByLabel('Project name', { exact: true }).fill('Retry initial save');
   await page.getByLabel('Garment name', { exact: true }).fill('Initial tee');
+  await page.getByRole('combobox', { name: 'Template', exact: true }).selectOption('legacy');
   await page.evaluate(() => {
     const put = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function (...args: Parameters<IDBObjectStore['put']>) {

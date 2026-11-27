@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#", "$id": "https://schemas.onyou.studio/size-set.schema.json",
+  "title": "Parametric size set", "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "id", "revisionId", "garmentRevisionId", "baseSizeId", "sizes", "gradeRules"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "id": { "type": "string", "format": "uuid" },
+    "revisionId": { "type": "string", "format": "uuid" }, "garmentRevisionId": { "type": "string", "format": "uuid" },
+    "baseSizeId": { "type": "string", "format": "uuid" },
+    "sizes": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "object", "additionalProperties": false,
+      "required": ["id", "label", "specification"], "properties": { "id": { "type": "string", "format": "uuid" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 24 }, "specification": { "$ref": "garment-specification.schema.json" } } } },
+    "gradeRules": { "type": "array", "maxItems": 7, "items": { "$ref": "grade-rule.schema.json" } }
+  }
+}

@@ -5,6 +5,7 @@ import { indexedDB } from 'fake-indexeddb';
 import { applyDraft, createProject, draftOf, forkImported } from '../src/domain/projects';
 import { ProjectRepository } from '../src/domain/repository';
 import { validateCatalog } from '../src/domain/validation';
+import { addSize, setGradeDelta, setMeasurement } from '../src/domain/development';
 import type { Catalog } from '../src/domain/types';
 
 const assetsDirectory = new URL('../public/assets/', import.meta.url);
@@ -115,6 +116,29 @@ test('saving an imported fork creates a separate project without replacing its s
     assert.deepEqual(await repository.open(source.project.id, catalog), source);
     assert.deepEqual(await repository.open(fork.project.id, catalog), fork);
     assert.equal((await repository.list()).length, 2);
+  } finally {
+    repository.close();
+  }
+});
+test('repository reopens and summarizes immutable v2 development state', async () => {
+  const { catalog, library } = await catalogFixture();
+  const repository = new ProjectRepository({ name: `studio-v2-${globalThis.crypto.randomUUID()}`, indexedDB });
+  try {
+    const initial = createProject(library, 'Parametric project', 'Block tee', 'parametric');
+    await repository.save(initial, catalog, null);
+    const draft = draftOf(initial);
+    const base = draft.development!.sizeSet.baseSizeId;
+    draft.development = addSize(setMeasurement(draft.development!, base, 'bodyLength', 0.74), 'Roomy');
+    const roomy = draft.development.sizeSet.sizes[1]!.id;
+    draft.development = setGradeDelta(draft.development, roomy, 'chestWidth', 0.02);
+    draft.selectedSizeId = roomy;
+    draft.displayUnit = 'in';
+    draft.fitModelRevisionId = library.catalog.fitModels[1]!.id;
+    const saved = applyDraft(initial, draft);
+    await repository.save(saved, catalog, initial.project.revisionId);
+    const reopened = await repository.open(saved.project.id, catalog);
+    assert.deepEqual(reopened, saved);
+    assert.equal((await repository.list())[0]!.garmentName, 'Block tee');
   } finally {
     repository.close();
   }

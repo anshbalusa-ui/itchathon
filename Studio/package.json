@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "assets": "python3 scripts/build_assets.py",
-    "test": "node --import tsx --test tests/domain.test.ts tests/repository.test.ts tests/geometry.test.ts",
+    "test": "node --import tsx --test tests/domain.test.ts tests/repository.test.ts tests/geometry.test.ts tests/patterns.test.ts tests/units.test.ts tests/parametric-geometry.test.ts tests/development.test.ts tests/preview-admission.test.ts",
     "test:browser": "playwright test"
   },
   "dependencies": {

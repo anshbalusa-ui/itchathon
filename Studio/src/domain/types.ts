@@ -1,3 +1,5 @@
+import type { ComparisonSelection, DevelopmentState, DisplayUnit, PatternView } from './development-types';
+
 export const SCHEMA_VERSION = 1 as const;
 export const PRODUCER = { name: 'On You Studio', version: '0.1.0' } as const;
 
@@ -65,7 +67,7 @@ export interface GarmentTemplate {
   previewMeshes: { fitModelRevisionId: UUID; meshAssetId: UUID }[];
   source: SourceLicense;
 }
-export interface GarmentRevision {
+export interface LegacyGarmentRevision {
   schemaVersion: 1;
   id: UUID;
   garmentId: UUID;
@@ -83,8 +85,17 @@ export interface GarmentRevision {
   source: SourceLicense;
   validationStatus: 'illustrative';
 }
+export interface ParametricGarmentRevision extends Omit<LegacyGarmentRevision, 'schemaVersion' | 'templateVersion' | 'geometryAdapter' | 'drawing' | 'previewMeshes'> {
+  schemaVersion: 2;
+  templateVersion: '2.0.0';
+  geometryAdapter: 'parametric-tshirt-v1';
+  development: DevelopmentState;
+  restoredFromRevisionId?: UUID;
+}
+export type GarmentRevision = LegacyGarmentRevision | ParametricGarmentRevision;
+
 export interface GarmentProject {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   id: UUID;
   revisionId: UUID;
   parentRevisionId: UUID | null;
@@ -97,6 +108,10 @@ export interface GarmentProject {
   currentGarmentRevisionId: UUID;
   selectedFitModelRevisionId: UUID;
   previewView: PreviewView;
+  selectedSizeId?: UUID | null;
+  displayUnit?: DisplayUnit;
+  patternView?: PatternView;
+  comparison?: ComparisonSelection | null;
   validationStatus: 'illustrative';
 }
 export interface MeshData {
@@ -114,7 +129,7 @@ export interface Catalog {
 }
 export interface ProjectPackage {
   format: 'onyou-project';
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   packagedAt: string;
   project: GarmentProject;
   revisions: GarmentRevision[];
@@ -137,6 +152,12 @@ export interface ProjectDraft {
   color: string;
   fitModelRevisionId: UUID;
   previewView: PreviewView;
+  development?: DevelopmentState;
+  selectedSizeId?: UUID | null;
+  displayUnit?: DisplayUnit;
+  patternView?: PatternView;
+  comparison?: ComparisonSelection | null;
+  restoreFromRevisionId?: UUID | null;
 }
 export interface ProjectSummary {
   id: UUID;
