@@ -1,0 +1,13 @@
+{
+  "id": "8f014f10-1f76-4af7-a327-b2316f9c2f1a",
+  "version": "tshirt-5-piece-v1",
+  "description": "Original provisional geometric construction for a flat short-sleeve T-shirt block.",
+  "license": "CC0-1.0",
+  "units": "m",
+  "seamAllowanceM": 0.01,
+  "sleeveCapEaseRatio": 1.03,
+  "neckbandStretchRatio": 0.9,
+  "backNeckDepthRule": "min(0.25 * frontNeckDepth, 0.03m)",
+  "sleeveOpeningDefinition": "half of the two-segment developed sleeve hem path, whose full seam path is twice this flat width",
+  "construction": "full-width front and back panels; cubic armholes and asymmetric front/back neckline depths; cubic two-part sleeve cap solved to 1.03 times paired armhole seams; joined sleeve underarms; one-piece neckband split into front and back attachment lengths at 0.9 ratio"
+}

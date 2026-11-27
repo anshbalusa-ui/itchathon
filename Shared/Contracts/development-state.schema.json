@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.onyou.studio/development-state.schema.json",
+  "title": "On You Studio bounded parametric development state",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "generatorVersion", "topologyVersion", "sizeSet", "patterns"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "generatorVersion": { "const": "1.0.0" }, "topologyVersion": { "const": "tshirt-5-piece-v1" },
+    "sizeSet": { "$ref": "size-set.schema.json" },
+    "patterns": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "pattern-definition.schema.json" } }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#", "$id": "https://schemas.onyou.studio/pattern-definition.schema.json",
+  "title": "Generated numeric garment pattern", "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "id", "revisionId", "garmentRevisionId", "specificationRevisionId", "sizeId", "templateId", "generatorVersion", "topologyVersion", "units", "coordinates", "pieces", "seams", "measuredValues", "validation", "source"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "id": { "type": "string", "format": "uuid" }, "revisionId": { "type": "string", "format": "uuid" },
+    "garmentRevisionId": { "type": "string", "format": "uuid" }, "specificationRevisionId": { "type": "string", "format": "uuid" }, "sizeId": { "type": "string", "format": "uuid" },
+    "templateId": { "type": "string", "format": "uuid" }, "generatorVersion": { "const": "1.0.0" }, "topologyVersion": { "const": "tshirt-5-piece-v1" },
+    "units": { "const": "m" }, "coordinates": { "type": "object", "additionalProperties": false, "required": ["x", "y"], "properties": { "x": { "const": "+right" }, "y": { "const": "+up" } } },
+    "pieces": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "$ref": "#/definitions/piece" } },
+    "seams": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/definitions/seam" } },
+    "measuredValues": { "$ref": "garment-specification.schema.json#/definitions/values" },
+    "validation": { "type": "object", "additionalProperties": false, "required": ["status", "maximumSeamErrorM", "warnings"], "properties": { "status": { "const": "provisional-authored" }, "maximumSeamErrorM": { "type": "number", "minimum": 0 }, "warnings": { "type": "array", "maxItems": 32, "items": { "type": "string", "maxLength": 500 } } } },
+    "source": { "$ref": "garment-revision.schema.json#/properties/source" }
+  },
+  "definitions": {
+    "vec2": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } },
+    "piece": { "type": "object", "additionalProperties": false, "required": ["id", "name", "points", "edges", "grainline", "fold", "cutQuantity", "mirrored", "materialGroup", "notches", "seamAllowance", "cuttingBoundary"], "properties": {
+      "id": { "enum": ["front", "back", "sleeve-left", "sleeve-right", "neckband"] }, "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+      "points": { "type": "array", "minItems": 3, "maxItems": 64, "items": { "type": "object", "additionalProperties": false, "required": ["id", "x", "y"], "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 80 }, "x": { "type": "number" }, "y": { "type": "number" } } } },
+      "edges": { "type": "array", "minItems": 3, "maxItems": 64, "items": { "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["id", "from", "to", "role", "kind"], "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 80 }, "from": { "type": "string" }, "to": { "type": "string" }, "role": { "$ref": "#/definitions/role" }, "kind": { "const": "line" } } },
+        { "type": "object", "additionalProperties": false, "required": ["id", "from", "to", "role", "kind", "control1", "control2"], "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 80 }, "from": { "type": "string" }, "to": { "type": "string" }, "role": { "$ref": "#/definitions/role" }, "kind": { "const": "cubic" }, "control1": { "$ref": "#/definitions/vec2" }, "control2": { "$ref": "#/definitions/vec2" } } }
+      ] } },
+      "grainline": { "type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": { "from": { "$ref": "#/definitions/vec2" }, "to": { "$ref": "#/definitions/vec2" } } },
+      "fold": { "oneOf": [ { "type": "null" }, { "type": "object", "additionalProperties": false, "required": ["edgeIds", "instruction"], "properties": { "edgeIds": { "type": "array", "maxItems": 16, "items": { "type": "string" } }, "instruction": { "type": "string", "maxLength": 200 }, "line": { "type": "object", "additionalProperties": false, "required": ["id", "from", "to"], "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 80 }, "from": { "$ref": "#/definitions/vec2" }, "to": { "$ref": "#/definitions/vec2" } } } } } ] },
+      "cutQuantity": { "type": "integer", "minimum": 1, "maximum": 8 }, "mirrored": { "type": "boolean" }, "materialGroup": { "enum": ["main", "rib"] },
+      "notches": { "type": "array", "maxItems": 64, "items": { "type": "object", "additionalProperties": false, "required": ["id", "edgeId", "t", "kind"], "properties": { "id": { "type": "string", "maxLength": 80 }, "edgeId": { "type": "string", "maxLength": 80 }, "t": { "type": "number", "minimum": 0, "maximum": 1 }, "kind": { "enum": ["single", "double"] } } } },
+      "seamAllowance": { "type": "object", "additionalProperties": false, "required": ["kind", "distanceM", "join", "curveToleranceM"], "properties": { "kind": { "const": "uniform-offset" }, "distanceM": { "type": "number", "minimum": 0, "maximum": 0.1 }, "join": { "const": "miter" }, "curveToleranceM": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.01 } } },
+      "cuttingBoundary": { "type": "array", "minItems": 3, "maxItems": 1024, "items": { "$ref": "#/definitions/vec2" } }
+    } },
+    "role": { "enum": ["shoulder", "side", "neckline", "armhole", "sleeve-cap", "underarm", "hem", "neckband-attachment", "neckband-fold", "neckband-join"] },
+    "seam": { "type": "object", "additionalProperties": false, "required": ["id", "a", "b", "relationship", "orientation", "ratio", "toleranceM"], "properties": {
+      "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+      "a": { "$ref": "#/definitions/seamSide" }, "b": { "$ref": "#/definitions/seamSide" }, "relationship": { "enum": ["equal-length", "sleeve-cap-ease", "neckband-stretch"] },
+      "orientation": { "enum": ["opposed", "aligned"] }, "ratio": { "type": "number", "exclusiveMinimum": 0, "maximum": 2 }, "toleranceM": { "type": "number", "minimum": 0, "maximum": 0.1 }
+    } },
+    "seamSide": { "type": "object", "additionalProperties": false, "required": ["pieceId", "edgeIds"], "properties": { "pieceId": { "enum": ["front", "back", "sleeve-left", "sleeve-right", "neckband"] }, "edgeIds": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "maxLength": 80 } } } }
+  }
+}

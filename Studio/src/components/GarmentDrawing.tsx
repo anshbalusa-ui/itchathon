@@ -1,7 +1,7 @@
 import { useId } from 'react';
-import type { GarmentRevision } from '../domain/types';
+import type { LegacyGarmentRevision } from '../domain/types';
 
-export function GarmentDrawing({ revision }: { revision: GarmentRevision }) {
+export function GarmentDrawing({ revision }: { revision: LegacyGarmentRevision }) {
   const titleId = useId();
   const descriptionId = useId();
   const { outline, neckline } = revision.drawing;

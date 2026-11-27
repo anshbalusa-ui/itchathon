@@ -1,21 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://schemas.onyou.studio/project-package.schema.json",
-  "title": "On You Studio self-contained project package",
-  "type": "object", "additionalProperties": false,
-  "required": ["format", "schemaVersion", "packagedAt", "project", "revisions", "template", "fitModels", "meshAssets", "assets", "previewStatus", "limitations"],
-  "properties": {
-    "format": { "const": "onyou-project" }, "schemaVersion": { "const": 1 }, "packagedAt": { "type": "string", "format": "date-time" },
-    "project": { "$ref": "garment-project.schema.json" },
-    "revisions": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "$ref": "garment-revision.schema.json" } },
-    "template": { "$ref": "garment-template.schema.json" },
-    "fitModels": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "fit-model-revision.schema.json" } },
-    "meshAssets": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "$ref": "mesh-asset-descriptor.schema.json" } },
-    "assets": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "$ref": "#/definitions/asset" } },
-    "previewStatus": { "const": "illustrative" },
-    "limitations": { "type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 500 } }
-  },
-  "definitions": {
-    "asset": { "type": "object", "additionalProperties": false, "required": ["id", "data"], "properties": { "id": { "type": "string", "format": "uuid" }, "data": { "type": "string", "minLength": 2, "maxLength": 3145728 } } }
-  }
+  "title": "On You Studio self-contained project package, V1 or V2",
+  "oneOf": [
+    { "$ref": "project-package-v1.schema.json" },
+    { "$ref": "project-package-v2.schema.json" }
+  ]
 }

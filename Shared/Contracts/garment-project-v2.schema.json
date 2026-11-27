@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#", "$id": "https://schemas.onyou.studio/garment-project-v2.schema.json",
+  "title": "On You Studio v2 project revision", "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "id", "revisionId", "parentRevisionId", "name", "category", "createdAt", "updatedAt", "producer", "currentGarmentRevisionId", "selectedFitModelRevisionId", "previewView", "selectedSizeId", "displayUnit", "patternView", "comparison", "validationStatus"],
+  "properties": {
+    "schemaVersion": { "const": 2 }, "id": { "type": "string", "format": "uuid" }, "revisionId": { "type": "string", "format": "uuid" },
+    "parentRevisionId": { "type": ["string", "null"], "format": "uuid" },
+    "importedFrom": { "type": "object", "additionalProperties": false, "required": ["projectId", "projectRevisionId"], "properties": { "projectId": { "type": "string", "format": "uuid" }, "projectRevisionId": { "type": "string", "format": "uuid" } } },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 }, "category": { "const": "tshirt" },
+    "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" },
+    "producer": { "$ref": "garment-revision.schema.json#/definitions/producer" },
+    "currentGarmentRevisionId": { "type": "string", "format": "uuid" }, "selectedFitModelRevisionId": { "type": "string", "format": "uuid" },
+    "previewView": { "enum": ["split", "2d", "3d"] }, "selectedSizeId": { "type": ["string", "null"], "format": "uuid" },
+    "displayUnit": { "enum": ["cm", "in"] }, "patternView": { "enum": ["front", "back", "pieces", "piece-front", "piece-back", "piece-sleeve-left", "piece-sleeve-right", "piece-neckband"] },
+    "comparison": { "oneOf": [{ "type": "null" }, { "type": "object", "additionalProperties": false, "required": ["revisionId", "sizeId"], "properties": { "revisionId": { "type": "string", "format": "uuid" }, "sizeId": { "type": ["string", "null"], "format": "uuid" } } }] },
+    "validationStatus": { "const": "illustrative" }
+  }
+}

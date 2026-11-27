@@ -76,13 +76,15 @@ Shared interfaces are the versioned records in the architecture document. Implem
 
 ## Goal 3 — Editable Garment Specifications and Sizing
 
+**Implementation:** Goal 3 extends the existing Studio with a provisional five-piece parametric T-shirt, eight garment POMs, independent named-size grading, dimension-driven previews, size/revision overlays, append-only restoration, explicit V1 upgrade, and CSV/JSON/SVG/project exports. See [garment development](ONYOU_STUDIO_GARMENT_DEVELOPMENT.md) for actual verification and remaining designer/simulation/manufacturing gates.
+
 **Objective:** make meaningful T-shirt edits, named sizes and revision comparisons useful to an independent designer before physical sampling.
 
 **Reuse:** Goal 2 project/viewer/repository; current meter-based garment endpoint concepts and legacy finished-garment/body-recommendation distinction. Keep existing native shirt capture unchanged.
 
-**Exact missing work:** supported front/back/sleeve/neckband pattern representation with stable piece/edge IDs and seam map; editable POM/parameter constraints; base size and explicit size-specific grade increments/values; immutable revision history, comparison and useful specification export. Define supported template/import subset; imported CAD is not automatically lossless or cut-ready. No universal image-to-pattern reconstruction.
+**Supported scope:** front/back/handed-sleeve/neckband geometry with stable identities and seam maps; bounded POM constraints; base-size and explicit per-size deltas; immutable comparison/restoration and revision-bound specifications. No arbitrary CAD import or image-to-pattern reconstruction. Inspection sheets are not optimized markers or cut-ready factory files.
 
-**Dependencies:** Goal 2 and designer-approved endpoint/template definitions. No Goal 4, personal avatar or physics dependency. Goal 5 consumes these patterns later.
+**Dependencies:** Goal 2. This implementation uses explicitly provisional authored endpoint/template definitions; designer approval and sample validation remain prerequisites for production claims, not a reason to fabricate approval. No Goal 4, personal avatar or physics dependency. Goal 5 consumes these patterns later.
 
 **Files/modules:** `Studio/` pattern/spec editor, sizing and revision domain/repository, SVG/illustrative mesh adapter and exports; `Shared/Contracts/` pattern/spec/size/grade/material-identity records and fixtures. Do not port a private Swift view's incidental field names into the shared schema.
 

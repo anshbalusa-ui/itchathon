@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "b0598a4c-38e0-4373-b9ee-2b5af54e7cab",
+  "revisionId": "8dee9d49-d854-4756-bfbc-563c6309f511",
+  "garmentRevisionId": "277a9870-b308-4775-b3fd-64466ee57c82",
+  "fromSizeId": "87b2596d-e5e3-48e7-9e34-4e6e7d186d22",
+  "toSizeId": "9119822e-8a91-4856-9204-90b221bf9f95",
+  "method": "explicit-per-measurement-delta",
+  "deltasM": {
+    "bodyLength": 0,
+    "chestWidth": 0,
+    "hemWidth": 0,
+    "shoulderWidth": 0,
+    "sleeveLength": 0,
+    "sleeveOpening": 0,
+    "neckWidth": 0,
+    "neckDepth": 0
+  }
+}
